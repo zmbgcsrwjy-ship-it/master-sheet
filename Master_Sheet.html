@@ -357,7 +357,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
       <div class="form-row"><label>Origination Fee ($)</label><input id="fi-origfee" type="number" oninput="sumFees()"></div>
       <div class="form-row"><label>Bank Fees — combined <small style="color:var(--text3)">(auto when split above)</small></label><input id="fi-bankfees" type="number" oninput="autoCalc()"></div>
       <div class="form-section">Participation</div>
-      <div class="form-row"><label>Book % <span id="bp-lock" onclick="toggleBookLock()" style="cursor:pointer" title="Locked at 100 — click to unlock for participation deals">🔒</span></label><input id="fi-bookpct" type="number" value="100" readonly style="opacity:.6" oninput="autoCalc()"></div>
+      <div class="form-row"><label>Book % <span id="bp-lock" onclick="toggleBookLock()" style="cursor:pointer" title="Locked at 100 — click to unlock for participation deals">🔒</span></label><input id="fi-bookpct" type="number" value="100" max="100" min="0" readonly style="opacity:.6" oninput="capBookPct();autoCalc()"></div>
       <div class="form-row"><label>Book funded ($) <small style="color:var(--text3)">auto</small></label><input id="fi-bookamt" readonly></div>
       <div class="form-section">Rep / ISO</div>
       <div class="form-row"><label>Rep</label><input id="fi-rep" type="text"></div>
@@ -413,6 +413,11 @@ function sumFees(){
     combined.value=(dd+og).toFixed(2); combined.readOnly=true; combined.style.opacity='.6';
   } else { combined.readOnly=false; combined.style.opacity='1'; }
   autoCalc();
+}
+function capBookPct(){
+  const inp=document.getElementById('fi-bookpct');
+  if(parseFloat(inp.value)>100){ inp.value=100; showNotice('Book % cannot exceed 100 — you cannot own more than the whole deal.','warn'); }
+  if(parseFloat(inp.value)<0){ inp.value=0; }
 }
 function toggleBookLock(){
   const inp=document.getElementById('fi-bookpct'), ic=document.getElementById('bp-lock');
@@ -732,7 +737,7 @@ async function processImage(file) {
   "daily_payment": number from Rate of Collection,
   "dd_fee": number from Due Diligence Fee,
   "orig_fee": number from Origination Fee,
-  "book_pct": number from Book percentage in Participation Info (0-100),
+  "book_pct": number from Book percentage in Participation Info — must be between 0 and 100, never above 100,
   "rep": "Rep from Verify Info",
   "iso": "ISO from Verify Info",
   "comm_pct": number from Commission % (no % sign),
@@ -814,6 +819,7 @@ function closeModal(){ document.getElementById('modal-bg').style.display='none';
 async function saveDeal() {
   const f=parseFloat(document.getElementById('fi-funded').value)||0;
   const bp=parseFloat(document.getElementById('fi-bookpct').value)||100;
+  if(bp>100){ showNotice('Book % cannot exceed 100. Fix it before saving.','error'); return; }
   const cp=parseFloat(document.getElementById('fi-commpct').value)||0;
   const rtr=parseFloat(document.getElementById('fi-rtr').value)||0;
   const fees=parseFloat(document.getElementById('fi-bankfees').value)||0;
