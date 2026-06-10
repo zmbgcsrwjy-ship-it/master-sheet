@@ -353,9 +353,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
       <div class="form-row"><label>Factor rate</label><input id="fi-factor" type="number" step="0.001"></div>
       <div class="form-row"><label>Term (business days)</label><input id="fi-term" type="number"></div>
       <div class="form-row"><label>Daily payment ($)</label><input id="fi-daily" type="number"></div>
-      <div class="form-row"><label>Bank fees — DD + Origination ($)</label><input id="fi-bankfees" type="number" oninput="autoCalc()"></div>
+      <div class="form-row"><label>DD Fee ($)</label><input id="fi-ddfee" type="number" oninput="sumFees()"></div>
+      <div class="form-row"><label>Origination Fee ($)</label><input id="fi-origfee" type="number" oninput="sumFees()"></div>
+      <div class="form-row"><label>Bank Fees — combined <small style="color:var(--text3)">(auto when split above)</small></label><input id="fi-bankfees" type="number" oninput="autoCalc()"></div>
       <div class="form-section">Participation</div>
-      <div class="form-row"><label>Book %</label><input id="fi-bookpct" type="number" value="100" oninput="autoCalc()"></div>
+      <div class="form-row"><label>Book % <span id="bp-lock" onclick="toggleBookLock()" style="cursor:pointer" title="Locked at 100 — click to unlock for participation deals">🔒</span></label><input id="fi-bookpct" type="number" value="100" readonly style="opacity:.6" oninput="autoCalc()"></div>
       <div class="form-row"><label>Book funded ($) <small style="color:var(--text3)">auto</small></label><input id="fi-bookamt" readonly></div>
       <div class="form-section">Rep / ISO</div>
       <div class="form-row"><label>Rep</label><input id="fi-rep" type="text"></div>
@@ -403,6 +405,20 @@ const decorate = d => {
   d.paid_down = d.rtr - d.balance;
   return d;
 };
+function sumFees(){
+  const dd=parseFloat(document.getElementById('fi-ddfee').value)||0;
+  const og=parseFloat(document.getElementById('fi-origfee').value)||0;
+  const combined=document.getElementById('fi-bankfees');
+  if(document.getElementById('fi-ddfee').value!==''||document.getElementById('fi-origfee').value!==''){
+    combined.value=(dd+og).toFixed(2); combined.readOnly=true; combined.style.opacity='.6';
+  } else { combined.readOnly=false; combined.style.opacity='1'; }
+  autoCalc();
+}
+function toggleBookLock(){
+  const inp=document.getElementById('fi-bookpct'), ic=document.getElementById('bp-lock');
+  if(inp.readOnly){ inp.readOnly=false; inp.style.opacity='1'; ic.textContent='🔓'; inp.focus(); }
+  else { inp.readOnly=true; inp.style.opacity='.6'; inp.value=100; ic.textContent='🔒'; autoCalc(); }
+}
 function toggleSidebar(){
   const sb=document.querySelector('.sidebar'), t=document.getElementById('sb-toggle');
   sb.classList.toggle('collapsed');
@@ -537,6 +553,8 @@ const REQUIRED_FIELDS = [
   {name:'Frequency',   type:'singleSelect', options:{choices:[{name:'Daily'},{name:'Weekly'}]}},
   {name:'Funder',      type:'singleLineText'},
   {name:'FinanceFeePct',type:'number', options:{precision:2}},
+  {name:'DDFee',       type:'number', options:{precision:2}},
+  {name:'OrigFee',     type:'number', options:{precision:2}},
 ];
 
 async function ensureFields() {
@@ -586,6 +604,8 @@ function dealToFields(d) {
     LeadID:       d.lead_id      || '',
     Frequency:    d.frequency    || 'Daily',
     Funder:       d.funder       || '',
+    DDFee:        d.dd_fee       || 0,
+    OrigFee:      d.orig_fee     || 0,
     FinanceFeePct:d.finance_fee_pct!=null?d.finance_fee_pct:0.5
   };
 }
@@ -616,6 +636,8 @@ function fieldsToDeal(id, f) {
     lead_id:      f.LeadID       || '',
     frequency:    f.Frequency    || 'Daily',
     funder:       f.Funder        || '',
+    dd_fee:       f.DDFee         || 0,
+    orig_fee:     f.OrigFee       || 0,
     finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5
   };
 }
@@ -708,7 +730,8 @@ async function processImage(file) {
   "factor": number from Factor Rate,
   "term": number from Estimated Payments (business days),
   "daily_payment": number from Rate of Collection,
-  "bank_fees": number (Due Diligence Fee + Origination Fee summed),
+  "dd_fee": number from Due Diligence Fee,
+  "orig_fee": number from Origination Fee,
   "book_pct": number from Book percentage in Participation Info (0-100),
   "rep": "Rep from Verify Info",
   "iso": "ISO from Verify Info",
@@ -763,7 +786,12 @@ function fillForm(d) {
   document.getElementById('fi-factor').value=d.factor||'';
   document.getElementById('fi-term').value=d.term||'';
   document.getElementById('fi-daily').value=d.daily_payment||'';
+  document.getElementById('fi-ddfee').value=d.dd_fee!=null&&d.dd_fee!==0?d.dd_fee:(d.dd_fee===0&&d.orig_fee?0:'');
+  document.getElementById('fi-origfee').value=d.orig_fee!=null&&d.orig_fee!==0?d.orig_fee:(d.orig_fee===0&&d.dd_fee?0:'');
   document.getElementById('fi-bankfees').value=d.bank_fees||'';
+  sumFees();
+  const bpInp=document.getElementById('fi-bookpct'), bpIc=document.getElementById('bp-lock');
+  bpInp.readOnly=true; bpInp.style.opacity='.6'; bpIc.textContent='🔒';
   document.getElementById('fi-bookpct').value=d.book_pct!=null?d.book_pct:100;
   document.getElementById('fi-rep').value=d.rep||'';
   document.getElementById('fi-iso').value=d.iso||'';
@@ -795,6 +823,8 @@ async function saveDeal() {
     lead_id:document.getElementById('fi-leadid').value.trim(),
     frequency:document.getElementById('fi-frequency').value||'Daily',
     funder:document.getElementById('fi-funder').value.trim()||'HBP',
+    dd_fee:parseFloat(document.getElementById('fi-ddfee').value)||0,
+    orig_fee:parseFloat(document.getElementById('fi-origfee').value)||0,
     finance_fee_pct:(v=>isNaN(v)?0.5:v)(parseFloat(document.getElementById('fi-financefee').value)),
     date_funded:document.getElementById('fi-date').value,
     funded:f,rtr,factor:parseFloat(document.getElementById('fi-factor').value)||0,
