@@ -213,6 +213,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
         <div class="nav-item" onclick="openScreenshotModal()">📸 Add from screenshot</div>
         <div class="nav-item" onclick="openModal()">➕ Add manually</div>
         <div class="nav-item" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</div>
+        <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
         <div class="nav-item" onclick="exportCSV()">⬇️ Export to CSV</div>
         <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
       </div>
@@ -291,6 +292,21 @@ tbody td{padding:11px 14px;vertical-align:middle}
           <div id="empty-deals" class="empty-state"><div class="icon">📋</div><h3>No deals yet</h3><p>Click <strong>📸 Add from screenshot</strong> and upload a Pinnacle<br>funding email screenshot. Claude reads it automatically.</p></div>
         </div>
 
+        <div class="panel" id="panel-monthly" style="display:none">
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Month</th><th>TDF</th><th>New</th><th>REFI</th>
+                <th>Total Funding</th><th>Avg Deal Size</th><th>Avg Deal Length</th>
+                <th>Average Fee</th><th>Banks</th><th>Bank Bonus</th>
+                <th>Total PNL</th><th>Finance Fees</th><th>Clawback</th><th>Legal</th>
+              </tr></thead>
+              <tbody id="monthly-body"></tbody>
+            </table>
+          </div>
+          <div id="monthly-empty" class="empty-state" style="display:none"><div class="icon">📅</div><h3>No funded deals yet</h3><p>Monthly totals appear as deals land.</p></div>
+        </div>
+
         <div class="panel" id="panel-renewal" style="display:none">
           <div class="panel-header"><h3>Renewal eligible — by rep</h3><span style="font-size:12px;color:var(--text3)">Deals ≥ 50% paid · ready for outreach</span></div>
           <div id="renewal-body"></div>
@@ -344,6 +360,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
       <div class="form-row"><label>Merchant (New QB Name)</label><input id="fi-merchant" type="text" placeholder="PHOENIXCLEANERSAND"></div>
       <div class="form-row"><label>Lead ID</label><input id="fi-leadid" type="text" placeholder="152663"></div>
       <div class="form-row"><label>Frequency</label><select id="fi-frequency"><option value="Daily" selected>Daily</option><option value="Weekly">Weekly</option></select></div>
+      <div class="form-row"><label>Deal Type</label><select id="fi-dealtype"><option value="NEW" selected>NEW</option><option value="REFI">REFI</option></select></div>
       <div class="form-row"><label>Funder</label><input id="fi-funder" type="text" placeholder="HBP"></div>
       <div class="form-row"><label>Finance Fee % <small style="color:var(--text3)">(of book payback; 0.5 default)</small></label><input id="fi-financefee" type="number" step="0.01"></div>
       <div class="form-row"><label>Date funded</label><input id="fi-date" type="date"></div>
@@ -517,6 +534,14 @@ function updateCredentials() {
 const AT_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE}`;
 const AT_META_URL = `https://api.airtable.com/v0/meta/bases/${AIRTABLE_BASE_ID}/tables`;
 
+async function atFetchT(table, method, path='', body=null) {
+  const key = getAirtableKey();
+  const opts = { method, headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(table)}` + path, opts);
+  if (!res.ok) { const err = await res.json().catch(()=>({error:{message:'HTTP '+res.status}})); throw new Error(err.error?.message || 'Airtable error ' + res.status); }
+  return res.json();
+}
 async function atFetch(method, path='', body=null) {
   const key = getAirtableKey();
   const opts = {
@@ -559,6 +584,7 @@ const REQUIRED_FIELDS = [
   {name:'Funder',      type:'singleLineText'},
   {name:'FinanceFeePct',type:'number', options:{precision:2}},
   {name:'DDFee',       type:'number', options:{precision:2}},
+  {name:'DealType',    type:'singleSelect', options:{choices:[{name:'NEW'},{name:'REFI'}]}},
   {name:'OrigFee',     type:'number', options:{precision:2}},
 ];
 
@@ -610,6 +636,7 @@ function dealToFields(d) {
     Frequency:    d.frequency    || 'Daily',
     Funder:       d.funder       || '',
     DDFee:        d.dd_fee       || 0,
+    DealType:     d.deal_type    || 'NEW',
     OrigFee:      d.orig_fee     || 0,
     FinanceFeePct:d.finance_fee_pct!=null?d.finance_fee_pct:0.5
   };
@@ -642,6 +669,7 @@ function fieldsToDeal(id, f) {
     frequency:    f.Frequency    || 'Daily',
     funder:       f.Funder        || '',
     dd_fee:       f.DDFee         || 0,
+    deal_type:    f.DealType      || 'NEW',
     orig_fee:     f.OrigFee       || 0,
     finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5
   };
@@ -728,6 +756,7 @@ async function processImage(file) {
   "merchant": "value from NEW QB Name field (or Existing QB Name). NEVER use Legal Name on Statement or DBA — only the QB Name",
   "lead_id": "value from Lead ID field as a string",
   "frequency": "Daily or Weekly, from Method of Collection",
+  "deal_type": "NEW or REFI, from the Deal Type line",
   "funder": "short funder name from the Funder line in Verify Info (e.g. HBP)",
   "date_funded": "YYYY-MM-DD from the Last Updated date (when the funding request went to accounting) — NOT Created, NOT Start Debits On. The year MUST be between 2020 and 2030 — read it carefully from the image, never invent digits",
   "funded": number from Purchase Price,
@@ -783,6 +812,7 @@ function fillForm(d) {
   document.getElementById('fi-merchant').value=d.merchant||'';
   document.getElementById('fi-leadid').value=d.lead_id||'';
   document.getElementById('fi-frequency').value=d.frequency||'Daily';
+  document.getElementById('fi-dealtype').value=d.deal_type||'NEW';
   document.getElementById('fi-funder').value=d.funder||'HBP';
   document.getElementById('fi-financefee').value=d.finance_fee_pct!=null?d.finance_fee_pct:0.5;
   document.getElementById('fi-date').value=d.date_funded||new Date().toISOString().split('T')[0];
@@ -828,6 +858,7 @@ async function saveDeal() {
     merchant:document.getElementById('fi-merchant').value.trim().toUpperCase(),
     lead_id:document.getElementById('fi-leadid').value.trim(),
     frequency:document.getElementById('fi-frequency').value||'Daily',
+    deal_type:document.getElementById('fi-dealtype').value||'NEW',
     funder:document.getElementById('fi-funder').value.trim()||'HBP',
     dd_fee:parseFloat(document.getElementById('fi-ddfee').value)||0,
     orig_fee:parseFloat(document.getElementById('fi-origfee').value)||0,
@@ -933,9 +964,9 @@ async function handleDailyReport(input) {
 // ─── VIEWS ───────────────────────────────────────────────
 function setView(v){
   currentView=v;
-  ['book','renewal','defaults'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
-  document.getElementById('view-title').textContent={book:'All deals',renewal:'Renewal eligible',defaults:'Defaults'}[v];
-  if(v==='renewal') renderRenewal(); if(v==='defaults') renderDefaults();
+  ['book','renewal','defaults','monthly'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
+  document.getElementById('view-title').textContent={book:'All deals',renewal:'Renewal eligible',defaults:'Defaults',monthly:'Monthly totals'}[v];
+  if(v==='renewal') renderRenewal(); if(v==='defaults') renderDefaults(); if(v==='monthly') renderMonthly();
 }
 
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
@@ -1070,6 +1101,92 @@ function showNotice(msg,type='info',dur=5000){
   const el=document.getElementById('notice');
   el.textContent=msg; el.className='notice show notice-'+type;
   if(dur) setTimeout(()=>el.className='notice',dur);
+}
+
+// ─── MONTHLY VIEW ────────────────────────────────────────
+// Computed live from the deal book; Legal + Clawback are manual, stored in the
+// shared Monthly table so Sal and Matt see the same numbers. Clawback will be
+// fed by the collections matrix later — fillable by hand until then.
+let monthlyManual = {};   // 'YYYY-MM' -> {_id, legal, clawback}
+async function loadMonthlyManual(){
+  monthlyManual = {};
+  let offset=null;
+  do{
+    const data = await atFetchT('Monthly','GET', offset?`?offset=${offset}`:'');
+    data.records.forEach(r=>{ if(r.fields.Month) monthlyManual[r.fields.Month]={_id:r.id, legal:r.fields.Legal||0, clawback:r.fields.Clawback||0}; });
+    offset = data.offset;
+  } while(offset);
+}
+async function saveMonthlyCell(month, field, value){
+  const v = parseFloat(value)||0;
+  try{
+    const m = monthlyManual[month];
+    if(m && m._id){ await atFetchT('Monthly','PATCH','',{records:[{id:m._id, fields:{[field]:v}}]}); m[field.toLowerCase()]=v; }
+    else{
+      const out = await atFetchT('Monthly','POST','',{records:[{fields:{Month:month,[field]:v}}]});
+      monthlyManual[month]={_id:out.records[0].id, legal:field==='Legal'?v:0, clawback:field==='Clawback'?v:0};
+    }
+    showNotice(field+' saved for '+month,'success');
+  }catch(err){ showNotice('Save failed: '+err.message,'error'); }
+}
+function monthLabel(ym){ const [y,m]=ym.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]+'-'+y.slice(2); }
+async function renderMonthly(){
+  const body=document.getElementById('monthly-body'), empty=document.getElementById('monthly-empty');
+  body.innerHTML='<tr><td colspan="14" style="color:var(--text3)">Loading monthly data...</td></tr>';
+  try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
+  const groups={};
+  deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
+  Object.keys(monthlyManual).forEach(ym=>{ if(!groups[ym]) groups[ym]=[]; });
+  const months=Object.keys(groups).sort();
+  if(!months.length){ body.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+  const bdLen=d=>d.frequency==='Weekly'?(d.term||0)*5:(d.term||0);
+  const rowFor=(label, ds, manual, ym, isTotal)=>{
+    const tdf=ds.length, nw=ds.filter(d=>d.deal_type!=='REFI').length, rf=ds.filter(d=>d.deal_type==='REFI').length;
+    const funding=ds.reduce((s,d)=>s+(d.funded||0),0);
+    const banks=ds.reduce((s,d)=>s+(d.bank_fees||0),0);
+    const bonus=ds.reduce((s,d)=>s+(d.kickback||0),0);
+    const pnl=ds.reduce((s,d)=>s+(d.pnl||0),0);
+    const ffees=ds.reduce((s,d)=>s+(d.finance_fee||0),0);
+    const avgSize=tdf?funding/tdf:0, avgLen=tdf?ds.reduce((s,d)=>s+bdLen(d),0)/tdf:0;
+    const avgFee=funding?banks/funding*100:0;
+    const style=isTotal?'font-weight:700;background:var(--bg3)':'';
+    const manualCells=isTotal
+      ? `<td style="${style}">${fmt$(manual.clawback)}</td><td style="${style}">${fmt$(manual.legal)}</td>`
+      : `<td><input class="m-edit" type="number" step="0.01" value="${manual.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${ym}','Clawback',this.value)"></td>`+
+        `<td><input class="m-edit" type="number" step="0.01" value="${manual.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${ym}','Legal',this.value)"></td>`;
+    return `<tr>
+      <td style="${style};white-space:nowrap">${label}</td>
+      <td style="${style}">${tdf}</td><td style="${style}">${nw}</td><td style="${style}">${rf}</td>
+      <td style="${style}">${fmt$(funding)}</td>
+      <td style="${style}">${tdf?fmt$(avgSize):'—'}</td>
+      <td style="${style}">${tdf?avgLen.toFixed(1)+' BD':'—'}</td>
+      <td style="${style}">${funding?avgFee.toFixed(2)+'%':'—'}</td>
+      <td style="${style}">${fmt$(banks)}</td>
+      <td style="${style}">${fmt$(bonus)}</td>
+      <td class="${pnl>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(pnl)}</td>
+      <td style="${style};color:var(--amber)">(${fmt$(ffees)})</td>
+      ${manualCells}
+    </tr>`;
+  };
+  let out='', yearAcc={}, lastYear=null;
+  const flushYear=y=>{
+    if(!y||!yearAcc[y]) return '';
+    const a=yearAcc[y];
+    return rowFor('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback}, '', true);
+  };
+  months.forEach(ym=>{
+    const y=ym.slice(0,4);
+    if(lastYear&&y!==lastYear){ out+=flushYear(lastYear); }
+    lastYear=y;
+    yearAcc[y]=yearAcc[y]||{deals:[],legal:0,clawback:0};
+    const man=monthlyManual[ym]||{legal:0,clawback:0};
+    yearAcc[y].deals=yearAcc[y].deals.concat(groups[ym]);
+    yearAcc[y].legal+=man.legal||0; yearAcc[y].clawback+=man.clawback||0;
+    out+=rowFor(monthLabel(ym), groups[ym], man, ym, false);
+  });
+  out+=flushYear(lastYear);
+  body.innerHTML=out;
 }
 
 function exportCSV(){
