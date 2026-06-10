@@ -206,7 +206,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 8 — lifecycle</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 9 — refi &amp; payouts</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -306,6 +306,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
                 <th>Total Funding</th><th>Avg Deal Size</th><th>Avg Deal Length</th>
                 <th>Average Fee</th><th>Banks</th><th>Bank Bonus</th>
                 <th>Total PNL</th><th>Finance Fees</th><th>Clawback</th><th>Legal</th>
+                <th style="border-left:2px solid var(--border)">FF Due (4-mo lag)</th><th>Sal Payout</th><th>Matt Payout</th>
               </tr></thead>
               <tbody id="monthly-body"></tbody>
             </table>
@@ -314,8 +315,17 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
         </div>
 
         <div class="panel" id="panel-renewal" style="display:none">
-          <div class="panel-header"><h3>REFI eligible — by rep</h3><span style="font-size:12px;color:var(--text3)">Deals with balances at ≥ <input id="refi-threshold-input" type="number" min="1" max="100" step="1" value="50" style="width:52px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:12px;text-align:center" onchange="saveThreshold(this.value)">% paid · shared setting — changes apply for both of you</span></div>
-          <div id="renewal-body"></div>
+          <div class="panel-header"><h3>REFI eligible</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <select id="refi-rep-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All reps</option></select>
+            <select id="refi-iso-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select>
+            <span>Balances at ≥ <input id="refi-threshold-input" type="number" min="1" max="100" step="1" value="50" style="width:52px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:12px;text-align:center" onchange="saveThreshold(this.value)">% paid · shared setting — changes apply for both of you</span>
+          </span></div>
+          <div class="table-wrap" id="renewal-table-wrap">
+            <table>
+              <thead><tr><th>Start Date</th><th>Merchant</th><th>Balance</th><th>% Paid</th><th>Rep</th><th>ISO</th><th>Lead ID</th></tr></thead>
+              <tbody id="renewal-body"></tbody>
+            </table>
+          </div>
           <div id="renewal-empty" class="empty-state" style="display:none"><div class="icon">✅</div><h3>None eligible yet</h3><p>Deals with a balance appear here once they cross the threshold.</p></div>
         </div>
 
@@ -1130,21 +1140,30 @@ function renderTable(){
 
 function renderRenewal(){
   const eligible=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0);
-  const body=document.getElementById('renewal-body'),empty=document.getElementById('renewal-empty');
-  if(!eligible.length){body.innerHTML='';empty.style.display='';return;}
-  empty.style.display='none';
-  const byRep={};
-  eligible.forEach(d=>{const r=d.rep||'Unassigned';if(!byRep[r])byRep[r]=[];byRep[r].push(d);});
-  body.innerHTML=Object.entries(byRep).map(([rep,ds])=>`
-    <div class="rep-group">
-      <div class="rep-header"><span>👤 ${rep}</span><span style="font-size:11px;color:var(--text3);font-weight:400">${ds.length} deal${ds.length!==1?'s':''} eligible</span></div>
-      <div class="rep-deals">${ds.map(d=>`<div class="rep-deal-card">
-        <div><div style="font-weight:700;font-size:13px">${d.merchant}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${fmtDate(d.date_funded)}</div></div>
-        <div style="font-size:12px;color:var(--text2)">${fmt$(d.funded)} funded</div>
-        <div style="color:var(--green);font-weight:700;font-size:13px">${(d.pct_paid*100).toFixed(1)}% paid</div>
-        <div style="color:var(--text2);font-size:12px">${fmt$(d.balance)} remaining</div>
-      </div>`).join('')}</div>
-    </div>`).join('');
+  const body=document.getElementById('renewal-body'),empty=document.getElementById('renewal-empty'),wrap=document.getElementById('renewal-table-wrap');
+  const repSel=document.getElementById('refi-rep-filter'),isoSel=document.getElementById('refi-iso-filter');
+  // rebuild filter options from the eligible pool, preserving current selection
+  const keepRep=repSel.value,keepIso=isoSel.value;
+  const reps=[...new Set(eligible.map(d=>d.rep||'Unassigned'))].sort();
+  const isos=[...new Set(eligible.map(d=>d.iso||'Unassigned'))].sort();
+  repSel.innerHTML='<option value="">All reps</option>'+reps.map(r=>`<option${r===keepRep?' selected':''}>${r}</option>`).join('');
+  isoSel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option${i===keepIso?' selected':''}>${i}</option>`).join('');
+  if(!eligible.length){body.innerHTML='';wrap.style.display='none';empty.style.display='';return;}
+  wrap.style.display='';empty.style.display='none';
+  const fRep=repSel.value,fIso=isoSel.value;
+  const rows=eligible
+    .filter(d=>(!fRep||(d.rep||'Unassigned')===fRep)&&(!fIso||(d.iso||'Unassigned')===fIso))
+    .sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+  if(!rows.length){body.innerHTML='<tr><td colspan="7" style="color:var(--text3);text-align:center;padding:20px">No eligible deals match these filters.</td></tr>';return;}
+  body.innerHTML=rows.map(d=>`<tr>
+    <td style="white-space:nowrap">${fmtDate(d.date_funded)}</td>
+    <td style="font-weight:600">${d.merchant}</td>
+    <td>${fmt$(d.balance)}</td>
+    <td style="color:var(--green);font-weight:700">${Math.round((d.pct_paid||0)*100)}%</td>
+    <td>${d.rep||'—'}</td>
+    <td>${d.iso||'—'}</td>
+    <td style="color:var(--text2)">${d.lead_id||'—'}</td>
+  </tr>`).join('');
 }
 
 function renderDefaults(){
@@ -1269,16 +1288,24 @@ async function saveMonthlyCell(month, field, value){
 function monthLabel(ym){ const [y,m]=ym.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]+'-'+y.slice(2); }
 async function renderMonthly(){
   const body=document.getElementById('monthly-body'), empty=document.getElementById('monthly-empty');
-  body.innerHTML='<tr><td colspan="14" style="color:var(--text3)">Loading monthly data...</td></tr>';
+  body.innerHTML='<tr><td colspan="17" style="color:var(--text3)">Loading monthly data...</td></tr>';
   try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
   Object.keys(monthlyManual).forEach(ym=>{ if(!groups[ym]) groups[ym]=[]; });
+  // FF 4-month lag: finance fees from month M are PAID in month M+4.
+  const addMonths=(ym,n)=>{const[y,m]=ym.split('-').map(Number);const t=(y*12+m-1)+n;return `${Math.floor(t/12)}-${String(t%12+1).padStart(2,'0')}`;};
+  const ffByMonth={};
+  Object.entries(groups).forEach(([ym,ds])=>{const f=ds.reduce((s,d)=>s+(d.finance_fee||0),0);if(f>0)ffByMonth[ym]=f;});
+  const nowYM=new Date().toISOString().slice(0,7);
+  // months owing a lagged FF payment get a row even with zero fundings (up to current month)
+  Object.keys(ffByMonth).forEach(ym=>{const t=addMonths(ym,4);if(t<=nowYM&&!groups[t])groups[t]=[];});
+  const ffDueFor=ym=>ffByMonth[addMonths(ym,-4)]||0;
   const months=Object.keys(groups).sort();
   if(!months.length){ body.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
   const bdLen=d=>d.frequency==='Weekly'?(d.term||0)*5:(d.term||0);
-  const rowFor=(label, ds, manual, ym, isTotal)=>{
+  const rowFor=(label, ds, manual, ym, isTotal, ffDue)=>{
     const tdf=ds.length, nw=ds.filter(d=>d.deal_type!=='REFI').length, rf=ds.filter(d=>d.deal_type==='REFI').length;
     const funding=ds.reduce((s,d)=>s+(d.funded||0),0);
     const banks=ds.reduce((s,d)=>s+(d.bank_fees||0),0);
@@ -1287,11 +1314,15 @@ async function renderMonthly(){
     const ffees=ds.reduce((s,d)=>s+(d.finance_fee||0),0);
     const avgSize=tdf?funding/tdf:0, avgLen=tdf?ds.reduce((s,d)=>s+bdLen(d),0)/tdf:0;
     const avgFee=funding?banks/funding*100:0;
+    const pay=(pnl-(ffDue||0)-(manual.legal||0))/2; // 50/50 Sal & Matt — PNL minus FF (4-mo lag) minus Legal
     const style=isTotal?'font-weight:700;background:var(--bg3)':'';
     const manualCells=isTotal
       ? `<td style="${style}">${fmt$(manual.clawback)}</td><td style="${style}">${fmt$(manual.legal)}</td>`
       : `<td><input class="m-edit" type="number" step="0.01" value="${manual.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${ym}','Clawback',this.value)"></td>`+
         `<td><input class="m-edit" type="number" step="0.01" value="${manual.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${ym}','Legal',this.value)"></td>`;
+    const payCells=`<td style="${style};border-left:2px solid var(--border);color:var(--amber)">${ffDue?'('+fmt$(ffDue)+')':'—'}</td>`+
+      `<td class="${pay>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(pay)}</td>`+
+      `<td class="${pay>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(pay)}</td>`;
     return `<tr>
       <td style="${style};white-space:nowrap">${label}</td>
       <td style="${style}">${tdf}</td><td style="${style}">${nw}</td><td style="${style}">${rf}</td>
@@ -1304,23 +1335,25 @@ async function renderMonthly(){
       <td class="${pnl>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(pnl)}</td>
       <td style="${style};color:var(--amber)">(${fmt$(ffees)})</td>
       ${manualCells}
+      ${payCells}
     </tr>`;
   };
   let out='', yearAcc={}, lastYear=null;
   const flushYear=y=>{
     if(!y||!yearAcc[y]) return '';
     const a=yearAcc[y];
-    return rowFor('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback}, '', true);
+    return rowFor('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback}, '', true, a.ffDue);
   };
   months.forEach(ym=>{
     const y=ym.slice(0,4);
     if(lastYear&&y!==lastYear){ out+=flushYear(lastYear); }
     lastYear=y;
-    yearAcc[y]=yearAcc[y]||{deals:[],legal:0,clawback:0};
+    yearAcc[y]=yearAcc[y]||{deals:[],legal:0,clawback:0,ffDue:0};
     const man=monthlyManual[ym]||{legal:0,clawback:0};
+    const ffDue=ffDueFor(ym);
     yearAcc[y].deals=yearAcc[y].deals.concat(groups[ym]);
-    yearAcc[y].legal+=man.legal||0; yearAcc[y].clawback+=man.clawback||0;
-    out+=rowFor(monthLabel(ym), groups[ym], man, ym, false);
+    yearAcc[y].legal+=man.legal||0; yearAcc[y].clawback+=man.clawback||0; yearAcc[y].ffDue+=ffDue;
+    out+=rowFor(monthLabel(ym), groups[ym], man, ym, false, ffDue);
   });
   out+=flushYear(lastYear);
   body.innerHTML=out;
