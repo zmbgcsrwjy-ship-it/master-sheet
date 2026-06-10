@@ -206,7 +206,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 9 — refi &amp; payouts</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 10 — shared login</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -473,31 +473,34 @@ const getAirtableKey  = () => BAKED_AIRTABLE.startsWith('pat')    ? BAKED_AIRTAB
 
 // ─── STARTUP ─────────────────────────────────────────────
 window.addEventListener('load', () => {
-  const storedPW = localStorage.getItem('ms_password');
+  localStorage.removeItem('ms_password'); // obsolete per-browser password (pre-build-10) — clean up
   document.getElementById('password-screen').style.display = 'flex';
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app').style.display = 'none';
-  if (!storedPW) {
-    document.getElementById('pw-desc').textContent = 'First time? Create a password to protect this dashboard.';
-  }
   document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
   document.getElementById('setup-anthropic').addEventListener('keydown', e => { if(e.key==='Enter') setupAndBake(); });
   document.getElementById('setup-airtable').addEventListener('keydown',  e => { if(e.key==='Enter') setupAndBake(); });
 });
 
-// --- PASSWORD ---
-function checkPassword() {
+// --- PASSWORD (shared — build 10) ---
+// One password for everyone, baked in as a SHA-256 fingerprint (one-way; can't be
+// reversed out of the public source). No create-password flow exists anymore.
+// To change the password: hash the new one and replace MS_PW_HASH, ship a new build.
+const MS_PW_HASH = 'f723d50023f22f10829530d3c56698e2a04a047f988846b7908893b114d29328';
+async function sha256Hex(str){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function checkPassword() {
   const entered = document.getElementById('pw-input').value;
-  const stored = localStorage.getItem('ms_password');
   const errEl = document.getElementById('pw-error');
-  if (!stored) {
-    if (!entered || entered.length < 4) { errEl.textContent = 'Password must be at least 4 characters.'; errEl.style.display='block'; return; }
-    localStorage.setItem('ms_password', btoa(entered));
-    unlockApp();
-  } else {
-    if (btoa(entered) !== stored) { errEl.textContent = 'Incorrect password. Try again.'; errEl.style.display='block'; document.getElementById('pw-input').value=''; return; }
-    unlockApp();
+  if (await sha256Hex(entered) !== MS_PW_HASH) {
+    errEl.textContent = 'Incorrect password. Try again.';
+    errEl.style.display='block';
+    document.getElementById('pw-input').value='';
+    return;
   }
+  unlockApp();
 }
 
 function unlockApp() {
@@ -531,10 +534,6 @@ function setupAndBake() {
   loadDeals();
 }
 
-function resetPassword() {
-  localStorage.removeItem('ms_password');
-  location.reload();
-}
 
 function bakeIntoFile(anthropic, airtable) {
   // SECURITY (June 10, 2026): this used to download a copy of the app with
