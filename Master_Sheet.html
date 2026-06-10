@@ -126,6 +126,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .form-row input{width:100%;font-size:13px;padding:8px 11px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text);outline:none;transition:border .15s}
 .form-row input:focus{border-color:var(--blue)}
 .input-missing{border-color:var(--red)!important;background:var(--red-bg)!important}
+tr.month-break td{border-top:2px solid var(--blue)!important}
 .form-row input[readonly]{opacity:.5;cursor:default}
 .modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border)}
 .formula-note{font-size:10px;color:var(--text3);grid-column:1/-1;margin-top:-4px;line-height:1.6}
@@ -203,18 +204,18 @@ tbody td{padding:11px 14px;vertical-align:middle}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 6 — watchdog</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 7 — filters</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
         <div class="nav-item active" id="nav-book" onclick="setView('book')">📊 All deals</div>
         <div class="nav-item" id="nav-renewal" onclick="setView('renewal')">🔄 Renewal eligible <span class="nav-badge" id="renewal-badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">0</span></div>
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
+        <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
         <div class="nav-section">Actions</div>
         <div class="nav-item" onclick="openScreenshotModal()">📸 Add from screenshot</div>
         <div class="nav-item" onclick="openModal()">➕ Add manually</div>
         <div class="nav-item" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</div>
-        <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
         <div class="nav-item" onclick="exportCSV()">⬇️ Export to CSV</div>
         <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
       </div>
@@ -257,7 +258,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
             <div class="filters">
               <select id="f-status" onchange="renderTable()"><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="DEFAULT">Default</option><option value="COMPLETED">Completed</option></select>
               <select id="f-rep" onchange="renderTable()"><option value="">All reps</option></select>
-              <input id="f-search" type="text" placeholder="Search merchant..." oninput="renderTable()" style="min-width:150px">
+              <select id="f-iso" onchange="renderTable()"><option value="">All ISOs</option></select>
+              <input id="f-search" type="text" placeholder="Search merchant or lead ID..." oninput="renderTable()" style="min-width:170px">
             </div>
           </div>
           <div class="table-wrap">
@@ -360,7 +362,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
       <div class="form-section">Deal info</div>
       <div class="form-row"><label>Merchant (New QB Name)</label><input id="fi-merchant" type="text" placeholder="PHOENIXCLEANERSAND"></div>
       <div class="form-row"><label>Lead ID</label><input id="fi-leadid" type="text" placeholder="152663"></div>
-      <div class="form-row"><label>Frequency</label><select id="fi-frequency"><option value="Daily" selected>Daily</option><option value="Weekly">Weekly</option></select></div>
+      <div class="form-row"><label>Frequency</label><select id="fi-frequency" onchange="updateFreqLabels()"><option value="Daily" selected>Daily</option><option value="Weekly">Weekly</option></select></div>
       <div class="form-row"><label>Deal Type</label><select id="fi-dealtype"><option value="NEW" selected>NEW</option><option value="REFI">REFI</option></select></div>
       <div class="form-row"><label>Funder</label><input id="fi-funder" type="text" placeholder="HBP"></div>
       <div class="form-row"><label>Finance Fee % <small style="color:var(--text3)">(of book payback; 0.5 default)</small></label><input id="fi-financefee" type="number" step="0.01"></div>
@@ -369,8 +371,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
       <div class="form-row"><label>Funded / Purchase price ($)</label><input id="fi-funded" type="number" oninput="autoCalc()"></div>
       <div class="form-row"><label>RTR / Payback ($)</label><input id="fi-rtr" type="number" oninput="autoCalc()"></div>
       <div class="form-row"><label>Factor rate</label><input id="fi-factor" type="number" step="0.001"></div>
-      <div class="form-row"><label>Term (business days)</label><input id="fi-term" type="number"></div>
-      <div class="form-row"><label>Daily payment ($)</label><input id="fi-daily" type="number"></div>
+      <div class="form-row"><label id="lbl-term">Term (business days)</label><input id="fi-term" type="number"></div>
+      <div class="form-row"><label id="lbl-payment">Daily payment ($)</label><input id="fi-daily" type="number"></div>
       <div class="form-row"><label>DD Fee ($)</label><input id="fi-ddfee" type="number" oninput="sumFees()"></div>
       <div class="form-row"><label>Origination Fee ($)</label><input id="fi-origfee" type="number" oninput="sumFees()"></div>
       <div class="form-row"><label>Bank Fees — combined <small style="color:var(--text3)">(auto when split above)</small></label><input id="fi-bankfees" type="number" oninput="autoCalc()"></div>
@@ -827,6 +829,11 @@ const WATCHDOG_FIELDS = [
   ['fi-funder','Funder', v=>!v.trim()],
   ['fi-commpct','Commission %', v=>v===''],
 ];
+function updateFreqLabels(){
+  const wk=document.getElementById('fi-frequency').value==='Weekly';
+  document.getElementById('lbl-term').textContent = wk?'Term (weeks)':'Term (business days)';
+  document.getElementById('lbl-payment').textContent = wk?'Weekly payment ($)':'Daily payment ($)';
+}
 function runWatchdog(){
   const missing=[];
   WATCHDOG_FIELDS.forEach(([id,label,isBad])=>{
@@ -848,6 +855,7 @@ function fillForm(d) {
   document.getElementById('fi-leadid').value=d.lead_id||'';
   document.getElementById('fi-frequency').value=d.frequency||'Daily';
   document.getElementById('fi-dealtype').value=d.deal_type||'NEW';
+  updateFreqLabels();
   document.getElementById('fi-funder').value=d.funder||'HBP';
   document.getElementById('fi-financefee').value=d.finance_fee_pct!=null?d.finance_fee_pct:0.5;
   document.getElementById('fi-date').value=d.date_funded||new Date().toISOString().split('T')[0];
@@ -1009,11 +1017,12 @@ function setView(v){
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
 
 function getFiltered(){
-  const sf=document.getElementById('f-status').value,rf=document.getElementById('f-rep').value,qf=document.getElementById('f-search').value.toLowerCase();
+  const sf=document.getElementById('f-status').value,rf=document.getElementById('f-rep').value,isoF=document.getElementById('f-iso').value,qf=document.getElementById('f-search').value.toLowerCase();
   return deals.filter(d=>{
     if(sf&&d.status!==sf) return false;
     if(rf&&d.rep!==rf) return false;
-    if(qf&&!d.merchant.toLowerCase().includes(qf)) return false;
+    if(isoF&&d.iso!==isoF) return false;
+    if(qf&&!d.merchant.toLowerCase().includes(qf)&&!String(d.lead_id||'').toLowerCase().includes(qf)) return false;
     return true;
   }).sort((a,b)=>{
     let av=a[sortCol]??0,bv=b[sortCol]??0;
@@ -1030,14 +1039,19 @@ function renderTable(){
   nod.style.display='none';
   if(!filtered.length){nof.style.display='';tbody.innerHTML='';return;}
   nof.style.display='none';
+  let _prevMonth=null;
+  const _dateSorted = sortCol==='date_funded';
   tbody.innerHTML=filtered.map(d=>{
+    const _ym=(d.date_funded||'').slice(0,7);
+    const _break=_dateSorted&&_prevMonth!==null&&_ym!==_prevMonth;
+    _prevMonth=_ym;
     const pct=d.pct_paid||0,isRenewal=pct>=0.5&&d.status==='ACTIVE';
     const fillCls=pct>=0.75?'fill-high':pct>=0.5?'fill-mid':'fill-low';
     const badgeCls=d.status==='ACTIVE'?'badge-active':d.status==='DEFAULT'?'badge-default':'badge-completed';
     const pnl=d.pnl||0;
     const lenTxt=d.term?(d.frequency==='Weekly'?d.term+' wk':d.term+' BD'):'—';
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    return`<tr>
+    return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
       <td style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.merchant)}">${d.merchant}${isRenewal?'<span class="renew-tag">🔄 Renew</span>':''}</td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
@@ -1132,7 +1146,13 @@ function populateRepFilter(){
   if(cur) sel.value=cur;
 }
 
-function renderAll(){ populateRepFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='defaults')renderDefaults(); }
+function populateIsoFilter(){
+  const sel=document.getElementById('f-iso'),cur=sel.value;
+  const isos=[...new Set(deals.map(d=>d.iso).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option value="${i.replace(/"/g,'&quot;')}">${i}</option>`).join('');
+  sel.value=cur;
+}
+function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='defaults')renderDefaults(); }
 
 function showNotice(msg,type='info',dur=5000){
   const el=document.getElementById('notice');
