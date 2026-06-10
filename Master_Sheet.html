@@ -97,6 +97,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
 /* BADGES */
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
 .badge-active{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.badge-new{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)}
+.badge-pif{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);font-style:italic}
 .badge-default{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
 .badge-completed{background:var(--bg4);color:var(--text3);border:1px solid var(--border)}
 
@@ -204,12 +206,13 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 7 — filters</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 8 — lifecycle</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
         <div class="nav-item active" id="nav-book" onclick="setView('book')">📊 All deals</div>
-        <div class="nav-item" id="nav-renewal" onclick="setView('renewal')">🔄 Renewal eligible <span class="nav-badge" id="renewal-badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">0</span></div>
+        <div class="nav-item" id="nav-renewal" onclick="setView('renewal')">🔁 REFI eligible <span class="nav-badge" id="renewal-badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">0</span></div>
+        <div class="nav-item" id="nav-pif" onclick="setView('pif')">💰 PIF <span class="nav-badge" id="pif-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)">0</span></div>
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
         <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
         <div class="nav-section">Actions</div>
@@ -256,7 +259,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
           <div class="panel-header">
             <h3>All deals</h3>
             <div class="filters">
-              <select id="f-status" onchange="renderTable()"><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="DEFAULT">Default</option><option value="COMPLETED">Completed</option></select>
+              <select id="f-status" onchange="renderTable()"><option value="">All statuses</option><option value="NEW">New</option><option value="ACTIVE">Active</option><option value="PIF">PIF</option><option value="COMPLETED">Completed</option><option value="DEFAULT">Default</option></select>
               <select id="f-rep" onchange="renderTable()"><option value="">All reps</option></select>
               <select id="f-iso" onchange="renderTable()"><option value="">All ISOs</option></select>
               <input id="f-search" type="text" placeholder="Search merchant or lead ID..." oninput="renderTable()" style="min-width:170px">
@@ -311,9 +314,15 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
         </div>
 
         <div class="panel" id="panel-renewal" style="display:none">
-          <div class="panel-header"><h3>Renewal eligible — by rep</h3><span style="font-size:12px;color:var(--text3)">Deals ≥ 50% paid · ready for outreach</span></div>
+          <div class="panel-header"><h3>REFI eligible — by rep</h3><span style="font-size:12px;color:var(--text3)">Deals with balances at ≥ <input id="refi-threshold-input" type="number" min="1" max="100" step="1" value="50" style="width:52px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:12px;text-align:center" onchange="saveThreshold(this.value)">% paid · shared setting — changes apply for both of you</span></div>
           <div id="renewal-body"></div>
-          <div id="renewal-empty" class="empty-state" style="display:none"><div class="icon">✅</div><h3>None eligible yet</h3><p>Deals appear here once they hit 50% paid.</p></div>
+          <div id="renewal-empty" class="empty-state" style="display:none"><div class="icon">✅</div><h3>None eligible yet</h3><p>Deals with a balance appear here once they cross the threshold.</p></div>
+        </div>
+
+        <div class="panel" id="panel-pif" style="display:none">
+          <div class="panel-header"><h3>Paid in Full — renewal pipeline</h3><span style="font-size:12px;color:var(--text3)">Zero balance, no refi taken · prime renewal targets</span></div>
+          <div id="pif-body"></div>
+          <div id="pif-empty" class="empty-state" style="display:none"><div class="icon">💰</div><h3>No PIF deals</h3><p>Deals land here when they pay to zero without a refi.</p></div>
         </div>
 
         <div class="panel" id="panel-defaults" style="display:none">
@@ -588,6 +597,7 @@ const REQUIRED_FIELDS = [
   {name:'FinanceFeePct',type:'number', options:{precision:2}},
   {name:'DDFee',       type:'number', options:{precision:2}},
   {name:'DealType',    type:'singleSelect', options:{choices:[{name:'NEW'},{name:'REFI'}]}},
+  {name:'PrevLeadID',  type:'singleLineText'},
   {name:'OrigFee',     type:'number', options:{precision:2}},
 ];
 
@@ -640,6 +650,7 @@ function dealToFields(d) {
     Funder:       d.funder       || '',
     DDFee:        d.dd_fee       || 0,
     DealType:     d.deal_type    || 'NEW',
+    PrevLeadID:   d.prev_lead_id || '',
     OrigFee:      d.orig_fee     || 0,
     FinanceFeePct:d.finance_fee_pct!=null?d.finance_fee_pct:0.5
   };
@@ -673,6 +684,7 @@ function fieldsToDeal(id, f) {
     funder:       f.Funder        || '',
     dd_fee:       f.DDFee         || 0,
     deal_type:    f.DealType      || 'NEW',
+    prev_lead_id: f.PrevLeadID    || '',
     orig_fee:     f.OrigFee       || 0,
     finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5
   };
@@ -682,6 +694,7 @@ async function loadDeals() {
   showLoading('Loading deals from Airtable...');
   try {
     await ensureFields();
+    await loadSettings();
     let allRecords = [], offset = null;
     do {
       const url = offset ? `?offset=${offset}` : '';
@@ -916,10 +929,25 @@ async function saveDeal() {
     iso:document.getElementById('fi-iso').value.trim(),
     comm_pct:cp,comm_amount:comm,
     kickback:parseFloat(document.getElementById('fi-kickback').value)||0,
-    max_loss:ml,pnl:calcPNL(rtr,rtr,bp,ml),status:'ACTIVE'
+    max_loss:ml,pnl:calcPNL(rtr,rtr,bp,ml),status:'NEW'
   };
   if(watchdogBlocksSave()) return;
   if(!deal.merchant){ showNotice('Merchant name is required.','warn'); return; }
+  // ── Deal lifecycle engine (June 10, 2026) ──
+  // First funding for a QB name -> NEW. Funding with a prior open deal (balance
+  // remaining) -> REFI: new deal ACTIVE, prior auto-COMPLETED. Funding after a
+  // PIF -> renewal: same mechanics, also counted as REFI. The book decides the
+  // type — never Pinnacle's label, never the extraction guess.
+  let _prior=null;
+  if(!editingId){
+    const squish=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const priors=deals.filter(x=>squish(x.merchant)===squish(deal.merchant)&&['NEW','ACTIVE','PIF'].includes(x.status));
+    if(priors.length){
+      priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+      _prior=priors[0];
+      deal.status='ACTIVE'; deal.deal_type='REFI'; deal.prev_lead_id=_prior.lead_id||'';
+    } else { deal.status='NEW'; }
+  }
   const btn=document.getElementById('save-btn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Saving...';
   try {
@@ -931,7 +959,14 @@ async function saveDeal() {
     } else {
       deal.balance=rtr; deal.pct_paid=0;
       await createDeal(deal);
-      showNotice('Added: '+deal.merchant,'success');
+      if(_prior){
+        const wasPif=_prior.status==='PIF';
+        _prior.status='COMPLETED';
+        await updateDeal(_prior._id,_prior);
+        showNotice((wasPif?'RENEWAL':'REFI')+' detected for '+deal.merchant+' — prior deal (lead '+(_prior.lead_id||'?')+') marked COMPLETED automatically.','success',10000);
+      } else {
+        showNotice('Added: '+deal.merchant+' — first deal on the book for this merchant (NEW).','success');
+      }
     }
     closeModal();
     await loadDeals();
@@ -987,8 +1022,15 @@ async function handleDailyReport(input) {
           if(cands.length===1) m=cands[0];
           else if(cands.length>1){ ambiguous++; return; }
         }
-        if(!m) m=deals.find(d=>d.merchant.replace(/\s+/g,'')==name&&d.status==='ACTIVE');
-        if(m){ updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(stat?{Status:stat}:{}), ...(lead&&!m.lead_id?{LeadID:lead}:{}) }}); }
+        if(!m) m=deals.find(d=>d.merchant.replace(/\s+/g,'')==name&&['NEW','ACTIVE'].includes(d.status));
+        if(m){
+          // Status discipline: our lifecycle owns NEW/ACTIVE/PIF/COMPLETED.
+          // The daily report may only (a) declare DEFAULT, (b) trigger PIF at zero balance.
+          let newStatus=null;
+          if(stat==='DEFAULT'&&m.status!=='DEFAULT') newStatus='DEFAULT';
+          else if(bal<=0&&['NEW','ACTIVE'].includes(m.status)) newStatus='PIF';
+          updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(newStatus?{Status:newStatus}:{}), ...(lead&&!m.lead_id?{LeadID:lead}:{}) }});
+        }
       });
       if(ambiguous>0) showNotice(ambiguous+' row'+(ambiguous!==1?'s':'')+' skipped — same LeadID on multiple deals and amounts did not disambiguate. Update those balances manually.','warn',9000);
       if(!updates.length){ showNotice('No matching active deals found in report.','warn'); return; }
@@ -1009,9 +1051,9 @@ async function handleDailyReport(input) {
 // ─── VIEWS ───────────────────────────────────────────────
 function setView(v){
   currentView=v;
-  ['book','renewal','defaults','monthly'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
-  document.getElementById('view-title').textContent={book:'All deals',renewal:'Renewal eligible',defaults:'Defaults',monthly:'Monthly totals'}[v];
-  if(v==='renewal') renderRenewal(); if(v==='defaults') renderDefaults(); if(v==='monthly') renderMonthly();
+  ['book','renewal','pif','defaults','monthly'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
+  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',monthly:'Monthly totals'}[v];
+  if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='monthly') renderMonthly();
 }
 
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
@@ -1045,15 +1087,15 @@ function renderTable(){
     const _ym=(d.date_funded||'').slice(0,7);
     const _break=_dateSorted&&_prevMonth!==null&&_ym!==_prevMonth;
     _prevMonth=_ym;
-    const pct=d.pct_paid||0,isRenewal=pct>=0.5&&d.status==='ACTIVE';
+    const pct=d.pct_paid||0,isRenewal=pct>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0;
     const fillCls=pct>=0.75?'fill-high':pct>=0.5?'fill-mid':'fill-low';
-    const badgeCls=d.status==='ACTIVE'?'badge-active':d.status==='DEFAULT'?'badge-default':'badge-completed';
+    const badgeCls=d.status==='ACTIVE'?'badge-active':d.status==='NEW'?'badge-new':d.status==='PIF'?'badge-pif':d.status==='DEFAULT'?'badge-default':'badge-completed';
     const pnl=d.pnl||0;
     const lenTxt=d.term?(d.frequency==='Weekly'?d.term+' wk':d.term+' BD'):'—';
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
-      <td style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.merchant)}">${d.merchant}${isRenewal?'<span class="renew-tag">🔄 Renew</span>':''}</td>
+      <td style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.merchant)}">${d.merchant}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}</td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
       <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
@@ -1087,7 +1129,7 @@ function renderTable(){
 }
 
 function renderRenewal(){
-  const eligible=deals.filter(d=>d.pct_paid>=0.5&&d.status==='ACTIVE');
+  const eligible=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0);
   const body=document.getElementById('renewal-body'),empty=document.getElementById('renewal-empty');
   if(!eligible.length){body.innerHTML='';empty.style.display='';return;}
   empty.style.display='none';
@@ -1123,9 +1165,26 @@ function renderDefaults(){
   </tr>`;}).join('');
 }
 
+function renderPif(){
+  const pifs=deals.filter(d=>d.status==='PIF').sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+  const body=document.getElementById('pif-body'),empty=document.getElementById('pif-empty');
+  if(!pifs.length){body.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+  const byRep={};
+  pifs.forEach(d=>{const r=d.rep||'Unassigned';(byRep[r]=byRep[r]||[]).push(d);});
+  body.innerHTML=Object.entries(byRep).map(([rep,ds])=>`
+    <div class="rep-group">
+      <div class="rep-header"><span>👤 ${rep}</span><span style="font-size:11px;color:var(--text3);font-weight:400">${ds.length} PIF deal${ds.length!==1?'s':''}</span></div>
+      <div class="rep-deals">${ds.map(d=>`<div class="rep-deal-card">
+        <div><div style="font-weight:700;font-size:13px">${d.merchant}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Funded ${fmtDate(d.date_funded)} · ${fmt$(d.funded)} @ ${d.factor||'—'}</div></div>
+        <div style="text-align:right"><div style="font-size:12px;color:var(--green);font-weight:700">PAID IN FULL</div><div style="font-size:11px;color:var(--text3)">${d.lead_id?'lead '+d.lead_id:''}</div></div>
+      </div>`).join('')}</div>
+    </div>`).join('');
+}
 function renderMetrics(){
-  const active=deals.filter(d=>d.status==='ACTIVE'),defs=deals.filter(d=>d.status==='DEFAULT');
-  const rc=active.filter(d=>d.pct_paid>=0.5).length,totalPNL=deals.reduce((s,d)=>s+(d.pnl||0),0);
+  const active=deals.filter(d=>['NEW','ACTIVE'].includes(d.status)),defs=deals.filter(d=>d.status==='DEFAULT');
+  const pifs=deals.filter(d=>d.status==='PIF');
+  const rc=active.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&d.balance>0).length,totalPNL=deals.reduce((s,d)=>s+(d.pnl||0),0);
   document.getElementById('m-active').textContent=active.length;
   document.getElementById('m-funded').textContent=fmtK(active.reduce((s,d)=>s+d.funded,0));
   document.getElementById('m-rtr').textContent=fmtK(active.reduce((s,d)=>s+d.rtr,0));
@@ -1133,6 +1192,7 @@ function renderMetrics(){
   document.getElementById('m-renewal').textContent=rc;
   document.getElementById('m-defaults').textContent=defs.length;
   document.getElementById('renewal-badge').textContent=rc;
+  document.getElementById('pif-badge').textContent=pifs.length;
   document.getElementById('default-badge').textContent=defs.length;
   const pnlEl=document.getElementById('m-pnl');
   pnlEl.textContent=fmtK(totalPNL);
@@ -1152,7 +1212,7 @@ function populateIsoFilter(){
   sel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option value="${i.replace(/"/g,'&quot;')}">${i}</option>`).join('');
   sel.value=cur;
 }
-function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='defaults')renderDefaults(); }
+function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='pif')renderPif(); if(currentView==='defaults')renderDefaults(); }
 
 function showNotice(msg,type='info',dur=5000){
   const el=document.getElementById('notice');
@@ -1164,6 +1224,26 @@ function showNotice(msg,type='info',dur=5000){
 // Computed live from the deal book; Legal + Clawback are manual, stored in the
 // shared Monthly table so Sal and Matt see the same numbers. Clawback will be
 // fed by the collections matrix later — fillable by hand until then.
+let appSettings = { refi_threshold: 0.5, _ids: {} };
+async function loadSettings(){
+  try{
+    const data = await atFetchT('Settings','GET','');
+    data.records.forEach(r=>{ if(r.fields.Key){ appSettings[r.fields.Key]=r.fields.Num; appSettings._ids[r.fields.Key]=r.id; } });
+  }catch(e){ /* settings table missing — defaults stand */ }
+  const el=document.getElementById('refi-threshold-input');
+  if(el) el.value=Math.round((appSettings.refi_threshold||0.5)*100);
+}
+async function saveThreshold(pct){
+  const v=Math.min(100,Math.max(1,parseFloat(pct)||50))/100;
+  try{
+    const id=appSettings._ids['refi_threshold'];
+    if(id) await atFetchT('Settings','PATCH','',{records:[{id, fields:{Num:v}}]});
+    else{ const out=await atFetchT('Settings','POST','',{records:[{fields:{Key:'refi_threshold',Num:v}}]}); appSettings._ids['refi_threshold']=out.records[0].id; }
+    appSettings.refi_threshold=v;
+    showNotice('REFI eligibility threshold set to '+Math.round(v*100)+'% — applies for you and Matt.','success');
+    renderAll();
+  }catch(err){ showNotice('Could not save threshold: '+err.message,'error'); }
+}
 let monthlyManual = {};   // 'YYYY-MM' -> {_id, legal, clawback}
 async function loadMonthlyManual(){
   monthlyManual = {};
