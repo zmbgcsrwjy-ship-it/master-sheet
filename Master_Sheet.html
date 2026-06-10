@@ -328,6 +328,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
     <div class="form-grid">
       <div class="form-section">Deal info</div>
       <div class="form-row"><label>Merchant (New QB Name)</label><input id="fi-merchant" type="text" placeholder="PHOENIXCLEANERSAND"></div>
+      <div class="form-row"><label>Lead ID</label><input id="fi-leadid" type="text" placeholder="152663"></div>
+      <div class="form-row"><label>Frequency</label><select id="fi-frequency"><option value="Daily" selected>Daily</option><option value="Weekly">Weekly</option></select></div>
       <div class="form-row"><label>Date funded</label><input id="fi-date" type="date"></div>
       <div class="form-section">Financials</div>
       <div class="form-row"><label>Funded / Purchase price ($)</label><input id="fi-funded" type="number" oninput="autoCalc()"></div>
@@ -359,10 +361,10 @@ tbody td{padding:11px 14px;vertical-align:middle}
 
 <script>
 // ─── CONFIG ──────────────────────────────────────────────
-const AIRTABLE_BASE_ID = 'appF4JyGEELVD3hu8';
+const AIRTABLE_BASE_ID = 'apphzzf9owsOTICpp';
 const AIRTABLE_TABLE = 'Deals';
 const BAKED_ANTHROPIC = '__BAKED_ANTHROPIC__';
-const BAKED_AIRTABLE  = 'patLV6SJIp02ovaEr.e3031581e870b14c9a2244b9cc4911cd0d627cea3ef34b988afde2fd6e89d68a';
+const BAKED_AIRTABLE  = '__BAKED_AIRTABLE__';
 
 // ─── STATE ───────────────────────────────────────────────
 let deals = [];
@@ -443,27 +445,19 @@ function resetPassword() {
 }
 
 function bakeIntoFile(anthropic, airtable) {
-  fetch(window.location.href)
-    .then(r => r.text())
-    .then(html => {
-      let baked = html;
-      if (anthropic) baked = baked.replace("'__BAKED_ANTHROPIC__'", `'${anthropic}'`);
-      baked = baked.replace("'patLV6SJIp02ovaEr.e3031581e870b14c9a2244b9cc4911cd0d627cea3ef34b988afde2fd6e89d68a'", `'${airtable}'`);
-      const blob = new Blob([baked], {type:'text/html'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'Master_Sheet.html';
-      a.click();
-      URL.revokeObjectURL(a.href);
-    })
-    .catch(() => showNotice('Credentials saved to this browser. Share the file and enter credentials once on each new device.', 'info', 8000));
+  // SECURITY (June 10, 2026): this used to download a copy of the app with
+  // credentials stamped into the source. That stamped copy ended up on public
+  // GitHub and exposed the live Airtable token. Credentials now live ONLY in
+  // this browser's localStorage. The published file always carries placeholders.
+  // Each device enters credentials once on first login — that's by design.
+  showNotice('Credentials saved to this browser only. On a new device, enter them once at the setup screen.', 'info', 8000);
 }
 
 function updateCredentials() {
   const anthropic = prompt('Anthropic API key (leave blank to keep current):');
   const airtable  = prompt('Airtable token (leave blank to keep current):');
-  if (airtable && airtable.startsWith('pat')) { localStorage.setItem('ms_airtable', airtable); bakeIntoFile(anthropic||'', airtable); showNotice('Credentials updated. New copy downloaded.', 'success'); }
-  else if (anthropic && anthropic.startsWith('sk-ant')) { localStorage.setItem('ms_anthropic', anthropic); showNotice('Anthropic key updated.', 'success'); }
+  if (airtable && airtable.startsWith('pat')) { localStorage.setItem('ms_airtable', airtable); showNotice('Airtable token updated in this browser.', 'success'); loadDeals(); }
+  if (anthropic && anthropic.startsWith('sk-ant')) { localStorage.setItem('ms_anthropic', anthropic); showNotice('Anthropic key updated in this browser.', 'success'); }
 }
 
 // ─── AIRTABLE API ─────────────────────────────────────────
@@ -507,6 +501,8 @@ const REQUIRED_FIELDS = [
   {name:'PctPaid',     type:'number', options:{precision:4}},
   {name:'PNL',         type:'number', options:{precision:2}},
   {name:'Status',      type:'singleLineText'},
+  {name:'LeadID',      type:'singleLineText'},
+  {name:'Frequency',   type:'singleSelect', options:{choices:[{name:'Daily'},{name:'Weekly'}]}},
 ];
 
 async function ensureFields() {
@@ -552,7 +548,9 @@ function dealToFields(d) {
     Balance:      d.balance      || d.rtr || 0,
     PctPaid:      d.pct_paid     || 0,
     PNL:          d.pnl          || 0,
-    Status:       d.status       || 'ACTIVE'
+    Status:       d.status       || 'ACTIVE',
+    LeadID:       d.lead_id      || '',
+    Frequency:    d.frequency    || 'Daily'
   };
 }
 
@@ -578,7 +576,9 @@ function fieldsToDeal(id, f) {
     balance:      f.Balance      || 0,
     pct_paid:     f.PctPaid      || 0,
     pnl:          f.PNL          || 0,
-    status:       f.Status       || 'ACTIVE'
+    status:       f.Status       || 'ACTIVE',
+    lead_id:      f.LeadID       || '',
+    frequency:    f.Frequency    || 'Daily'
   };
 }
 
@@ -660,8 +660,10 @@ async function processImage(file) {
             { type:'image', source:{ type:'base64', media_type:mediaType, data:b64 } },
             { type:'text', text:`Extract deal fields from this Pinnacle MCA funding confirmation screenshot. Return ONLY valid JSON, no markdown, no explanation.
 {
-  "merchant": "value from NEW QB Name field",
-  "date_funded": "YYYY-MM-DD from Start Debits On date",
+  "merchant": "value from NEW QB Name field (or Existing QB Name)",
+  "lead_id": "value from Lead ID field as a string",
+  "frequency": "Daily or Weekly, from Method of Collection",
+  "date_funded": "YYYY-MM-DD from Start Debits On date. The year MUST be between 2020 and 2030 — read it carefully from the image, never invent digits",
   "funded": number from Purchase Price,
   "rtr": number from Purchase Amount,
   "factor": number from Factor Rate,
@@ -712,6 +714,8 @@ function autoCalc() {
 
 function fillForm(d) {
   document.getElementById('fi-merchant').value=d.merchant||'';
+  document.getElementById('fi-leadid').value=d.lead_id||'';
+  document.getElementById('fi-frequency').value=d.frequency||'Daily';
   document.getElementById('fi-date').value=d.date_funded||new Date().toISOString().split('T')[0];
   document.getElementById('fi-funded').value=d.funded||'';
   document.getElementById('fi-rtr').value=d.rtr||'';
@@ -747,6 +751,8 @@ async function saveDeal() {
   const comm=f*cp/100, ml=calcML(f,bp,fees,comm);
   const deal={
     merchant:document.getElementById('fi-merchant').value.trim().toUpperCase(),
+    lead_id:document.getElementById('fi-leadid').value.trim(),
+    frequency:document.getElementById('fi-frequency').value||'Daily',
     date_funded:document.getElementById('fi-date').value,
     funded:f,rtr,factor:parseFloat(document.getElementById('fi-factor').value)||0,
     term:parseInt(document.getElementById('fi-term').value)||0,
@@ -806,16 +812,30 @@ async function handleDailyReport(input) {
       for(let i=0;i<rows.length;i++){const r=rows[i];if(r&&r.some(c=>typeof c==='string'&&c.toLowerCase().includes('customer'))){headers=r.map(h=>String(h||'').toLowerCase().trim());dataRows=rows.slice(i+1);break;}}
       if(!headers.length){headers=rows[0]?rows[0].map(h=>String(h||'').toLowerCase().trim()):[];dataRows=rows.slice(1);}
       const ci=n=>headers.findIndex(h=>h.includes(n));
-      const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status');
-      let updates=[];
+      const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status'),leadI=ci('lead'),purchI=ci('purchased');
+      let updates=[],ambiguous=0;
+      // Match precedence (June 10, 2026): LeadID alone when unique; LeadID+RTR
+      // composite when the same merchant has multiple deals under one LeadID
+      // (Pinnacle reuses LeadIDs — e.g. one merchant, two deals, same ID);
+      // merchant-name as the fallback for deals saved before LeadID existed.
       dataRows.forEach(row=>{
         if(!row||!row[custI]) return;
         const name=String(row[custI]).trim().toUpperCase().replace(/\s+/g,'');
+        const lead=leadI>=0&&row[leadI]!=null?String(row[leadI]).trim():'';
+        const purch=purchI>=0?parseFloat(row[purchI])||0:0;
         const bal=parseFloat(row[balI])||0,pct=parseFloat(row[pctI])||0;
         const stat=row[statI]?String(row[statI]).trim().toUpperCase():null;
-        const m=deals.find(d=>d.merchant.replace(/\s+/g,'')==name&&d.status==='ACTIVE');
-        if(m){ updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(stat?{Status:stat}:{}) }}); }
+        let m=null;
+        if(lead){
+          let cands=deals.filter(d=>d.lead_id===lead);
+          if(cands.length>1&&purch) cands=cands.filter(d=>Math.abs(d.rtr-purch)<1);
+          if(cands.length===1) m=cands[0];
+          else if(cands.length>1){ ambiguous++; return; }
+        }
+        if(!m) m=deals.find(d=>d.merchant.replace(/\s+/g,'')==name&&d.status==='ACTIVE');
+        if(m){ updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(stat?{Status:stat}:{}), ...(lead&&!m.lead_id?{LeadID:lead}:{}) }}); }
       });
+      if(ambiguous>0) showNotice(ambiguous+' row'+(ambiguous!==1?'s':'')+' skipped — same LeadID on multiple deals and amounts did not disambiguate. Update those balances manually.','warn',9000);
       if(!updates.length){ showNotice('No matching active deals found in report.','warn'); return; }
       showLoading('Syncing '+updates.length+' deals to Airtable...');
       // Batch update in groups of 10 (Airtable limit)
