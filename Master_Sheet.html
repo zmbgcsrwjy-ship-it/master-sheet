@@ -34,7 +34,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 /* APP */
 #app{display:none;flex:1;flex-direction:column}
 .shell{display:flex;flex:1;min-height:100vh}
-.sidebar{width:235px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar{width:235px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;transition:width .2s ease,padding .2s ease}
+.sidebar.collapsed{width:0;overflow:hidden;border-right:none}
+.sb-toggle{position:sticky;top:50vh;align-self:flex-start;flex-shrink:0;width:18px;height:64px;background:var(--bg3);border:1px solid var(--border);border-left:none;border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:10px;z-index:50;user-select:none}
+.sb-toggle:hover{color:var(--text);background:var(--bg2)}
 .sidebar-logo{padding:20px 16px 16px;border-bottom:1px solid var(--border)}
 .sidebar-logo h1{font-size:16px;font-weight:700}
 .sidebar-logo span{font-size:11px;color:var(--text3)}
@@ -218,6 +221,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
         <div class="sidebar-chip" onclick="updateCredentials()">🔑 Credentials active ✓</div>
       </div>
     </div>
+    <div class="sb-toggle" id="sb-toggle" onclick="toggleSidebar()" title="Hide/show menu">◀</div>
 
     <div class="main">
       <div class="topbar">
@@ -257,18 +261,28 @@ tbody td{padding:11px 14px;vertical-align:middle}
           <div class="table-wrap">
             <table>
               <thead><tr>
-                <th onclick="sortBy('date_funded')">Date ↕</th>
-                <th onclick="sortBy('merchant')">Merchant ↕</th>
-                <th>Rep</th><th>ISO</th>
+                <th onclick="sortBy('date_funded')">Date Funded ↕</th>
+                <th onclick="sortBy('merchant')">Name ↕</th>
+                <th onclick="sortBy('bank_fees')">Bank Fees ↕</th>
+                <th onclick="sortBy('comm_amount')">Commission ↕</th>
+                <th>Rep</th>
                 <th onclick="sortBy('funded')">Funded ↕</th>
-                <th>RTR</th><th>Factor</th><th>Book %</th><th>Book $</th>
-                <th>Daily</th><th>Term</th>
-                <th onclick="sortBy('balance')">Balance ↕</th>
-                <th onclick="sortBy('pct_paid')">% Paid ↕</th>
-                <th>Comm</th>
+                <th onclick="sortBy('rtr')">Payback ↕</th>
+                <th>Factor</th><th>Book %</th>
+                <th onclick="sortBy('book_funded')">Book Funded ↕</th>
+                <th onclick="sortBy('book_payback')">Book Payback ↕</th>
+                <th onclick="sortBy('spread')">Spread ↕</th>
+                <th onclick="sortBy('book_comm')">Book Comm ↕</th>
+                <th onclick="sortBy('book_profit')">Book Profit ↕</th>
+                <th onclick="sortBy('finance_fee')">Finance Fee ↕</th>
                 <th onclick="sortBy('max_loss')">Max Loss ↕</th>
+                <th onclick="sortBy('balance')">Balance Left ↕</th>
+                <th onclick="sortBy('paid_down')">Paid Down ↕</th>
                 <th onclick="sortBy('pnl')">PNL ↕</th>
-                <th>Status</th><th></th>
+                <th onclick="sortBy('term')">Length ↕</th>
+                <th onclick="sortBy('pct_paid')">% Paid ↕</th>
+                <th>Status</th><th>Funder</th><th>Kickback</th>
+                <th>ISO</th><th>Payment</th><th></th>
               </tr></thead>
               <tbody id="tbody"></tbody>
             </table>
@@ -330,6 +344,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
       <div class="form-row"><label>Merchant (New QB Name)</label><input id="fi-merchant" type="text" placeholder="PHOENIXCLEANERSAND"></div>
       <div class="form-row"><label>Lead ID</label><input id="fi-leadid" type="text" placeholder="152663"></div>
       <div class="form-row"><label>Frequency</label><select id="fi-frequency"><option value="Daily" selected>Daily</option><option value="Weekly">Weekly</option></select></div>
+      <div class="form-row"><label>Funder</label><input id="fi-funder" type="text" placeholder="HBP"></div>
+      <div class="form-row"><label>Finance Fee % <small style="color:var(--text3)">(of book payback; 0.5 default)</small></label><input id="fi-financefee" type="number" step="0.01"></div>
       <div class="form-row"><label>Date funded</label><input id="fi-date" type="date"></div>
       <div class="form-section">Financials</div>
       <div class="form-row"><label>Funded / Purchase price ($)</label><input id="fi-funded" type="number" oninput="autoCalc()"></div>
@@ -376,6 +392,22 @@ const fmtK = n => { const v=Number(n||0); return Math.abs(v)>=1000?'$'+(v/1000).
 const fmtDate = iso => { if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${parseInt(m)}/${parseInt(d)}/${y}`; };
 const calcML = (f,bp,fees,comm) => (f*bp/100)-fees+(comm*bp/100);
 const calcPNL = (rtr,bal,bp,ml) => ((rtr-bal)*bp/100)-ml;
+// Derived columns (June 10, 2026) — computed live, mirrors the legacy Excel master sheet.
+// Finance fee is informational only (tax tracking) — NOT inside profit math, per Sal.
+const decorate = d => {
+  d.book_payback = d.rtr * d.book_pct / 100;
+  d.spread = d.book_payback - d.book_funded;
+  d.book_comm = d.comm_amount * d.book_pct / 100;
+  d.book_profit = d.spread - d.book_comm + d.bank_fees;
+  d.finance_fee = (d.finance_fee_pct != null ? d.finance_fee_pct : 0.5) / 100 * d.book_payback;
+  d.paid_down = d.rtr - d.balance;
+  return d;
+};
+function toggleSidebar(){
+  const sb=document.querySelector('.sidebar'), t=document.getElementById('sb-toggle');
+  sb.classList.toggle('collapsed');
+  t.textContent = sb.classList.contains('collapsed') ? '\u25B6' : '\u25C0';
+}
 const getAnthropicKey = () => BAKED_ANTHROPIC.startsWith('sk-ant') ? BAKED_ANTHROPIC : localStorage.getItem('ms_anthropic')||'';
 const getAirtableKey  = () => BAKED_AIRTABLE.startsWith('pat')    ? BAKED_AIRTABLE  : localStorage.getItem('ms_airtable')||'';
 
@@ -503,6 +535,8 @@ const REQUIRED_FIELDS = [
   {name:'Status',      type:'singleLineText'},
   {name:'LeadID',      type:'singleLineText'},
   {name:'Frequency',   type:'singleSelect', options:{choices:[{name:'Daily'},{name:'Weekly'}]}},
+  {name:'Funder',      type:'singleLineText'},
+  {name:'FinanceFeePct',type:'number', options:{precision:2}},
 ];
 
 async function ensureFields() {
@@ -550,7 +584,9 @@ function dealToFields(d) {
     PNL:          d.pnl          || 0,
     Status:       d.status       || 'ACTIVE',
     LeadID:       d.lead_id      || '',
-    Frequency:    d.frequency    || 'Daily'
+    Frequency:    d.frequency    || 'Daily',
+    Funder:       d.funder       || '',
+    FinanceFeePct:d.finance_fee_pct!=null?d.finance_fee_pct:0.5
   };
 }
 
@@ -578,7 +614,9 @@ function fieldsToDeal(id, f) {
     pnl:          f.PNL          || 0,
     status:       f.Status       || 'ACTIVE',
     lead_id:      f.LeadID       || '',
-    frequency:    f.Frequency    || 'Daily'
+    frequency:    f.Frequency    || 'Daily',
+    funder:       f.Funder        || '',
+    finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5
   };
 }
 
@@ -593,7 +631,7 @@ async function loadDeals() {
       allRecords = allRecords.concat(data.records);
       offset = data.offset;
     } while (offset);
-    deals = allRecords.map(r => fieldsToDeal(r.id, r.fields));
+    deals = allRecords.map(r => decorate(fieldsToDeal(r.id, r.fields)));
     document.getElementById('sync-info').textContent = '⏱ ' + new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
     renderAll();
   } catch(err) {
@@ -660,10 +698,11 @@ async function processImage(file) {
             { type:'image', source:{ type:'base64', media_type:mediaType, data:b64 } },
             { type:'text', text:`Extract deal fields from this Pinnacle MCA funding confirmation screenshot. Return ONLY valid JSON, no markdown, no explanation.
 {
-  "merchant": "value from NEW QB Name field (or Existing QB Name)",
+  "merchant": "value from NEW QB Name field (or Existing QB Name). NEVER use Legal Name on Statement or DBA — only the QB Name",
   "lead_id": "value from Lead ID field as a string",
   "frequency": "Daily or Weekly, from Method of Collection",
-  "date_funded": "YYYY-MM-DD from Start Debits On date. The year MUST be between 2020 and 2030 — read it carefully from the image, never invent digits",
+  "funder": "short funder name from the Funder line in Verify Info (e.g. HBP)",
+  "date_funded": "YYYY-MM-DD from the Last Updated date (when the funding request went to accounting) — NOT Created, NOT Start Debits On. The year MUST be between 2020 and 2030 — read it carefully from the image, never invent digits",
   "funded": number from Purchase Price,
   "rtr": number from Purchase Amount,
   "factor": number from Factor Rate,
@@ -716,6 +755,8 @@ function fillForm(d) {
   document.getElementById('fi-merchant').value=d.merchant||'';
   document.getElementById('fi-leadid').value=d.lead_id||'';
   document.getElementById('fi-frequency').value=d.frequency||'Daily';
+  document.getElementById('fi-funder').value=d.funder||'HBP';
+  document.getElementById('fi-financefee').value=d.finance_fee_pct!=null?d.finance_fee_pct:0.5;
   document.getElementById('fi-date').value=d.date_funded||new Date().toISOString().split('T')[0];
   document.getElementById('fi-funded').value=d.funded||'';
   document.getElementById('fi-rtr').value=d.rtr||'';
@@ -753,6 +794,8 @@ async function saveDeal() {
     merchant:document.getElementById('fi-merchant').value.trim().toUpperCase(),
     lead_id:document.getElementById('fi-leadid').value.trim(),
     frequency:document.getElementById('fi-frequency').value||'Daily',
+    funder:document.getElementById('fi-funder').value.trim()||'HBP',
+    finance_fee_pct:(v=>isNaN(v)?0.5:v)(parseFloat(document.getElementById('fi-financefee').value)),
     date_funded:document.getElementById('fi-date').value,
     funded:f,rtr,factor:parseFloat(document.getElementById('fi-factor').value)||0,
     term:parseInt(document.getElementById('fi-term').value)||0,
@@ -888,25 +931,35 @@ function renderTable(){
     const fillCls=pct>=0.75?'fill-high':pct>=0.5?'fill-mid':'fill-low';
     const badgeCls=d.status==='ACTIVE'?'badge-active':d.status==='DEFAULT'?'badge-default':'badge-completed';
     const pnl=d.pnl||0;
+    const lenTxt=d.term?(d.frequency==='Weekly'?d.term+' wk':d.term+' BD'):'—';
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr>
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
       <td style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.merchant)}">${d.merchant}${isRenewal?'<span class="renew-tag">🔄 Renew</span>':''}</td>
+      <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
+      <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
-      <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
       <td style="font-weight:600">${fmt$(d.funded)}</td>
       <td style="color:var(--text2)">${fmt$(d.rtr)}</td>
       <td style="color:var(--text2)">${d.factor||'—'}</td>
       <td style="color:var(--text2)">${d.book_pct!=null?d.book_pct.toFixed(0)+'%':'—'}</td>
       <td style="color:var(--text2)">${fmt$(d.book_funded)}</td>
-      <td style="color:var(--text2)">${fmt$(d.daily_payment)}</td>
-      <td style="color:var(--text2);white-space:nowrap">${d.term?d.term+' BD':'—'}</td>
-      <td style="font-weight:600">${fmt$(d.balance)}</td>
-      <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
-      <td style="font-size:11px;color:var(--text2)">${d.comm_pct?d.comm_pct+'%':''} ${d.comm_amount?fmt$(d.comm_amount):''}</td>
+      <td style="color:var(--text2)">${fmt$(d.book_payback)}</td>
+      <td style="color:var(--text2)">${fmt$(d.spread)}</td>
+      <td style="color:var(--text2)">${fmt$(d.book_comm)}</td>
+      <td style="font-weight:600">${fmt$(d.book_profit)}</td>
+      <td style="color:var(--amber)">(${fmt$(d.finance_fee)})</td>
       <td style="color:var(--red);font-weight:600">${fmt$(d.max_loss||0)}</td>
+      <td style="font-weight:600">${fmt$(d.balance)}</td>
+      <td style="color:var(--text2)">${fmt$(d.paid_down)}</td>
       <td class="${pnl>=0?'pnl-pos':'pnl-neg'}">${fmt$(pnl)}</td>
+      <td style="color:var(--text2);white-space:nowrap">${lenTxt}</td>
+      <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
       <td><span class="badge ${badgeCls}">${d.status}</span></td>
+      <td style="font-size:11px;color:var(--text2)">${d.funder||'—'}</td>
+      <td style="color:var(--text2)">${d.kickback?fmt$(d.kickback):'—'}</td>
+      <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
+      <td style="color:var(--text2)">${fmt$(d.daily_payment)}${d.frequency==='Weekly'?'/wk':''}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-sm" onclick='openModal(deals.find(x=>x._id==="${esc(d._id)}"))'>✏️</button>
         <button class="btn btn-sm btn-red" onclick='deleteDeal("${esc(d._id)}","${esc(d.merchant)}")'>🗑️</button>
@@ -985,8 +1038,8 @@ function showNotice(msg,type='info',dur=5000){
 
 function exportCSV(){
   if(!deals.length){showNotice('No deals to export.','warn');return;}
-  const h=['Date Funded','Merchant','Rep','ISO','Funded','RTR','Factor','Book %','Book Funded','Daily Payment','Term (BD)','Bank Fees','Balance','% Paid','Comm %','Comm $','Max Loss','PNL','Status'];
-  const rows=deals.map(d=>[fmtDate(d.date_funded),d.merchant,d.rep,d.iso,d.funded,d.rtr,d.factor,d.book_pct,d.book_funded,d.daily_payment,d.term,d.bank_fees,d.balance,(d.pct_paid*100).toFixed(1),d.comm_pct,d.comm_amount,d.max_loss,d.pnl,d.status]);
+  const h=['Date Funded','Name','Bank Fees','Commission','Rep','Funded','Payback','Factor','Book %','Book Funded','Book Payback','Spread','Book Portion of Comm','Book Profit','Finance Fee','Max Loss','Balance Left','Paid Down','PNL','Length of Deal','% Paid','Status','Funder','Rep Kickback','ISO','Payment','Frequency','Lead ID'];
+  const rows=deals.map(d=>[fmtDate(d.date_funded),d.merchant,d.bank_fees,d.comm_amount,d.rep,d.funded,d.rtr,d.factor,d.book_pct,d.book_funded,d.book_payback.toFixed(2),d.spread.toFixed(2),d.book_comm.toFixed(2),d.book_profit.toFixed(2),d.finance_fee.toFixed(2),d.max_loss,d.balance,d.paid_down.toFixed(2),d.pnl,(d.frequency==='Weekly'?d.term+' wk':d.term+' BD'),(d.pct_paid*100).toFixed(1),d.status,d.funder,d.kickback,d.iso,d.daily_payment,d.frequency,d.lead_id]);
   const csv=[h,...rows].map(r=>r.map(v=>JSON.stringify(v??'')).join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
