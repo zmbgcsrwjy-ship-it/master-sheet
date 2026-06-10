@@ -206,7 +206,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 10 — shared login</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 11 — excel export</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -219,7 +219,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
         <div class="nav-item" onclick="openScreenshotModal()">📸 Add from screenshot</div>
         <div class="nav-item" onclick="openModal()">➕ Add manually</div>
         <div class="nav-item" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</div>
-        <div class="nav-item" onclick="exportCSV()">⬇️ Export to CSV</div>
+        <div class="nav-item" onclick="exportExcel()">⬇️ Export to Excel</div>
         <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
       </div>
       <div class="sidebar-bottom">
@@ -239,7 +239,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
           <button class="btn btn-blue" onclick="openScreenshotModal()">📸 Add from screenshot</button>
           <button class="btn btn-green" onclick="openModal()">➕ Add manually</button>
           <button class="btn" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</button>
-          <button class="btn" onclick="exportCSV()">⬇️ Export CSV</button>
+          <button class="btn" onclick="exportExcel()">⬇️ Export Excel</button>
         </div>
       </div>
 
@@ -1285,9 +1285,8 @@ async function saveMonthlyCell(month, field, value){
   }catch(err){ showNotice('Save failed: '+err.message,'error'); }
 }
 function monthLabel(ym){ const [y,m]=ym.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]+'-'+y.slice(2); }
-async function renderMonthly(){
-  const body=document.getElementById('monthly-body'), empty=document.getElementById('monthly-empty');
-  body.innerHTML='<tr><td colspan="17" style="color:var(--text3)">Loading monthly data...</td></tr>';
+// One source of truth for monthly math — used by BOTH the Monthly view and the Excel export.
+async function computeMonthlyRows(){
   try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
@@ -1301,72 +1300,123 @@ async function renderMonthly(){
   Object.keys(ffByMonth).forEach(ym=>{const t=addMonths(ym,4);if(t<=nowYM&&!groups[t])groups[t]=[];});
   const ffDueFor=ym=>ffByMonth[addMonths(ym,-4)]||0;
   const months=Object.keys(groups).sort();
-  if(!months.length){ body.innerHTML=''; empty.style.display=''; return; }
-  empty.style.display='none';
   const bdLen=d=>d.frequency==='Weekly'?(d.term||0)*5:(d.term||0);
-  const rowFor=(label, ds, manual, ym, isTotal, ffDue)=>{
+  const mkRow=(label, ds, manual, ym, isTotal, ffDue)=>{
     const tdf=ds.length, nw=ds.filter(d=>d.deal_type!=='REFI').length, rf=ds.filter(d=>d.deal_type==='REFI').length;
     const funding=ds.reduce((s,d)=>s+(d.funded||0),0);
     const banks=ds.reduce((s,d)=>s+(d.bank_fees||0),0);
     const bonus=ds.reduce((s,d)=>s+(d.kickback||0),0);
     const pnl=ds.reduce((s,d)=>s+(d.pnl||0),0);
     const ffees=ds.reduce((s,d)=>s+(d.finance_fee||0),0);
-    const avgSize=tdf?funding/tdf:0, avgLen=tdf?ds.reduce((s,d)=>s+bdLen(d),0)/tdf:0;
-    const avgFee=funding?banks/funding*100:0;
-    const pay=(pnl-(ffDue||0)-(manual.legal||0))/2; // 50/50 Sal & Matt — PNL minus FF (4-mo lag) minus Legal
-    const style=isTotal?'font-weight:700;background:var(--bg3)':'';
-    const manualCells=isTotal
-      ? `<td style="${style}">${fmt$(manual.clawback)}</td><td style="${style}">${fmt$(manual.legal)}</td>`
-      : `<td><input class="m-edit" type="number" step="0.01" value="${manual.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${ym}','Clawback',this.value)"></td>`+
-        `<td><input class="m-edit" type="number" step="0.01" value="${manual.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${ym}','Legal',this.value)"></td>`;
-    const payCells=`<td style="${style};border-left:2px solid var(--border);color:var(--amber)">${ffDue?'('+fmt$(ffDue)+')':'—'}</td>`+
-      `<td class="${pay>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(pay)}</td>`+
-      `<td class="${pay>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(pay)}</td>`;
-    return `<tr>
-      <td style="${style};white-space:nowrap">${label}</td>
-      <td style="${style}">${tdf}</td><td style="${style}">${nw}</td><td style="${style}">${rf}</td>
-      <td style="${style}">${fmt$(funding)}</td>
-      <td style="${style}">${tdf?fmt$(avgSize):'—'}</td>
-      <td style="${style}">${tdf?avgLen.toFixed(1)+' BD':'—'}</td>
-      <td style="${style}">${funding?avgFee.toFixed(2)+'%':'—'}</td>
-      <td style="${style}">${fmt$(banks)}</td>
-      <td style="${style}">${fmt$(bonus)}</td>
-      <td class="${pnl>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(pnl)}</td>
-      <td style="${style};color:var(--amber)">(${fmt$(ffees)})</td>
-      ${manualCells}
-      ${payCells}
-    </tr>`;
+    const legal=manual.legal||0, clawback=manual.clawback||0;
+    const pay=(pnl-(ffDue||0)-legal)/2; // 50/50 Sal & Matt — PNL minus FF (4-mo lag) minus Legal
+    return {label, ym, isTotal, tdf, nw, rf, funding,
+      avgSize: tdf?funding/tdf:null,
+      avgLen: tdf?ds.reduce((s,d)=>s+bdLen(d),0)/tdf:null,
+      avgFee: funding?banks/funding*100:null,
+      banks, bonus, pnl, ffees, clawback, legal, ffDue:ffDue||0, pay};
   };
-  let out='', yearAcc={}, lastYear=null;
+  const rows=[]; let yearAcc={}, lastYear=null;
   const flushYear=y=>{
-    if(!y||!yearAcc[y]) return '';
+    if(!y||!yearAcc[y]) return;
     const a=yearAcc[y];
-    return rowFor('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback}, '', true, a.ffDue);
+    rows.push(mkRow('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback}, '', true, a.ffDue));
   };
   months.forEach(ym=>{
     const y=ym.slice(0,4);
-    if(lastYear&&y!==lastYear){ out+=flushYear(lastYear); }
+    if(lastYear&&y!==lastYear){ flushYear(lastYear); }
     lastYear=y;
     yearAcc[y]=yearAcc[y]||{deals:[],legal:0,clawback:0,ffDue:0};
     const man=monthlyManual[ym]||{legal:0,clawback:0};
     const ffDue=ffDueFor(ym);
     yearAcc[y].deals=yearAcc[y].deals.concat(groups[ym]);
     yearAcc[y].legal+=man.legal||0; yearAcc[y].clawback+=man.clawback||0; yearAcc[y].ffDue+=ffDue;
-    out+=rowFor(monthLabel(ym), groups[ym], man, ym, false, ffDue);
+    rows.push(mkRow(monthLabel(ym), groups[ym], man, ym, false, ffDue));
   });
-  out+=flushYear(lastYear);
-  body.innerHTML=out;
+  flushYear(lastYear);
+  return rows;
 }
 
-function exportCSV(){
+async function renderMonthly(){
+  const body=document.getElementById('monthly-body'), empty=document.getElementById('monthly-empty');
+  body.innerHTML='<tr><td colspan="17" style="color:var(--text3)">Loading monthly data...</td></tr>';
+  const rows=await computeMonthlyRows();
+  if(!rows.length){ body.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+  body.innerHTML=rows.map(r=>{
+    const style=r.isTotal?'font-weight:700;background:var(--bg3)':'';
+    const manualCells=r.isTotal
+      ? `<td style="${style}">${fmt$(r.clawback)}</td><td style="${style}">${fmt$(r.legal)}</td>`
+      : `<td><input class="m-edit" type="number" step="0.01" value="${r.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Clawback',this.value)"></td>`+
+        `<td><input class="m-edit" type="number" step="0.01" value="${r.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Legal',this.value)"></td>`;
+    const payCells=`<td style="${style};border-left:2px solid var(--border);color:var(--amber)">${r.ffDue?'('+fmt$(r.ffDue)+')':'—'}</td>`+
+      `<td class="${r.pay>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(r.pay)}</td>`+
+      `<td class="${r.pay>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(r.pay)}</td>`;
+    return `<tr>
+      <td style="${style};white-space:nowrap">${r.label}</td>
+      <td style="${style}">${r.tdf}</td><td style="${style}">${r.nw}</td><td style="${style}">${r.rf}</td>
+      <td style="${style}">${fmt$(r.funding)}</td>
+      <td style="${style}">${r.avgSize!=null?fmt$(r.avgSize):'—'}</td>
+      <td style="${style}">${r.avgLen!=null?r.avgLen.toFixed(1)+' BD':'—'}</td>
+      <td style="${style}">${r.avgFee!=null?r.avgFee.toFixed(2)+'%':'—'}</td>
+      <td style="${style}">${fmt$(r.banks)}</td>
+      <td style="${style}">${fmt$(r.bonus)}</td>
+      <td class="${r.pnl>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(r.pnl)}</td>
+      <td style="${style};color:var(--amber)">(${fmt$(r.ffees)})</td>
+      ${manualCells}
+      ${payCells}
+    </tr>`;
+  }).join('');
+}
+
+async function exportExcel(){
   if(!deals.length){showNotice('No deals to export.','warn');return;}
-  const h=['Date Funded','Name','Bank Fees','Commission','Rep','Funded','Payback','Factor','Book %','Book Funded','Book Payback','Spread','Book Portion of Comm','Book Profit','Finance Fee','Max Loss','Balance Left','Paid Down','PNL','Length of Deal','% Paid','Status','Funder','Rep Kickback','ISO','Payment','Frequency','Lead ID'];
-  const rows=deals.map(d=>[fmtDate(d.date_funded),d.merchant,d.bank_fees,d.comm_amount,d.rep,d.funded,d.rtr,d.factor,d.book_pct,d.book_funded,d.book_payback.toFixed(2),d.spread.toFixed(2),d.book_comm.toFixed(2),d.book_profit.toFixed(2),d.finance_fee.toFixed(2),d.max_loss,d.balance,d.paid_down.toFixed(2),d.pnl,(d.frequency==='Weekly'?d.term+' wk':d.term+' BD'),(d.pct_paid*100).toFixed(1),d.status,d.funder,d.kickback,d.iso,d.daily_payment,d.frequency,d.lead_id]);
-  const csv=[h,...rows].map(r=>r.map(v=>JSON.stringify(v??'')).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-  a.download='Master_Sheet_'+new Date().toISOString().split('T')[0]+'.csv';
-  a.click();
+  if(typeof XLSX==='undefined'){showNotice('Excel library did not load — check your connection and refresh the page.','error',8000);return;}
+  const n=v=>v==null||v===''?null:Math.round(Number(v)*100)/100; // clean number or blank
+  const wb=XLSX.utils.book_new();
+  const addSheet=(name,header,rows,widths)=>{
+    const ws=XLSX.utils.aoa_to_sheet([header,...rows]);
+    if(widths)ws['!cols']=widths.map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb,ws,name);
+  };
+
+  // ── Sheet 1: All Deals (legacy column order) ──
+  addSheet('All Deals',
+    ['Date Funded','Name','Bank Fees','Commission','Rep','Funded','Payback','Factor','Book %','Book Funded','Book Payback','Spread','Book Portion of Comm','Book Profit','Finance Fee','Max Loss','Balance Left','Paid Down','PNL','Length of Deal','% Paid','Status','Funder','Rep Kickback','ISO','Payment','Frequency','Lead ID'],
+    deals.map(d=>[fmtDate(d.date_funded),d.merchant,n(d.bank_fees),n(d.comm_amount),d.rep,n(d.funded),n(d.rtr),d.factor,n(d.book_pct),n(d.book_funded),n(d.book_payback),n(d.spread),n(d.book_comm),n(d.book_profit),n(d.finance_fee),n(d.max_loss),n(d.balance),n(d.paid_down),n(d.pnl),(d.frequency==='Weekly'?d.term+' wk':d.term+' BD'),n((d.pct_paid||0)*100),d.status,d.funder,n(d.kickback),d.iso,n(d.daily_payment),d.frequency,d.lead_id]),
+    [11,22,10,11,16,10,10,7,7,11,12,9,10,10,10,10,11,10,10,11,7,10,8,11,16,9,9,9]);
+
+  // ── Sheet 2: REFI Eligible (full eligible list, ignores on-screen filters) ──
+  const eligible=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0)
+    .sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+  addSheet('REFI Eligible',
+    ['Start Date','Merchant','Balance','% Paid','Rep','ISO','Lead ID'],
+    eligible.map(d=>[fmtDate(d.date_funded),d.merchant,n(d.balance),Math.round((d.pct_paid||0)*100),d.rep,d.iso,d.lead_id]),
+    [11,24,11,7,18,18,9]);
+
+  // ── Sheet 3: PIF ──
+  const pifs=deals.filter(d=>d.status==='PIF').sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+  addSheet('PIF',
+    ['Date Funded','Merchant','Funded','Factor','RTR','Rep','ISO','Lead ID'],
+    pifs.map(d=>[fmtDate(d.date_funded),d.merchant,n(d.funded),d.factor,n(d.rtr),d.rep,d.iso,d.lead_id]),
+    [11,24,10,7,10,18,18,9]);
+
+  // ── Sheet 4: Defaults ──
+  const defs=deals.filter(d=>d.status==='DEFAULT');
+  addSheet('Defaults',
+    ['Date Funded','Merchant','Rep','Funded','RTR','Balance','% Paid','Max Loss','PNL','ISO','Lead ID'],
+    defs.map(d=>[fmtDate(d.date_funded),d.merchant,d.rep,n(d.funded),n(d.rtr),n(d.balance),Math.round((d.pct_paid||0)*100),n(d.max_loss),n(d.pnl),d.iso,d.lead_id]),
+    [11,24,18,10,10,11,7,10,10,18,9]);
+
+  // ── Sheet 5: Monthly (same math as the Monthly view — one source of truth) ──
+  const mrows=await computeMonthlyRows();
+  addSheet('Monthly',
+    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Bank Bonus','Total PNL','Finance Fees','Clawback','Legal','FF Due (4-mo lag)','Sal Payout','Matt Payout'],
+    mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.funding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.bonus),n(r.pnl),n(r.ffees),n(r.clawback),n(r.legal),n(r.ffDue),n(r.pay),n(r.pay)]),
+    [11,5,5,5,13,13,17,12,10,11,11,12,10,9,16,11,11]);
+
+  XLSX.writeFile(wb,'Master_Sheet_'+new Date().toISOString().split('T')[0]+'.xlsx');
+  showNotice('Exported workbook with 5 sheets: All Deals, REFI Eligible, PIF, Defaults, Monthly.','info',6000);
 }
 </script>
 </body>
