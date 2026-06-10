@@ -125,6 +125,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .form-row label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:500}
 .form-row input{width:100%;font-size:13px;padding:8px 11px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text);outline:none;transition:border .15s}
 .form-row input:focus{border-color:var(--blue)}
+.input-missing{border-color:var(--red)!important;background:var(--red-bg)!important}
 .form-row input[readonly]{opacity:.5;cursor:default}
 .modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border)}
 .formula-note{font-size:10px;color:var(--text3);grid-column:1/-1;margin-top:-4px;line-height:1.6}
@@ -202,7 +203,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable</span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 6 — watchdog</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -753,7 +754,7 @@ async function processImage(file) {
             { type:'image', source:{ type:'base64', media_type:mediaType, data:b64 } },
             { type:'text', text:`Extract deal fields from this Pinnacle MCA funding confirmation screenshot. Return ONLY valid JSON, no markdown, no explanation.
 {
-  "merchant": "value from NEW QB Name field (or Existing QB Name). NEVER use Legal Name on Statement or DBA — only the QB Name",
+  "merchant": "the QB Name. On NEW deals the line is labeled NEW QB Name; on REFI deals it is labeled Existing QB Name — take whichever appears. NEVER use Legal Name on Statement, never use DBA",
   "lead_id": "value from Lead ID field as a string",
   "frequency": "Daily or Weekly, from Method of Collection",
   "deal_type": "NEW or REFI, from the Deal Type line",
@@ -763,7 +764,7 @@ async function processImage(file) {
   "rtr": number from Purchase Amount,
   "factor": number from Factor Rate,
   "term": number from Estimated Payments (business days),
-  "daily_payment": number from Rate of Collection,
+  "daily_payment": number from the Remittance Amount line,
   "dd_fee": number from Due Diligence Fee,
   "orig_fee": number from Origination Fee,
   "book_pct": number from Book percentage in Participation Info — must be between 0 and 100, never above 100,
@@ -788,6 +789,7 @@ Use null for missing fields.` }
         document.getElementById('modal-sub').textContent = 'Fields extracted from your screenshot. Review and confirm.';
         fillForm(parsed);
         document.getElementById('modal-bg').style.display = 'flex';
+        setTimeout(runWatchdog, 100);
       }, 700);
     } catch(err) { statusEl.style.color='var(--red)'; statusEl.innerHTML='❌ '+err.message; }
   };
@@ -808,6 +810,39 @@ function autoCalc() {
   document.getElementById('fi-pnl').value=rtr?calcPNL(rtr,rtr,bp,ml).toFixed(2):'';
 }
 
+// Missing-field watchdog (June 10, 2026): after screenshot extraction, any core
+// field the reader failed to fill is flagged red and listed in a warning. Save is
+// blocked until every flagged field has a value — no silent zeros into the book.
+const WATCHDOG_FIELDS = [
+  ['fi-merchant','Merchant', v=>!v],
+  ['fi-leadid','Lead ID', v=>!v],
+  ['fi-date','Date funded', v=>!v],
+  ['fi-funded','Funded', v=>!parseFloat(v)],
+  ['fi-rtr','RTR / Payback', v=>!parseFloat(v)],
+  ['fi-factor','Factor', v=>!parseFloat(v)],
+  ['fi-term','Term', v=>!parseFloat(v)],
+  ['fi-daily','Payment amount', v=>!parseFloat(v)],
+  ['fi-ddfee','DD Fee', v=>v===''],
+  ['fi-origfee','Origination Fee', v=>v===''],
+  ['fi-funder','Funder', v=>!v.trim()],
+  ['fi-commpct','Commission %', v=>v===''],
+];
+function runWatchdog(){
+  const missing=[];
+  WATCHDOG_FIELDS.forEach(([id,label,isBad])=>{
+    const el=document.getElementById(id);
+    if(isBad(el.value)){ el.classList.add('input-missing'); missing.push(label);
+      el.addEventListener('input',()=>{ if(!isBad(el.value)) el.classList.remove('input-missing'); },{once:false});
+    } else el.classList.remove('input-missing');
+  });
+  if(missing.length) showNotice('⚠️ Extraction missed '+missing.length+' field'+(missing.length!==1?'s':'')+': '+missing.join(', ')+' — fill them in manually (highlighted red).','warn',12000);
+  return missing;
+}
+function watchdogBlocksSave(){
+  const still=WATCHDOG_FIELDS.filter(([id,_,isBad])=>document.getElementById(id).classList.contains('input-missing')&&isBad(document.getElementById(id).value)).map(([_,l])=>l);
+  if(still.length){ showNotice('Cannot save — fill the highlighted fields first: '+still.join(', '),'error'); return true; }
+  return false;
+}
 function fillForm(d) {
   document.getElementById('fi-merchant').value=d.merchant||'';
   document.getElementById('fi-leadid').value=d.lead_id||'';
@@ -836,6 +871,7 @@ function fillForm(d) {
 }
 
 function openModal(prefill) {
+  WATCHDOG_FIELDS.forEach(([id])=>document.getElementById(id)?.classList.remove('input-missing'));
   editingId=prefill?._id||null;
   document.getElementById('modal-title').textContent=editingId?'Edit deal':'Add deal';
   document.getElementById('modal-sub').textContent=editingId?'Edit deal fields below.':'Fill in fields from the Pinnacle funding email.';
@@ -874,6 +910,7 @@ async function saveDeal() {
     kickback:parseFloat(document.getElementById('fi-kickback').value)||0,
     max_loss:ml,pnl:calcPNL(rtr,rtr,bp,ml),status:'ACTIVE'
   };
+  if(watchdogBlocksSave()) return;
   if(!deal.merchant){ showNotice('Merchant name is required.','warn'); return; }
   const btn=document.getElementById('save-btn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Saving...';
