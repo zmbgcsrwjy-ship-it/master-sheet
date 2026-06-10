@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Master Sheet</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#161b27;--bg3:#1e2435;--bg4:#252d40;
+  --border:#2a3249;--border2:#323d57;
+  --text:#e8eaf0;--text2:#9aa3b8;--text3:#5c6580;
+  --blue:#4a9eff;--blue-bg:#1a2a45;--blue-border:#2a4a7f;
+  --green:#3ecf8e;--green-bg:#0d2b1e;--green-border:#1a4a32;
+  --red:#f87171;--red-bg:#2b1010;--red-border:#4a1a1a;
+  --amber:#f59e0b;--amber-bg:#2b1f08;--amber-border:#4a3210;
+  --radius:8px;--radius-sm:5px;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+
+/* SETUP */
+#setup-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}
+.setup-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:2.5rem;width:min(500px,100%)}
+.setup-card h1{font-size:22px;font-weight:700;margin-bottom:8px}
+.setup-card p{font-size:13px;color:var(--text2);margin-bottom:1.5rem;line-height:1.6}
+.setup-card label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px;font-weight:500}
+.setup-card input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius-sm);padding:10px 12px;color:var(--text);font-size:13px;font-family:monospace;margin-bottom:14px;outline:none}
+.setup-card input:focus{border-color:var(--blue)}
+.setup-hint{font-size:11px;color:var(--text3);margin-bottom:1.5rem;line-height:1.5}
+.setup-error{font-size:12px;color:var(--red);margin-top:10px;display:none;padding:8px 12px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:var(--radius-sm)}
+
+/* APP */
+#app{display:none;flex:1;flex-direction:column}
+.shell{display:flex;flex:1;min-height:100vh}
+.sidebar{width:235px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar-logo{padding:20px 16px 16px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:16px;font-weight:700}
+.sidebar-logo span{font-size:11px;color:var(--text3)}
+.sidebar-nav{padding:12px 8px;flex:1}
+.nav-section{font-size:10px;font-weight:700;color:var(--text3);padding:10px 10px 4px;letter-spacing:.08em;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);font-size:13px;color:var(--text2);cursor:pointer;margin-bottom:1px;transition:all .15s;user-select:none}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--bg3);color:var(--text);font-weight:600}
+.nav-badge{margin-left:auto;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700}
+.sidebar-bottom{padding:12px;border-top:1px solid var(--border)}
+.sidebar-chip{font-size:11px;color:var(--text3);padding:5px 8px;cursor:pointer;border-radius:var(--radius-sm);transition:background .15s;display:flex;align-items:center;gap:5px}
+.sidebar-chip:hover{background:var(--bg3);color:var(--text2)}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{padding:16px 24px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.topbar-left h2{font-size:15px;font-weight:700}
+.topbar-left p{font-size:12px;color:var(--text3);margin-top:2px}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap}
+.content{padding:24px;flex:1;overflow-y:auto}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:500}
+.btn:hover{background:var(--bg4);color:var(--text)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-blue{background:var(--blue-bg);border-color:var(--blue-border);color:var(--blue)}
+.btn-blue:hover{opacity:.85;background:var(--blue-bg)}
+.btn-green{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
+.btn-green:hover{opacity:.85;background:var(--green-bg)}
+.btn-red{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}
+.btn-sm{padding:4px 9px;font-size:11px}
+
+/* METRICS */
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px}
+.metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
+.metric-card .lbl{font-size:10px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.metric-card .val{font-size:24px;font-weight:700;line-height:1}
+.metric-card .sub{font-size:11px;color:var(--text3);margin-top:5px}
+.val-green{color:var(--green)}.val-red{color:var(--red)}.val-amber{color:var(--amber)}.val-blue{color:var(--blue)}
+
+/* PANEL */
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.panel-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.panel-header h3{font-size:13px;font-weight:700}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.filters select,.filters input{font-size:12px;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text);outline:none}
+.filters select:focus,.filters input:focus{border-color:var(--blue)}
+
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
+thead th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);border-bottom:1px solid var(--border);background:var(--bg3);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.05em;text-transform:uppercase}
+thead th:hover{color:var(--text2)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg3)}
+tbody td{padding:11px 14px;vertical-align:middle}
+
+/* BADGES */
+.badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-active{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+.badge-default{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+.badge-completed{background:var(--bg4);color:var(--text3);border:1px solid var(--border)}
+
+/* PROGRESS */
+.progress-wrap{display:flex;align-items:center;gap:8px}
+.progress-bar{flex:1;height:5px;border-radius:3px;background:var(--bg4);overflow:hidden;min-width:50px}
+.progress-fill{height:100%;border-radius:3px}
+.fill-low{background:var(--green)}.fill-mid{background:var(--amber)}.fill-high{background:var(--red)}
+.pct-text{font-size:11px;color:var(--text3);min-width:34px;text-align:right}
+.renew-tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:3px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);margin-left:6px;vertical-align:middle;font-weight:600}
+.pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
+
+/* EMPTY */
+.empty-state{padding:4rem;text-align:center;color:var(--text3)}
+.empty-state .icon{font-size:40px;margin-bottom:14px}
+.empty-state h3{font-size:15px;color:var(--text2);margin-bottom:6px;font-weight:500}
+.empty-state p{font-size:12px;line-height:1.7}
+
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:500;backdrop-filter:blur(4px)}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:1.75rem;width:min(600px,96vw);max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:4px}
+.modal-sub{font-size:12px;color:var(--text3);margin-bottom:1.5rem;line-height:1.5}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-section{font-size:10px;font-weight:700;color:var(--text3);grid-column:1/-1;padding:8px 0 5px;border-bottom:1px solid var(--border);margin-top:6px;letter-spacing:.08em;text-transform:uppercase}
+.form-row label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:500}
+.form-row input{width:100%;font-size:13px;padding:8px 11px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text);outline:none;transition:border .15s}
+.form-row input:focus{border-color:var(--blue)}
+.form-row input[readonly]{opacity:.5;cursor:default}
+.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border)}
+.formula-note{font-size:10px;color:var(--text3);grid-column:1/-1;margin-top:-4px;line-height:1.6}
+
+/* NOTICE */
+.notice{font-size:12px;padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:16px;display:none;border:1px solid}
+.notice.show{display:block}
+.notice-success{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+.notice-warn{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-border)}
+.notice-error{background:var(--red-bg);color:var(--red);border-color:var(--red-border)}
+.notice-info{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-border)}
+
+/* UPLOAD */
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--radius);padding:2.5rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--blue);background:var(--blue-bg)}
+.upload-zone .uz-icon{font-size:36px;margin-bottom:12px}
+.upload-zone p{font-size:13px;color:var(--text2);margin-bottom:4px}
+.upload-zone span{font-size:11px;color:var(--text3)}
+
+/* SPINNER */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* RENEWAL */
+.rep-group{border-bottom:1px solid var(--border)}
+.rep-group:last-child{border-bottom:none}
+.rep-header{padding:12px 18px;background:var(--bg3);display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700}
+.rep-deals{padding:10px 18px 14px}
+.rep-deal-card{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--radius-sm);background:var(--bg3);margin-bottom:8px;gap:16px;flex-wrap:wrap;border:1px solid var(--border)}
+.rep-deal-card:last-child{margin-bottom:0}
+
+/* LOADING OVERLAY */
+#loading-overlay{position:fixed;inset:0;background:rgba(15,17,23,.85);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px}
+#loading-overlay p{font-size:13px;color:var(--text2)}
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay" style="display:none">
+  <div class="spinner" style="width:24px;height:24px"></div>
+  <p id="loading-msg">Loading...</p>
+</div>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <h1>📋 Master Sheet</h1>
+    <p>Enter your credentials to connect to Airtable. Your data will sync in real time — you and Sal will always see the same book. Enter once, works forever.</p>
+    <label>Anthropic API Key <small style="color:var(--text3)">(for screenshot auto-fill)</small></label>
+    <input type="password" id="setup-anthropic" placeholder="sk-ant-api03-..." autocomplete="off" spellcheck="false">
+    <label>Airtable API Token</label>
+    <input type="password" id="setup-airtable" placeholder="pat..." autocomplete="off" spellcheck="false">
+    <div class="setup-hint">Base ID is pre-configured. Your credentials are saved locally and baked into your copy of this file.</div>
+    <button class="btn btn-blue" style="width:100%;justify-content:center;padding:11px;font-size:13px" onclick="setupAndBake()">💾 Save & open Master Sheet</button>
+    <div class="setup-error" id="setup-error"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="shell">
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <h1>📋 Master Sheet</h1>
+        <span>Powered by Airtable</span>
+      </div>
+      <div class="sidebar-nav">
+        <div class="nav-section">Views</div>
+        <div class="nav-item active" id="nav-book" onclick="setView('book')">📊 All deals</div>
+        <div class="nav-item" id="nav-renewal" onclick="setView('renewal')">🔄 Renewal eligible <span class="nav-badge" id="renewal-badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">0</span></div>
+        <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
+        <div class="nav-section">Actions</div>
+        <div class="nav-item" onclick="openScreenshotModal()">📸 Add from screenshot</div>
+        <div class="nav-item" onclick="openModal()">➕ Add manually</div>
+        <div class="nav-item" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</div>
+        <div class="nav-item" onclick="exportCSV()">⬇️ Export to CSV</div>
+        <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
+      </div>
+      <div class="sidebar-bottom">
+        <div class="sidebar-chip" id="sync-info">⏱ Not synced yet</div>
+        <div class="sidebar-chip" onclick="updateCredentials()">🔑 Credentials active ✓</div>
+      </div>
+    </div>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="topbar-left">
+          <h2 id="view-title">All deals</h2>
+          <p>Live sync with Airtable — you and Sal always see the same book</p>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-blue" onclick="openScreenshotModal()">📸 Add from screenshot</button>
+          <button class="btn btn-green" onclick="openModal()">➕ Add manually</button>
+          <button class="btn" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</button>
+          <button class="btn" onclick="exportCSV()">⬇️ Export CSV</button>
+        </div>
+      </div>
+
+      <div class="content">
+        <div id="notice" class="notice"></div>
+        <div class="metrics-grid">
+          <div class="metric-card"><div class="lbl">Active deals</div><div class="val val-blue" id="m-active">0</div><div class="sub">in portfolio</div></div>
+          <div class="metric-card"><div class="lbl">Total funded</div><div class="val" id="m-funded">$0</div><div class="sub">active book</div></div>
+          <div class="metric-card"><div class="lbl">Total RTR</div><div class="val" id="m-rtr">$0</div><div class="sub">to collect</div></div>
+          <div class="metric-card"><div class="lbl">Outstanding</div><div class="val" id="m-balance">$0</div><div class="sub">balance remaining</div></div>
+          <div class="metric-card"><div class="lbl">Renewal eligible</div><div class="val val-amber" id="m-renewal">0</div><div class="sub">≥ 50% paid</div></div>
+          <div class="metric-card"><div class="lbl">Portfolio PNL</div><div class="val" id="m-pnl">$0</div><div class="sub">all deals</div></div>
+          <div class="metric-card"><div class="lbl">Defaults</div><div class="val val-red" id="m-defaults">0</div><div class="sub">total</div></div>
+        </div>
+
+        <div class="panel" id="panel-book">
+          <div class="panel-header">
+            <h3>All deals</h3>
+            <div class="filters">
+              <select id="f-status" onchange="renderTable()"><option value="">All statuses</option><option value="ACTIVE">Active</option><option value="DEFAULT">Default</option><option value="COMPLETED">Completed</option></select>
+              <select id="f-rep" onchange="renderTable()"><option value="">All reps</option></select>
+              <input id="f-search" type="text" placeholder="Search merchant..." oninput="renderTable()" style="min-width:150px">
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th onclick="sortBy('date_funded')">Date ↕</th>
+                <th onclick="sortBy('merchant')">Merchant ↕</th>
+                <th>Rep</th><th>ISO</th>
+                <th onclick="sortBy('funded')">Funded ↕</th>
+                <th>RTR</th><th>Factor</th><th>Book %</th><th>Book $</th>
+                <th>Daily</th><th>Term</th>
+                <th onclick="sortBy('balance')">Balance ↕</th>
+                <th onclick="sortBy('pct_paid')">% Paid ↕</th>
+                <th>Comm</th>
+                <th onclick="sortBy('max_loss')">Max Loss ↕</th>
+                <th onclick="sortBy('pnl')">PNL ↕</th>
+                <th>Status</th><th></th>
+              </tr></thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div id="empty-filter" class="empty-state" style="display:none"><div class="icon">🔍</div><h3>No deals match</h3><p>Try adjusting your filters.</p></div>
+          <div id="empty-deals" class="empty-state"><div class="icon">📋</div><h3>No deals yet</h3><p>Click <strong>📸 Add from screenshot</strong> and upload a Pinnacle<br>funding email screenshot. Claude reads it automatically.</p></div>
+        </div>
+
+        <div class="panel" id="panel-renewal" style="display:none">
+          <div class="panel-header"><h3>Renewal eligible — by rep</h3><span style="font-size:12px;color:var(--text3)">Deals ≥ 50% paid · ready for outreach</span></div>
+          <div id="renewal-body"></div>
+          <div id="renewal-empty" class="empty-state" style="display:none"><div class="icon">✅</div><h3>None eligible yet</h3><p>Deals appear here once they hit 50% paid.</p></div>
+        </div>
+
+        <div class="panel" id="panel-defaults" style="display:none">
+          <div class="panel-header"><h3>Defaults</h3></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Merchant</th><th>Rep</th><th>Funded</th><th>RTR</th><th>Balance</th><th>% Paid</th><th>Max Loss</th><th>PNL</th><th></th></tr></thead><tbody id="tbody-defaults"></tbody></table></div>
+          <div id="defaults-empty" class="empty-state" style="display:none"><div class="icon">🎯</div><h3>No defaults</h3><p>Keep it that way.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="daily-input" accept=".xlsx" style="display:none" onchange="handleDailyReport(this)">
+
+<!-- SCREENSHOT MODAL -->
+<div id="ss-modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeSSModal()">
+  <div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
+    <div class="modal-title">📸 Add deal from screenshot</div>
+    <div class="modal-sub">Upload a Pinnacle funding email screenshot. Claude reads every field automatically.</div>
+    <div class="upload-zone" id="upload-zone"
+      onclick="document.getElementById('img-input').click()"
+      ondragover="event.preventDefault();this.classList.add('drag')"
+      ondragleave="this.classList.remove('drag')"
+      ondrop="handleDrop(event)">
+      <div class="uz-icon">📁</div>
+      <p>Click to upload or drag & drop</p>
+      <span>PNG, JPG, WEBP supported</span>
+    </div>
+    <input type="file" id="img-input" accept="image/*" style="display:none" onchange="handleImageUpload(this)">
+    <div id="extract-status" style="display:none;font-size:13px;padding:12px 0;text-align:center;color:var(--text2)"></div>
+    <div id="img-preview" style="display:none;margin-bottom:12px;text-align:center">
+      <img id="preview-img" style="max-width:100%;max-height:180px;border-radius:var(--radius-sm);border:1px solid var(--border)">
+    </div>
+    <div class="modal-footer" style="margin-top:0;padding-top:1rem">
+      <button class="btn" onclick="closeSSModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- DEAL FORM MODAL -->
+<div id="modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="modal-title">Add deal</div>
+    <div class="modal-sub" id="modal-sub">Fill in the fields from the Pinnacle funding email.</div>
+    <div class="form-grid">
+      <div class="form-section">Deal info</div>
+      <div class="form-row"><label>Merchant (New QB Name)</label><input id="fi-merchant" type="text" placeholder="PHOENIXCLEANERSAND"></div>
+      <div class="form-row"><label>Date funded</label><input id="fi-date" type="date"></div>
+      <div class="form-section">Financials</div>
+      <div class="form-row"><label>Funded / Purchase price ($)</label><input id="fi-funded" type="number" oninput="autoCalc()"></div>
+      <div class="form-row"><label>RTR / Payback ($)</label><input id="fi-rtr" type="number" oninput="autoCalc()"></div>
+      <div class="form-row"><label>Factor rate</label><input id="fi-factor" type="number" step="0.001"></div>
+      <div class="form-row"><label>Term (business days)</label><input id="fi-term" type="number"></div>
+      <div class="form-row"><label>Daily payment ($)</label><input id="fi-daily" type="number"></div>
+      <div class="form-row"><label>Bank fees — DD + Origination ($)</label><input id="fi-bankfees" type="number" oninput="autoCalc()"></div>
+      <div class="form-section">Participation</div>
+      <div class="form-row"><label>Book %</label><input id="fi-bookpct" type="number" value="100" oninput="autoCalc()"></div>
+      <div class="form-row"><label>Book funded ($) <small style="color:var(--text3)">auto</small></label><input id="fi-bookamt" readonly></div>
+      <div class="form-section">Rep / ISO</div>
+      <div class="form-row"><label>Rep</label><input id="fi-rep" type="text"></div>
+      <div class="form-row"><label>ISO</label><input id="fi-iso" type="text"></div>
+      <div class="form-row"><label>Commission %</label><input id="fi-commpct" type="number" step="0.01" oninput="autoCalc()"></div>
+      <div class="form-row"><label>Commission $ <small style="color:var(--text3)">auto</small></label><input id="fi-comm" readonly></div>
+      <div class="form-row"><label>Rep kickback ($) <small style="color:var(--text3)">optional</small></label><input id="fi-kickback" type="number" placeholder="0"></div>
+      <div class="form-section">Calculated</div>
+      <div class="form-row"><label>Max Loss ($) <small style="color:var(--text3)">auto</small></label><input id="fi-maxloss" readonly></div>
+      <div class="form-row"><label>PNL ($) <small style="color:var(--text3)">auto · updates on sync</small></label><input id="fi-pnl" readonly></div>
+      <div class="formula-note">Max Loss = (Funded × Book%) − Bank Fees + (Comm × Book%) &nbsp;·&nbsp; PNL = (Paid Down × Book%) − Max Loss</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-green" id="save-btn" onclick="saveDeal()">✓ Add to book</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ──────────────────────────────────────────────
+const AIRTABLE_BASE_ID = 'appF4JyGEELVD3hu8';
+const AIRTABLE_TABLE = 'Deals';
+const BAKED_ANTHROPIC = '__BAKED_ANTHROPIC__';
+const BAKED_AIRTABLE  = '__BAKED_AIRTABLE__';
+
+// ─── STATE ───────────────────────────────────────────────
+let deals = [];
+let editingId = null; // airtable record id when editing
+let sortCol = 'date_funded', sortDir = -1, currentView = 'book';
+
+const fmt$ = n => '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtK = n => { const v=Number(n||0); return Math.abs(v)>=1000?'$'+(v/1000).toFixed(0)+'K':fmt$(v); };
+const fmtDate = iso => { if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${parseInt(m)}/${parseInt(d)}/${y}`; };
+const calcML = (f,bp,fees,comm) => (f*bp/100)-fees+(comm*bp/100);
+const calcPNL = (rtr,bal,bp,ml) => ((rtr-bal)*bp/100)-ml;
+const getAnthropicKey = () => BAKED_ANTHROPIC.startsWith('sk-ant') ? BAKED_ANTHROPIC : localStorage.getItem('ms_anthropic')||'';
+const getAirtableKey  = () => BAKED_AIRTABLE.startsWith('pat')    ? BAKED_AIRTABLE  : localStorage.getItem('ms_airtable')||'';
+
+// ─── STARTUP ─────────────────────────────────────────────
+window.addEventListener('load', () => {
+  if (getAirtableKey()) {
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    loadDeals();
+  }
+  document.getElementById('setup-anthropic').addEventListener('keydown', e => { if(e.key==='Enter') setupAndBake(); });
+  document.getElementById('setup-airtable').addEventListener('keydown',  e => { if(e.key==='Enter') setupAndBake(); });
+});
+
+// ─── SETUP & BAKE ────────────────────────────────────────
+function setupAndBake() {
+  const anthropic = document.getElementById('setup-anthropic').value.trim();
+  const airtable  = document.getElementById('setup-airtable').value.trim();
+  const errEl = document.getElementById('setup-error');
+
+  if (!airtable.startsWith('pat')) {
+    errEl.textContent = 'Airtable token should start with pat... — check and try again.';
+    errEl.style.display = 'block'; return;
+  }
+  if (anthropic && !anthropic.startsWith('sk-ant')) {
+    errEl.textContent = 'Anthropic key should start with sk-ant... — check and try again.';
+    errEl.style.display = 'block'; return;
+  }
+
+  localStorage.setItem('ms_airtable', airtable);
+  if (anthropic) localStorage.setItem('ms_anthropic', anthropic);
+
+  bakeIntoFile(anthropic, airtable);
+
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  loadDeals();
+}
+
+function bakeIntoFile(anthropic, airtable) {
+  fetch(window.location.href)
+    .then(r => r.text())
+    .then(html => {
+      let baked = html;
+      if (anthropic) baked = baked.replace("'__BAKED_ANTHROPIC__'", `'${anthropic}'`);
+      baked = baked.replace("'__BAKED_AIRTABLE__'", `'${airtable}'`);
+      const blob = new Blob([baked], {type:'text/html'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'Master_Sheet.html';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    })
+    .catch(() => showNotice('Credentials saved to this browser. Share the file and enter credentials once on each new device.', 'info', 8000));
+}
+
+function updateCredentials() {
+  const anthropic = prompt('Anthropic API key (leave blank to keep current):');
+  const airtable  = prompt('Airtable token (leave blank to keep current):');
+  if (airtable && airtable.startsWith('pat')) { localStorage.setItem('ms_airtable', airtable); bakeIntoFile(anthropic||'', airtable); showNotice('Credentials updated. New copy downloaded.', 'success'); }
+  else if (anthropic && anthropic.startsWith('sk-ant')) { localStorage.setItem('ms_anthropic', anthropic); showNotice('Anthropic key updated.', 'success'); }
+}
+
+// ─── AIRTABLE API ─────────────────────────────────────────
+const AT_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_TABLE}`;
+const AT_META_URL = `https://api.airtable.com/v0/meta/bases/${AIRTABLE_BASE_ID}/tables`;
+
+async function atFetch(method, path='', body=null) {
+  const key = getAirtableKey();
+  const opts = {
+    method,
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(AT_URL + path, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({error:{message:'HTTP '+res.status}}));
+    throw new Error(err.error?.message || 'Airtable error ' + res.status);
+  }
+  return res.json();
+}
+
+// Required fields: name → type
+const REQUIRED_FIELDS = [
+  {name:'Merchant',    type:'singleLineText'},
+  {name:'DateFunded',  type:'date', options:{dateFormat:{name:'iso'}}},
+  {name:'Funded',      type:'number', options:{precision:2}},
+  {name:'RTR',         type:'number', options:{precision:2}},
+  {name:'Factor',      type:'number', options:{precision:3}},
+  {name:'Term',        type:'number', options:{precision:0}},
+  {name:'DailyPayment',type:'number', options:{precision:2}},
+  {name:'BankFees',    type:'number', options:{precision:2}},
+  {name:'BookPct',     type:'number', options:{precision:2}},
+  {name:'BookFunded',  type:'number', options:{precision:2}},
+  {name:'Rep',         type:'singleLineText'},
+  {name:'ISO',         type:'singleLineText'},
+  {name:'CommPct',     type:'number', options:{precision:2}},
+  {name:'CommAmount',  type:'number', options:{precision:2}},
+  {name:'Kickback',    type:'number', options:{precision:2}},
+  {name:'MaxLoss',     type:'number', options:{precision:2}},
+  {name:'Balance',     type:'number', options:{precision:2}},
+  {name:'PctPaid',     type:'number', options:{precision:4}},
+  {name:'PNL',         type:'number', options:{precision:2}},
+  {name:'Status',      type:'singleLineText'},
+];
+
+async function ensureFields() {
+  const key = getAirtableKey();
+  // Get existing tables/fields
+  const res = await fetch(AT_META_URL, { headers:{'Authorization':`Bearer ${key}`} });
+  if (!res.ok) return; // skip silently if no schema access
+  const data = await res.json();
+  const table = data.tables?.find(t => t.name === AIRTABLE_TABLE);
+  if (!table) return;
+  const existing = new Set(table.fields.map(f => f.name));
+  // Create any missing fields
+  for (const field of REQUIRED_FIELDS) {
+    if (existing.has(field.name)) continue;
+    const body = { name: field.name, type: field.type };
+    if (field.options) body.options = field.options;
+    await fetch(`${AT_META_URL}/${table.id}/fields`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+  }
+}
+
+function dealToFields(d) {
+  return {
+    Merchant:     d.merchant     || '',
+    DateFunded:   d.date_funded  || '',
+    Funded:       d.funded       || 0,
+    RTR:          d.rtr          || 0,
+    Factor:       d.factor       || 0,
+    Term:         d.term         || 0,
+    DailyPayment: d.daily_payment|| 0,
+    BankFees:     d.bank_fees    || 0,
+    BookPct:      d.book_pct     || 100,
+    BookFunded:   d.book_funded  || 0,
+    Rep:          d.rep          || '',
+    ISO:          d.iso          || '',
+    CommPct:      d.comm_pct     || 0,
+    CommAmount:   d.comm_amount  || 0,
+    Kickback:     d.kickback     || 0,
+    MaxLoss:      d.max_loss     || 0,
+    Balance:      d.balance      || d.rtr || 0,
+    PctPaid:      d.pct_paid     || 0,
+    PNL:          d.pnl          || 0,
+    Status:       d.status       || 'ACTIVE'
+  };
+}
+
+function fieldsToDeal(id, f) {
+  return {
+    _id:          id,
+    merchant:     f.Merchant     || '',
+    date_funded:  f.DateFunded   || '',
+    funded:       f.Funded       || 0,
+    rtr:          f.RTR          || 0,
+    factor:       f.Factor       || 0,
+    term:         f.Term         || 0,
+    daily_payment:f.DailyPayment || 0,
+    bank_fees:    f.BankFees     || 0,
+    book_pct:     f.BookPct      || 100,
+    book_funded:  f.BookFunded   || 0,
+    rep:          f.Rep          || '',
+    iso:          f.ISO          || '',
+    comm_pct:     f.CommPct      || 0,
+    comm_amount:  f.CommAmount   || 0,
+    kickback:     f.Kickback     || 0,
+    max_loss:     f.MaxLoss      || 0,
+    balance:      f.Balance      || 0,
+    pct_paid:     f.PctPaid      || 0,
+    pnl:          f.PNL          || 0,
+    status:       f.Status       || 'ACTIVE'
+  };
+}
+
+async function loadDeals() {
+  showLoading('Loading deals from Airtable...');
+  try {
+    await ensureFields();
+    let allRecords = [], offset = null;
+    do {
+      const url = offset ? `?offset=${offset}` : '';
+      const data = await atFetch('GET', url);
+      allRecords = allRecords.concat(data.records);
+      offset = data.offset;
+    } while (offset);
+    deals = allRecords.map(r => fieldsToDeal(r.id, r.fields));
+    document.getElementById('sync-info').textContent = '⏱ ' + new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    renderAll();
+  } catch(err) {
+    showNotice('Failed to load deals: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function createDeal(deal) {
+  const data = await atFetch('POST', '', { records: [{ fields: dealToFields(deal) }] });
+  return data.records[0].id;
+}
+
+async function updateDeal(airtableId, deal) {
+  await atFetch('PATCH', '', { records: [{ id: airtableId, fields: dealToFields(deal) }] });
+}
+
+async function deleteDealRemote(airtableId) {
+  await fetch(`${AT_URL}/${airtableId}`, {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${getAirtableKey()}` }
+  });
+}
+
+// ─── LOADING ─────────────────────────────────────────────
+function showLoading(msg='Loading...') {
+  document.getElementById('loading-msg').textContent = msg;
+  document.getElementById('loading-overlay').style.display = 'flex';
+}
+function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
+
+// ─── SCREENSHOT ──────────────────────────────────────────
+function openScreenshotModal() {
+  document.getElementById('extract-status').style.display = 'none';
+  document.getElementById('img-preview').style.display = 'none';
+  document.getElementById('img-input').value = '';
+  document.getElementById('upload-zone').classList.remove('drag');
+  document.getElementById('ss-modal-bg').style.display = 'flex';
+}
+function closeSSModal() { document.getElementById('ss-modal-bg').style.display = 'none'; }
+function handleDrop(e) { e.preventDefault(); document.getElementById('upload-zone').classList.remove('drag'); const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) processImage(f); }
+function handleImageUpload(input) { if(input.files[0]) processImage(input.files[0]); }
+
+async function processImage(file) {
+  const apiKey = getAnthropicKey();
+  if (!apiKey) { showNotice('No Anthropic API key. Update credentials via the sidebar.', 'error'); return; }
+  document.getElementById('preview-img').src = URL.createObjectURL(file);
+  document.getElementById('img-preview').style.display = 'block';
+  const statusEl = document.getElementById('extract-status');
+  statusEl.style.display = 'block'; statusEl.style.color = 'var(--text2)';
+  statusEl.innerHTML = '<span class="spinner"></span> Reading screenshot with Claude...';
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const b64 = e.target.result.split(',')[1];
+    const mediaType = file.type || 'image/png';
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514', max_tokens: 1000,
+          messages: [{ role:'user', content: [
+            { type:'image', source:{ type:'base64', media_type:mediaType, data:b64 } },
+            { type:'text', text:`Extract deal fields from this Pinnacle MCA funding confirmation screenshot. Return ONLY valid JSON, no markdown, no explanation.
+{
+  "merchant": "value from NEW QB Name field",
+  "date_funded": "YYYY-MM-DD from Start Debits On date",
+  "funded": number from Purchase Price,
+  "rtr": number from Purchase Amount,
+  "factor": number from Factor Rate,
+  "term": number from Estimated Payments (business days),
+  "daily_payment": number from Rate of Collection,
+  "bank_fees": number (Due Diligence Fee + Origination Fee summed),
+  "book_pct": number from Book percentage in Participation Info (0-100),
+  "rep": "Rep from Verify Info",
+  "iso": "ISO from Verify Info",
+  "comm_pct": number from Commission % (no % sign),
+  "comm_amount": number from Commission Amount
+}
+Use null for missing fields.` }
+          ]}]
+        })
+      });
+      if (!res.ok) { const e=await res.json().catch(()=>({error:{message:'HTTP '+res.status}})); throw new Error(e.error?.message); }
+      const data = await res.json();
+      const text = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+      const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+      statusEl.style.color = 'var(--green)';
+      statusEl.innerHTML = '✅ All fields extracted — review below.';
+      setTimeout(() => {
+        closeSSModal(); editingId = null;
+        document.getElementById('modal-title').textContent = '📸 Review extracted deal';
+        document.getElementById('modal-sub').textContent = 'Fields extracted from your screenshot. Review and confirm.';
+        fillForm(parsed);
+        document.getElementById('modal-bg').style.display = 'flex';
+      }, 700);
+    } catch(err) { statusEl.style.color='var(--red)'; statusEl.innerHTML='❌ '+err.message; }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─── FORM ────────────────────────────────────────────────
+function autoCalc() {
+  const f=parseFloat(document.getElementById('fi-funded').value)||0;
+  const bp=parseFloat(document.getElementById('fi-bookpct').value)||100;
+  const cp=parseFloat(document.getElementById('fi-commpct').value)||0;
+  const fees=parseFloat(document.getElementById('fi-bankfees').value)||0;
+  const rtr=parseFloat(document.getElementById('fi-rtr').value)||0;
+  const comm=f*cp/100, ml=calcML(f,bp,fees,comm);
+  document.getElementById('fi-bookamt').value=f?(f*bp/100).toFixed(2):'';
+  document.getElementById('fi-comm').value=comm?comm.toFixed(2):'';
+  document.getElementById('fi-maxloss').value=ml?ml.toFixed(2):'';
+  document.getElementById('fi-pnl').value=rtr?calcPNL(rtr,rtr,bp,ml).toFixed(2):'';
+}
+
+function fillForm(d) {
+  document.getElementById('fi-merchant').value=d.merchant||'';
+  document.getElementById('fi-date').value=d.date_funded||new Date().toISOString().split('T')[0];
+  document.getElementById('fi-funded').value=d.funded||'';
+  document.getElementById('fi-rtr').value=d.rtr||'';
+  document.getElementById('fi-factor').value=d.factor||'';
+  document.getElementById('fi-term').value=d.term||'';
+  document.getElementById('fi-daily').value=d.daily_payment||'';
+  document.getElementById('fi-bankfees').value=d.bank_fees||'';
+  document.getElementById('fi-bookpct').value=d.book_pct!=null?d.book_pct:100;
+  document.getElementById('fi-rep').value=d.rep||'';
+  document.getElementById('fi-iso').value=d.iso||'';
+  document.getElementById('fi-commpct').value=d.comm_pct||'';
+  document.getElementById('fi-kickback').value=d.kickback||'';
+  autoCalc();
+}
+
+function openModal(prefill) {
+  editingId=prefill?._id||null;
+  document.getElementById('modal-title').textContent=editingId?'Edit deal':'Add deal';
+  document.getElementById('modal-sub').textContent=editingId?'Edit deal fields below.':'Fill in fields from the Pinnacle funding email.';
+  document.getElementById('save-btn').textContent=editingId?'✓ Save changes':'✓ Add to book';
+  if(prefill){ fillForm(prefill); document.getElementById('fi-bookamt').value=prefill.book_funded||''; document.getElementById('fi-comm').value=prefill.comm_amount||''; document.getElementById('fi-maxloss').value=prefill.max_loss||''; document.getElementById('fi-pnl').value=prefill.pnl||''; }
+  else { fillForm({}); }
+  document.getElementById('modal-bg').style.display='flex';
+}
+function closeModal(){ document.getElementById('modal-bg').style.display='none'; editingId=null; }
+
+async function saveDeal() {
+  const f=parseFloat(document.getElementById('fi-funded').value)||0;
+  const bp=parseFloat(document.getElementById('fi-bookpct').value)||100;
+  const cp=parseFloat(document.getElementById('fi-commpct').value)||0;
+  const rtr=parseFloat(document.getElementById('fi-rtr').value)||0;
+  const fees=parseFloat(document.getElementById('fi-bankfees').value)||0;
+  const comm=f*cp/100, ml=calcML(f,bp,fees,comm);
+  const deal={
+    merchant:document.getElementById('fi-merchant').value.trim().toUpperCase(),
+    date_funded:document.getElementById('fi-date').value,
+    funded:f,rtr,factor:parseFloat(document.getElementById('fi-factor').value)||0,
+    term:parseInt(document.getElementById('fi-term').value)||0,
+    daily_payment:parseFloat(document.getElementById('fi-daily').value)||0,
+    bank_fees:fees,book_pct:bp,book_funded:f*bp/100,
+    rep:document.getElementById('fi-rep').value.trim(),
+    iso:document.getElementById('fi-iso').value.trim(),
+    comm_pct:cp,comm_amount:comm,
+    kickback:parseFloat(document.getElementById('fi-kickback').value)||0,
+    max_loss:ml,pnl:calcPNL(rtr,rtr,bp,ml),status:'ACTIVE'
+  };
+  if(!deal.merchant){ showNotice('Merchant name is required.','warn'); return; }
+  const btn=document.getElementById('save-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Saving...';
+  try {
+    if(editingId) {
+      const existing=deals.find(d=>d._id===editingId);
+      if(existing){ deal.balance=existing.balance; deal.pct_paid=existing.pct_paid; deal.status=existing.status; deal.pnl=calcPNL(deal.rtr,deal.balance,deal.book_pct,deal.max_loss); }
+      await updateDeal(editingId, deal);
+      showNotice('Updated: '+deal.merchant,'success');
+    } else {
+      deal.balance=rtr; deal.pct_paid=0;
+      await createDeal(deal);
+      showNotice('Added: '+deal.merchant,'success');
+    }
+    closeModal();
+    await loadDeals();
+  } catch(err) {
+    showNotice('Save failed: '+err.message,'error');
+  } finally {
+    btn.disabled=false; btn.innerHTML=editingId?'✓ Save changes':'✓ Add to book';
+  }
+}
+
+async function deleteDeal(airtableId, merchant) {
+  if(!confirm(`Remove ${merchant} from the book?`)) return;
+  showLoading('Deleting...');
+  try {
+    await deleteDealRemote(airtableId);
+    await loadDeals();
+    showNotice('Removed: '+merchant,'success');
+  } catch(err) {
+    showNotice('Delete failed: '+err.message,'error');
+  } finally { hideLoading(); }
+}
+
+// ─── DAILY REPORT SYNC ───────────────────────────────────
+async function handleDailyReport(input) {
+  const file=input.files[0]; if(!file) return; input.value='';
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+      let headers=[],dataRows=[];
+      for(let i=0;i<rows.length;i++){const r=rows[i];if(r&&r.some(c=>typeof c==='string'&&c.toLowerCase().includes('customer'))){headers=r.map(h=>String(h||'').toLowerCase().trim());dataRows=rows.slice(i+1);break;}}
+      if(!headers.length){headers=rows[0]?rows[0].map(h=>String(h||'').toLowerCase().trim()):[];dataRows=rows.slice(1);}
+      const ci=n=>headers.findIndex(h=>h.includes(n));
+      const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status');
+      let updates=[];
+      dataRows.forEach(row=>{
+        if(!row||!row[custI]) return;
+        const name=String(row[custI]).trim().toUpperCase().replace(/\s+/g,'');
+        const bal=parseFloat(row[balI])||0,pct=parseFloat(row[pctI])||0;
+        const stat=row[statI]?String(row[statI]).trim().toUpperCase():null;
+        const m=deals.find(d=>d.merchant.replace(/\s+/g,'')==name&&d.status==='ACTIVE');
+        if(m){ updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(stat?{Status:stat}:{}) }}); }
+      });
+      if(!updates.length){ showNotice('No matching active deals found in report.','warn'); return; }
+      showLoading('Syncing '+updates.length+' deals to Airtable...');
+      // Batch update in groups of 10 (Airtable limit)
+      for(let i=0;i<updates.length;i+=10){
+        const batch=updates.slice(i,i+10);
+        await atFetch('PATCH','',{records:batch});
+      }
+      await loadDeals();
+      showNotice('Synced '+updates.length+' deal'+(updates.length!==1?'s':'')+' — balances and PNL updated.','success');
+    }catch(err){ showNotice('Failed: '+err.message,'error'); }
+    finally{ hideLoading(); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── VIEWS ───────────────────────────────────────────────
+function setView(v){
+  currentView=v;
+  ['book','renewal','defaults'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
+  document.getElementById('view-title').textContent={book:'All deals',renewal:'Renewal eligible',defaults:'Defaults'}[v];
+  if(v==='renewal') renderRenewal(); if(v==='defaults') renderDefaults();
+}
+
+function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
+
+function getFiltered(){
+  const sf=document.getElementById('f-status').value,rf=document.getElementById('f-rep').value,qf=document.getElementById('f-search').value.toLowerCase();
+  return deals.filter(d=>{
+    if(sf&&d.status!==sf) return false;
+    if(rf&&d.rep!==rf) return false;
+    if(qf&&!d.merchant.toLowerCase().includes(qf)) return false;
+    return true;
+  }).sort((a,b)=>{
+    let av=a[sortCol]??0,bv=b[sortCol]??0;
+    if(sortCol==='date_funded') return(new Date(av)-new Date(bv))*sortDir;
+    if(typeof av==='string') return av.localeCompare(bv)*sortDir;
+    return(av-bv)*sortDir;
+  });
+}
+
+function renderTable(){
+  const filtered=getFiltered(),tbody=document.getElementById('tbody');
+  const nod=document.getElementById('empty-deals'),nof=document.getElementById('empty-filter');
+  if(deals.length===0){nod.style.display='';nof.style.display='none';tbody.innerHTML='';return;}
+  nod.style.display='none';
+  if(!filtered.length){nof.style.display='';tbody.innerHTML='';return;}
+  nof.style.display='none';
+  tbody.innerHTML=filtered.map(d=>{
+    const pct=d.pct_paid||0,isRenewal=pct>=0.5&&d.status==='ACTIVE';
+    const fillCls=pct>=0.75?'fill-high':pct>=0.5?'fill-mid':'fill-low';
+    const badgeCls=d.status==='ACTIVE'?'badge-active':d.status==='DEFAULT'?'badge-default':'badge-completed';
+    const pnl=d.pnl||0;
+    const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return`<tr>
+      <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
+      <td style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.merchant)}">${d.merchant}${isRenewal?'<span class="renew-tag">🔄 Renew</span>':''}</td>
+      <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
+      <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
+      <td style="font-weight:600">${fmt$(d.funded)}</td>
+      <td style="color:var(--text2)">${fmt$(d.rtr)}</td>
+      <td style="color:var(--text2)">${d.factor||'—'}</td>
+      <td style="color:var(--text2)">${d.book_pct!=null?d.book_pct.toFixed(0)+'%':'—'}</td>
+      <td style="color:var(--text2)">${fmt$(d.book_funded)}</td>
+      <td style="color:var(--text2)">${fmt$(d.daily_payment)}</td>
+      <td style="color:var(--text2);white-space:nowrap">${d.term?d.term+' BD':'—'}</td>
+      <td style="font-weight:600">${fmt$(d.balance)}</td>
+      <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
+      <td style="font-size:11px;color:var(--text2)">${d.comm_pct?d.comm_pct+'%':''} ${d.comm_amount?fmt$(d.comm_amount):''}</td>
+      <td style="color:var(--red);font-weight:600">${fmt$(d.max_loss||0)}</td>
+      <td class="${pnl>=0?'pnl-pos':'pnl-neg'}">${fmt$(pnl)}</td>
+      <td><span class="badge ${badgeCls}">${d.status}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-sm" onclick='openModal(deals.find(x=>x._id==="${esc(d._id)}"))'>✏️</button>
+        <button class="btn btn-sm btn-red" onclick='deleteDeal("${esc(d._id)}","${esc(d.merchant)}")'>🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderRenewal(){
+  const eligible=deals.filter(d=>d.pct_paid>=0.5&&d.status==='ACTIVE');
+  const body=document.getElementById('renewal-body'),empty=document.getElementById('renewal-empty');
+  if(!eligible.length){body.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+  const byRep={};
+  eligible.forEach(d=>{const r=d.rep||'Unassigned';if(!byRep[r])byRep[r]=[];byRep[r].push(d);});
+  body.innerHTML=Object.entries(byRep).map(([rep,ds])=>`
+    <div class="rep-group">
+      <div class="rep-header"><span>👤 ${rep}</span><span style="font-size:11px;color:var(--text3);font-weight:400">${ds.length} deal${ds.length!==1?'s':''} eligible</span></div>
+      <div class="rep-deals">${ds.map(d=>`<div class="rep-deal-card">
+        <div><div style="font-weight:700;font-size:13px">${d.merchant}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">${fmtDate(d.date_funded)}</div></div>
+        <div style="font-size:12px;color:var(--text2)">${fmt$(d.funded)} funded</div>
+        <div style="color:var(--green);font-weight:700;font-size:13px">${(d.pct_paid*100).toFixed(1)}% paid</div>
+        <div style="color:var(--text2);font-size:12px">${fmt$(d.balance)} remaining</div>
+      </div>`).join('')}</div>
+    </div>`).join('');
+}
+
+function renderDefaults(){
+  const defs=deals.filter(d=>d.status==='DEFAULT');
+  const tbody=document.getElementById('tbody-defaults'),empty=document.getElementById('defaults-empty');
+  if(!defs.length){tbody.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+  const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  tbody.innerHTML=defs.map(d=>{const pnl=d.pnl||0;return`<tr>
+    <td style="font-size:11px;color:var(--text3)">${fmtDate(d.date_funded)}</td>
+    <td style="font-weight:600">${d.merchant}</td>
+    <td style="font-size:11px;color:var(--text2)">${d.rep||'—'}</td>
+    <td>${fmt$(d.funded)}</td><td>${fmt$(d.rtr)}</td><td>${fmt$(d.balance)}</td>
+    <td>${(d.pct_paid*100).toFixed(1)}%</td>
+    <td style="color:var(--red)">${fmt$(d.max_loss||0)}</td>
+    <td class="${pnl>=0?'pnl-pos':'pnl-neg'}">${fmt$(pnl)}</td>
+    <td><button class="btn btn-sm" onclick='openModal(deals.find(x=>x._id==="${esc(d._id)}"))'>✏️</button></td>
+  </tr>`;}).join('');
+}
+
+function renderMetrics(){
+  const active=deals.filter(d=>d.status==='ACTIVE'),defs=deals.filter(d=>d.status==='DEFAULT');
+  const rc=active.filter(d=>d.pct_paid>=0.5).length,totalPNL=deals.reduce((s,d)=>s+(d.pnl||0),0);
+  document.getElementById('m-active').textContent=active.length;
+  document.getElementById('m-funded').textContent=fmtK(active.reduce((s,d)=>s+d.funded,0));
+  document.getElementById('m-rtr').textContent=fmtK(active.reduce((s,d)=>s+d.rtr,0));
+  document.getElementById('m-balance').textContent=fmtK(active.reduce((s,d)=>s+d.balance,0));
+  document.getElementById('m-renewal').textContent=rc;
+  document.getElementById('m-defaults').textContent=defs.length;
+  document.getElementById('renewal-badge').textContent=rc;
+  document.getElementById('default-badge').textContent=defs.length;
+  const pnlEl=document.getElementById('m-pnl');
+  pnlEl.textContent=fmtK(totalPNL);
+  pnlEl.className='val '+(totalPNL>=0?'val-green':'val-red');
+}
+
+function populateRepFilter(){
+  const sel=document.getElementById('f-rep'),cur=sel.value;
+  const reps=[...new Set(deals.map(d=>d.rep).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">All reps</option>'+reps.map(r=>`<option value="${r}">${r}</option>`).join('');
+  if(cur) sel.value=cur;
+}
+
+function renderAll(){ populateRepFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='defaults')renderDefaults(); }
+
+function showNotice(msg,type='info',dur=5000){
+  const el=document.getElementById('notice');
+  el.textContent=msg; el.className='notice show notice-'+type;
+  if(dur) setTimeout(()=>el.className='notice',dur);
+}
+
+function exportCSV(){
+  if(!deals.length){showNotice('No deals to export.','warn');return;}
+  const h=['Date Funded','Merchant','Rep','ISO','Funded','RTR','Factor','Book %','Book Funded','Daily Payment','Term (BD)','Bank Fees','Balance','% Paid','Comm %','Comm $','Max Loss','PNL','Status'];
+  const rows=deals.map(d=>[fmtDate(d.date_funded),d.merchant,d.rep,d.iso,d.funded,d.rtr,d.factor,d.book_pct,d.book_funded,d.daily_payment,d.term,d.bank_fees,d.balance,(d.pct_paid*100).toFixed(1),d.comm_pct,d.comm_amount,d.max_loss,d.pnl,d.status]);
+  const csv=[h,...rows].map(r=>r.map(v=>JSON.stringify(v??'')).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='Master_Sheet_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+}
+</script>
+</body>
+</html>
