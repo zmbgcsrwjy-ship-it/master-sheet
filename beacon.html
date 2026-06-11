@@ -1223,7 +1223,7 @@
   <button class="tab-btn active" id="tab-daily-btn" onclick="showTab('daily')">Daily Collections<span class="badge" id="daily-count-badge">0</span></button>
   <button class="tab-btn" id="tab-legal-btn" onclick="showTab('legal')">Legal Cases</button>
   <div class="tab-bar-actions">
-    <input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="document.getElementById('bounce-file').click()">Sync bounce report <span class="btn-sub">(xlsx)</span></button>
+    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="document.getElementById('daily-file').click()">1⃣ Sync daily report <span class="btn-sub">(xlsx)</span></button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="document.getElementById('bounce-file').click()">2⃣ Sync bounce report <span class="btn-sub">(xlsx)</span></button>
     <button class="primary" onclick="saveAndDownload()">Save snapshot <span class="btn-sub">(share)</span></button>
   </div>
 </div>
@@ -1468,7 +1468,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v72 — AIRTABLE DATA LAYER
+// BEACON v73 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -1873,6 +1873,81 @@ function showBootError(e){
   d.textContent = (e && e.preflight ? '\u26d4 PREFLIGHT FAILED \u2014 schema drift detected. NOTHING was written.\nFix the base or the manifest, then reload.\n\n' : '\u26d4 Beacon failed to load.\n\n') + (e && e.message || e);
   document.body.appendChild(d);
 }
+
+// ---------- DAILY-REPORT SYNC (v73) — faithful port of Master Sheet build-17 logic ----------
+// Contract v1.3: daily ingestion rules are owned by Master Sheet; Beacon may invoke the
+// IDENTICAL logic as the morning launch point. Any rule change ships to both files.
+var bCalcPNL = (rtr,bal,bp,ml)=>((rtr-bal)*bp/100)-ml;
+function beaconBuildDailyUpdates(wb, rawDeals){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1});
+  let headers=[],dataRows=[];
+  for(let i=0;i<rows.length;i++){const r=rows[i];if(r&&r.some(c=>typeof c==='string'&&c.toLowerCase().includes('customer'))){headers=r.map(h=>String(h||'').toLowerCase().trim());dataRows=rows.slice(i+1);break;}}
+  if(!headers.length){headers=rows[0]?rows[0].map(h=>String(h||'').toLowerCase().trim()):[];dataRows=rows.slice(1);}
+  const ci=n=>headers.findIndex(h=>h.includes(n));
+  const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status'),leadI=ci('lead'),purchI=ci('purchased'),paidI=ci('paid today'),pmtdI=ci('paid this month');
+  if(custI<0||balI<0) throw new Error('Daily report headers not recognized — is this the right file?');
+  let updates=[],ambiguous=0,matched=0;
+  const claimed=new Set();
+  dataRows.forEach(row=>{
+    if(!row||!row[custI]) return;
+    const nameKey=bSquish(row[custI]);
+    const lead=leadI>=0&&row[leadI]!=null?String(row[leadI]).trim():'';
+    const purch=purchI>=0?parseFloat(row[purchI])||0:0;
+    const bal=parseFloat(String(row[balI]).replace(/[$,]/g,''))||0;
+    let pct=parseFloat(row[pctI])||0;
+    if(!pct&&purch>0) pct=Math.max(0,1-bal/purch);  // '% paid' can be an uncached formula cell — compute it
+    const stat=row[statI]?String(row[statI]).trim().toUpperCase():null;
+    let m=null;
+    if(lead){
+      // Match precedence (contract §6): LeadID alone when unique; LeadID+RTR composite when reused
+      let cands=rawDeals.filter(d=>String((d.fields&&d.fields.LeadID)||'').trim()===lead);
+      if(cands.length>1&&purch) cands=cands.filter(d=>Math.abs(((d.fields&&d.fields.RTR)||0)-purch)<1);
+      if(cands.length===1) m=cands[0];
+      else if(cands.length>1){ ambiguous++; return; }
+    }
+    if(!m) m=rawDeals.find(d=>bSquish(d.fields&&d.fields.Merchant)===nameKey&&['NEW','ACTIVE'].includes(d.fields&&d.fields.Status));
+    if(m){
+      if(claimed.has(m.id)){ ambiguous++; return; }  // two report rows -> one deal record: never double-write
+      claimed.add(m.id);
+      matched++;
+      const f=m.fields||{};
+      // Status discipline (contract §4): sync may ONLY declare DEFAULT from the report
+      // or PIF at zero balance; never touches NEW/ACTIVE; pinned deals keep their status.
+      let newStatus=null;
+      if(!f.StatusOverride){
+        if(stat==='DEFAULT'&&f.Status!=='DEFAULT') newStatus='DEFAULT';
+        else if(bal<=0&&['NEW','ACTIVE'].includes(f.Status||'')) newStatus='PIF';
+      }
+      const flds={Balance:bal, PctPaid:pct, PNL:bCalcPNL(f.RTR||0, bal, (f.BookPct!=null?f.BookPct:100), f.MaxLoss||0)};
+      if(paidI>=0) flds.PaidToday=parseFloat(row[paidI])||0;
+      if(pmtdI>=0) flds.PaidMTD=parseFloat(row[pmtdI])||0;
+      if(newStatus) flds.Status=newStatus;
+      if(lead&&!f.LeadID) flds.LeadID=lead;
+      updates.push({id:m.id, fields:flds});
+    }
+  });
+  return {updates, ambiguous, matched, total:dataRows.filter(r=>r&&r[custI]).length};
+}
+
+
+async function syncDailyReport(file){
+  if(!file) return;
+  try{
+    showToast('Parsing ' + file.name + ' \u2026');
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array'});
+    const r=beaconBuildDailyUpdates(wb, beaconRawCache.deals);
+    if(r.ambiguous>0) alert(r.ambiguous+' row(s) skipped \u2014 same LeadID on multiple deals and amounts did not disambiguate. Update those in Master Sheet manually.');
+    if(!r.updates.length){ showToast('No matching deals found in this report'); return; }
+    showToast('Syncing '+r.updates.length+' deals \u2026');
+    await atPatch('Deals', r.updates);
+    showToast('Daily synced \u2014 '+r.updates.length+' of '+r.total+' rows updated');
+    await beaconReload();
+  }catch(e){ beaconWriteErr(e); }
+  finally{ const fi=document.getElementById('daily-file'); if(fi) fi.value=''; }
+}
+
 function beaconEffectiveToday(raw){
   if (typeof localStorage!=='undefined' && localStorage.getItem('beacon_today')) return localStorage.getItem('beacon_today');
   const ds = (raw.bounces||[]).map(r=>(r.fields&&r.fields.Date)||'').filter(Boolean).sort();
@@ -5127,7 +5202,7 @@ async function beaconBoot(){
   initTheme();
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v72 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  console.log("%c BEACON v73 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
 // Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0

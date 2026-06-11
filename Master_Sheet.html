@@ -1111,6 +1111,7 @@ async function handleDailyReport(input) {
       const ci=n=>headers.findIndex(h=>h.includes(n));
       const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status'),leadI=ci('lead'),purchI=ci('purchased'),paidI=ci('paid today'),pmtdI=ci('paid this month');
       let updates=[],ambiguous=0;
+      const claimed=new Set();
       // Match precedence (June 10, 2026): LeadID alone when unique; LeadID+RTR
       // composite when the same merchant has multiple deals under one LeadID
       // (Pinnacle reuses LeadIDs — e.g. one merchant, two deals, same ID);
@@ -1131,6 +1132,8 @@ async function handleDailyReport(input) {
         }
         if(!m) m=deals.find(d=>d.merchant.replace(/\s+/g,'')==name&&['NEW','ACTIVE'].includes(d.status));
         if(m){
+          if(claimed.has(m._id)){ ambiguous++; return; }  // two report rows -> one deal record: never double-write
+          claimed.add(m._id);
           // Status discipline: our lifecycle owns NEW/ACTIVE/PIF/COMPLETED.
           // The daily report may only (a) declare DEFAULT, (b) trigger PIF at zero balance.
           // Manually pinned deals (StatusOverride) keep their status — balances still sync.
