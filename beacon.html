@@ -1207,7 +1207,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v72 · snapshot fix</span>
+      <span class="build-tag">v74 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1223,8 +1223,20 @@
   <button class="tab-btn active" id="tab-daily-btn" onclick="showTab('daily')">Daily Collections<span class="badge" id="daily-count-badge">0</span></button>
   <button class="tab-btn" id="tab-legal-btn" onclick="showTab('legal')">Legal Cases</button>
   <div class="tab-bar-actions">
-    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="document.getElementById('daily-file').click()">1⃣ Sync daily report <span class="btn-sub">(xlsx)</span></button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="document.getElementById('bounce-file').click()">2⃣ Sync bounce report <span class="btn-sub">(xlsx)</span></button>
-    <button class="primary" onclick="saveAndDownload()">Save snapshot <span class="btn-sub">(share)</span></button>
+    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">1⃣ Sync daily report <span class="btn-sub">(xlsx)</span></button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">2⃣ Sync bounce report <span class="btn-sub">(xlsx)</span></button>
+<div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:9000;align-items:center;justify-content:center">
+  <div style="background:#141b2d;border:1px solid #2a3550;border-radius:14px;padding:28px;width:min(640px,92vw);box-shadow:0 18px 60px rgba(0,0,0,.5)">
+    <div id="sync-modal-title" style="font-size:19px;font-weight:700;color:#e6edf3;margin-bottom:4px"></div>
+    <div id="sync-modal-sub" style="color:#8b96ad;font-size:13px;margin-bottom:18px"></div>
+    <div id="sync-drop" onclick="syncModalPick()" ondragover="event.preventDefault();this.style.borderColor='#539bf5';this.style.background='rgba(83,155,245,.06)'" ondragleave="this.style.borderColor='#3a4a6b';this.style.background='transparent'" ondrop="syncModalDrop(event)" style="border:2px dashed #3a4a6b;border-radius:12px;padding:52px 20px;text-align:center;cursor:pointer;transition:all .15s">
+      <div style="font-size:40px">📁</div>
+      <div style="font-size:16px;color:#e6edf3;margin-top:10px">Click to upload or drag &amp; drop</div>
+      <div style="color:#8b96ad;font-size:12px;margin-top:6px">XLSX straight from the Pinnacle email</div>
+    </div>
+    <div style="text-align:right;margin-top:18px"><button onclick="closeSyncModal()">Cancel</button></div>
+  </div>
+</div>
+    
   </div>
 </div>
 
@@ -1468,7 +1480,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v73 — AIRTABLE DATA LAYER
+// BEACON v74 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -1701,7 +1713,9 @@ function beaconReconstruct(raw, todayISO){
   const todayEvents=(historyOut[today]&&historyOut[today].bounce_events)||[];
   const sToday=statsFor(todayEvents);
   const statsOut=Object.assign({
-    date_iso:today, date_disp:bDisp(today), total_pulls:todayEvents.length,
+    date_iso:today, date_disp:bDisp(today), date_display:bDisp(today), total_pulls:todayEvents.length,
+    active_rtr:Math.round(merchants.filter(m=>['NEW','ACTIVE'].includes(m.status)).reduce((s,m)=>s+(m.balance||0),0)*100)/100,
+    paid_mtd:Math.round(merchants.reduce((s,m)=>s+(m.paid_mtd||0),0)*100)/100,
     active_count:merchants.filter(m=>m.status==='ACTIVE'||m.status==='NEW').length,
     default_count:merchants.filter(m=>m.status==='DEFAULT').length,
     completed_count:raw.deals.filter(r=>(r.fields&&r.fields.Status)==='COMPLETED').length,
@@ -1930,6 +1944,27 @@ function beaconBuildDailyUpdates(wb, rawDeals){
   return {updates, ambiguous, matched, total:dataRows.filter(r=>r&&r[custI]).length};
 }
 
+
+
+let _syncKind = 'daily';
+function openSyncModal(kind){
+  _syncKind = kind;
+  document.getElementById('sync-modal-title').textContent = kind==='daily' ? '1\u20e3 Sync daily report' : '2\u20e3 Sync bounce report';
+  document.getElementById('sync-modal-sub').textContent = kind==='daily'
+    ? 'The Pinnacle DAILY report \u2014 updates every balance, % paid, paid-today, and status across the book.'
+    : 'The Pinnacle BOUNCE report \u2014 lights up today\u2019s board. Run the daily first.';
+  document.getElementById('sync-modal').style.display='flex';
+}
+function closeSyncModal(){ document.getElementById('sync-modal').style.display='none'; const d=document.getElementById('sync-drop'); d.style.borderColor='#3a4a6b'; d.style.background='transparent'; }
+function syncModalPick(){ document.getElementById(_syncKind==='daily'?'daily-file':'bounce-file').click(); closeSyncModal(); }
+function syncModalDrop(ev){
+  ev.preventDefault();
+  const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
+  closeSyncModal();
+  if(!f) return;
+  if(!/\.xlsx$/i.test(f.name)){ showToast('That is not an xlsx file'); return; }
+  (_syncKind==='daily' ? syncDailyReport(f) : syncBounceReport(f));
+}
 
 async function syncDailyReport(file){
   if(!file) return;
@@ -5202,7 +5237,7 @@ async function beaconBoot(){
   initTheme();
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v73 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  console.log("%c BEACON v74 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
 // Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0
