@@ -173,6 +173,11 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
 .pnl-sec-yellow{background:rgba(232,198,63,.10);color:#e3cd7a;border-left:3px solid #e8c63f}
 .pnl-div{border-left:2px solid var(--border)}
 .pnl-grace{color:var(--text3);font-style:italic}
+
+/* Status toggle (build 14): badge-styled select, pin dot when manually overridden */
+select.badge{appearance:none;-webkit-appearance:none;cursor:pointer;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:700;font-family:inherit}
+select.badge:hover{filter:brightness(1.2)}
+.ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
 </style>
 </head>
 <body>
@@ -216,7 +221,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 13 — pnl v2</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 14 — status toggle</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -632,6 +637,7 @@ const REQUIRED_FIELDS = [
   {name:'PrevLeadID',  type:'singleLineText'},
   {name:'OrigFee',     type:'number', options:{precision:2}},
   {name:'KickbackPaid', type:'number', options:{precision:0}},
+  {name:'StatusOverride', type:'number', options:{precision:0}},
 ];
 
 async function ensureFields() {
@@ -686,6 +692,7 @@ function dealToFields(d) {
     PrevLeadID:   d.prev_lead_id || '',
     OrigFee:      d.orig_fee     || 0,
     KickbackPaid: d.kickback_paid|| 0,
+    StatusOverride: d.status_override|| 0,
     FinanceFeePct:d.finance_fee_pct!=null?d.finance_fee_pct:0.5
   };
 }
@@ -721,6 +728,7 @@ function fieldsToDeal(id, f) {
     prev_lead_id: f.PrevLeadID    || '',
     orig_fee:     f.OrigFee       || 0,
     kickback_paid:f.KickbackPaid  || 0,
+    status_override:f.StatusOverride|| 0,
     finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5
   };
 }
@@ -1026,6 +1034,26 @@ async function deleteDeal(airtableId, merchant) {
 }
 
 // ─── DAILY REPORT SYNC ───────────────────────────────────
+
+// Manual status toggle (build 14): picking a status PINS it (StatusOverride=1) so the
+// daily sync cannot flip it back. "Release to auto" clears the pin; the current status
+// stays until the next sync re-applies its own triggers (DEFAULT from report, PIF at $0).
+async function setDealStatus(id, val){
+  const d=deals.find(x=>x._id===id); if(!d) return;
+  try{
+    if(val==='__AUTO__'){
+      await atFetch('PATCH','',{records:[{id, fields:{StatusOverride:0}}]});
+      d.status_override=0;
+      showNotice(d.merchant+' released to auto — next sync may adjust its status.','info');
+    } else {
+      await atFetch('PATCH','',{records:[{id, fields:{Status:val, StatusOverride:1}}]});
+      d.status=val; d.status_override=1;
+      showNotice(d.merchant+' set to '+val+' and pinned — sync will not change it. Use "release to auto" to unpin.','success',7000);
+    }
+    renderAll();
+  }catch(err){ showNotice('Status change failed: '+err.message,'error'); renderAll(); }
+}
+
 async function handleDailyReport(input) {
   const file=input.files[0]; if(!file) return; input.value='';
   const reader=new FileReader();
@@ -1062,9 +1090,12 @@ async function handleDailyReport(input) {
         if(m){
           // Status discipline: our lifecycle owns NEW/ACTIVE/PIF/COMPLETED.
           // The daily report may only (a) declare DEFAULT, (b) trigger PIF at zero balance.
+          // Manually pinned deals (StatusOverride) keep their status — balances still sync.
           let newStatus=null;
-          if(stat==='DEFAULT'&&m.status!=='DEFAULT') newStatus='DEFAULT';
-          else if(bal<=0&&['NEW','ACTIVE'].includes(m.status)) newStatus='PIF';
+          if(!m.status_override){
+            if(stat==='DEFAULT'&&m.status!=='DEFAULT') newStatus='DEFAULT';
+            else if(bal<=0&&['NEW','ACTIVE'].includes(m.status)) newStatus='PIF';
+          }
           updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(newStatus?{Status:newStatus}:{}), ...(lead&&!m.lead_id?{LeadID:lead}:{}) }});
         }
       });
@@ -1151,7 +1182,7 @@ function renderTable(){
       <td class="${pnl>=0?'pnl-pos':'pnl-neg'}">${fmt$(pnl)}</td>
       <td style="color:var(--text2);white-space:nowrap">${lenTxt}</td>
       <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
-      <td><span class="badge ${badgeCls}">${d.status}</span></td>
+      <td style="white-space:nowrap"><select class="badge ${badgeCls}" onchange="setDealStatus('${d._id}',this.value)" title="${d.status_override?'Manually pinned — sync will not change this status':'Status (auto) — pick one to pin it manually'}">${['NEW','ACTIVE','PIF','COMPLETED','DEFAULT'].map(s=>`<option value="${s}"${s===d.status?' selected':''}>${s}</option>`).join('')}${d.status_override?'<option value="__AUTO__">↺ release to auto</option>':''}</select>${d.status_override?'<span class="ovr-dot" title="Manually pinned — sync will not change this status">📌</span>':''}</td>
       <td style="font-size:11px;color:var(--text2)">${d.funder||'—'}</td>
       <td style="color:var(--text2)">${d.kickback?fmt$(d.kickback):'—'}</td>
       <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
