@@ -85,7 +85,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 
 /* TABLE */
-.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 19: bounded so headers pin while the list scrolls */
+.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 20: bounded so headers pin while the list scrolls */
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
 thead th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);border-bottom:1px solid var(--border);background:var(--bg3);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.05em;text-transform:uppercase}
@@ -180,7 +180,7 @@ select.badge{appearance:none;-webkit-appearance:none;cursor:pointer;border-radiu
 select.badge:hover{filter:brightness(1.2)}
 .ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
 
-/* Build 19: frozen Date Funded + Name columns (All Deals), inline kickback editing */
+/* Build 20: frozen Date Funded + Name columns (All Deals), inline kickback editing */
 #panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);min-width:78px}
 #panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
 #panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
@@ -230,7 +230,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 19 — sticky headers</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 20 — sticky headers</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -781,7 +781,7 @@ async function loadDeals() {
 }
 
 
-// ── CRM deals-export import (build 19) — the PREFERRED deal intake ──
+// ── CRM deals-export import (build 20) — the PREFERRED deal intake ──
 // End-of-day ritual: upload the CRM csv; anything not on the book gets added
 // through the same lifecycle law as saveDeal (NEW vs REFI by QB-name chain,
 // prior auto-COMPLETED). Dedupe key: Lead ID. Re-running is always safe.
@@ -1095,7 +1095,7 @@ async function saveDeal() {
       priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
       _prior=priors[0];
       if(_prior.merchant!==deal.merchant){
-        // QB-name guard (build 19): one spelling per merchant, forever. A refi that
+        // QB-name guard (build 20): one spelling per merchant, forever. A refi that
         // arrives as "PENDLETON PAWN" when the book says "PENDLETONPAWN" silently
         // breaks Beacon's name matching — so adopt the book's spelling and say so.
         showNotice('QB name normalized to "'+_prior.merchant+'" (you typed "'+deal.merchant+'") to match the existing deal chain.','info',9000);
@@ -1147,7 +1147,7 @@ async function deleteDeal(airtableId, merchant) {
 
 // ─── DAILY REPORT SYNC ───────────────────────────────────
 
-// Inline kickback editing (build 19): type in the cell, saves on enter/blur.
+// Inline kickback editing (build 20): type in the cell, saves on enter/blur.
 async function saveKickbackInline(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
   const v=parseFloat(val)||0;
@@ -1165,10 +1165,10 @@ async function saveKickbackInline(id, val){
 // daily sync cannot flip it back. "Release to auto" clears the pin; the current status
 // stays until the next sync re-applies its own triggers (DEFAULT from report, PIF at $0).
 
-// CollectionsState chip (build 19) — Beacon's second status layer, display-only here.
+// CollectionsState chip (build 20) — Beacon's second status layer, display-only here.
 // Shows only exception states; OK/blank stays clean.
 
-// Merchant contact card (build 19) — CRM-fed. Hover the name for the details.
+// Merchant contact card (build 20) — CRM-fed. Hover the name for the details.
 function toggleContact(el, ev){
   if(ev) ev.stopPropagation();
   try{
@@ -1179,18 +1179,22 @@ function toggleContact(el, ev){
     var nxt = tr.nextElementSibling;
     if(nxt && nxt.classList && nxt.classList.contains('contact-row')){ nxt.remove(); return; }
     document.querySelectorAll('.contact-row').forEach(function(x){ x.remove(); });
-    var hx = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+    var hx=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+    var tc=function(s){ return String(s||'').toLowerCase().replace(/(^|[\s\-'])[a-z]/g, function(m){ return m.toUpperCase(); }); };
+    var fp=function(s){ var d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return d.length===10 ? '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6) : String(s||''); };
+    var pill='display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.045);border-radius:7px;padding:4px 11px;white-space:nowrap;';
     var bits=[];
-    if(c.i||c.s) bits.push('<span style="opacity:.75">'+hx(c.i||'')+((c.i&&c.s)?' · ':'')+hx(c.s||'')+'</span>');
-    if(c.n) bits.push('👤 '+hx(c.n));
-    if(c.p) bits.push('📞 <a href="tel:'+hx(c.p)+'" style="color:#539bf5" onclick="event.stopPropagation()">'+hx(c.p)+'</a>');
-    if(c.e) bits.push('✉ <a href="mailto:'+hx(c.e)+'" style="color:#539bf5" onclick="event.stopPropagation()">'+hx(c.e)+'</a>');
+    if(c.i||c.s) bits.push('<span style="'+pill+'color:#8b96ad">'+hx(c.i||'')+((c.i&&c.s)?' · ':'')+hx(c.s||'')+'</span>');
+    if(c.n) bits.push('<span style="'+pill+'color:#dde4ef">👤 '+hx(tc(c.n))+'</span>');
+    if(c.p) bits.push('<span style="'+pill+'">📞 <a href="tel:'+hx(String(c.p).replace(/\D/g,''))+'" style="color:#539bf5;text-decoration:none" onclick="event.stopPropagation()">'+hx(fp(c.p))+'</a></span>');
+    if(c.e) bits.push('<span style="'+pill+'">✉ <a href="mailto:'+hx(String(c.e).trim())+'" style="color:#539bf5;text-decoration:none" onclick="event.stopPropagation()">'+hx(String(c.e).trim().toLowerCase())+'</a></span>');
     if(!bits.length) return;
     var det=document.createElement('tr'); det.className='contact-row';
-    det.innerHTML='<td colspan="30" style="background:rgba(83,155,245,.06);border-left:2px solid #539bf5;padding:8px 14px"><div style="position:sticky;left:14px;width:fit-content;font-size:12.5px;white-space:nowrap">'+bits.join('<span style="opacity:.3;margin:0 10px">|</span>')+'</div></td>';
+    det.innerHTML='<td colspan="30" style="padding:7px 10px;background:transparent;border:0"><div style="position:sticky;left:14px;width:fit-content;display:inline-flex;align-items:center;gap:8px;background:#151e31;border:1px solid #2c3a57;border-left:3px solid #539bf5;border-radius:10px;padding:8px 12px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.3)">'+bits.join('')+'</div></td>';
     tr.after(det);
   }catch(err){ console.error('contact card:', err); }
 }
+
 
 function hasContact(d){ return !!(d.industry||d.owner_name||d.owner_phone||d.owner_email); }
 
