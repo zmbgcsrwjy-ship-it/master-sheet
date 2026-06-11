@@ -1167,6 +1167,19 @@ async function saveKickbackInline(id, val){
 
 // CollectionsState chip (build 18) — Beacon's second status layer, display-only here.
 // Shows only exception states; OK/blank stays clean.
+
+// Merchant contact card (build 18) — CRM-fed. Hover the name for the details.
+function contactTip(d){
+  const bits=[];
+  if(d.industry) bits.push(d.industry + (d.state?' · '+d.state:''));
+  else if(d.state) bits.push(d.state);
+  if(d.owner_name) bits.push('👤 '+d.owner_name);
+  if(d.owner_phone) bits.push('📞 '+d.owner_phone);
+  if(d.owner_email) bits.push('✉ '+d.owner_email);
+  return bits.length ? '\n\n'+bits.join('\n') : '';
+}
+function hasContact(d){ return !!(d.industry||d.owner_name||d.owner_phone||d.owner_email); }
+
 function csChip(d){
   const s=d.collections_state; if(!s||s==='OK') return '';
   const col={'BOUNCING':'#e5534b','SUSPENDED':'#d4a72c','RESUME SCHEDULED':'#539bf5','LEGAL':'#986ee2'}[s]||'#888';
@@ -1299,7 +1312,7 @@ function renderTable(){
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
-      <td style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.merchant)}">${d.merchant}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}</td>
+      <td style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.merchant)}${esc(contactTip(d))}">${d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}</td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
       <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
