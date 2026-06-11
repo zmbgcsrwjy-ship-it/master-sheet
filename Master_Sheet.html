@@ -85,7 +85,8 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 
 /* TABLE */
-.table-wrap{overflow-x:auto}
+.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 16: bounded so headers pin while the list scrolls */
+.table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
 thead th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);border-bottom:1px solid var(--border);background:var(--bg3);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.05em;text-transform:uppercase}
 thead th:hover{color:var(--text2)}
@@ -178,6 +179,14 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
 select.badge{appearance:none;-webkit-appearance:none;cursor:pointer;border-radius:20px;padding:3px 9px;font-size:11px;font-weight:700;font-family:inherit}
 select.badge:hover{filter:brightness(1.2)}
 .ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
+
+/* Build 15: frozen Date Funded + Name columns (All Deals), inline kickback editing */
+#panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);min-width:78px}
+#panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
+#panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
+#panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
+.kb-edit{width:74px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px}
+.kb-edit:focus{border-color:var(--blue);outline:none}
 </style>
 </head>
 <body>
@@ -221,7 +230,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 14 — status toggle</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 16 — sticky headers</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1035,6 +1044,20 @@ async function deleteDeal(airtableId, merchant) {
 
 // ─── DAILY REPORT SYNC ───────────────────────────────────
 
+// Inline kickback editing (build 15): type in the cell, saves on enter/blur.
+async function saveKickbackInline(id, val){
+  const d=deals.find(x=>x._id===id); if(!d) return;
+  const v=parseFloat(val)||0;
+  if(v===(d.kickback||0)) return;
+  try{
+    await atFetch('PATCH','',{records:[{id, fields:{Kickback:v}}]});
+    const wasPaid=d.kickback_paid;
+    d.kickback=v;
+    showNotice(d.merchant+' kickback set to '+fmt$(v)+(wasPaid?' — NOTE: this kickback was already distributed in a closed month; the change will not flow to a new payout. Adjust with Sal if money moved.':''),wasPaid?'warn':'success',wasPaid?10000:4000);
+    renderAll();
+  }catch(err){ showNotice('Kickback save failed: '+err.message,'error'); renderAll(); }
+}
+
 // Manual status toggle (build 14): picking a status PINS it (StatusOverride=1) so the
 // daily sync cannot flip it back. "Release to auto" clears the pin; the current status
 // stays until the next sync re-applies its own triggers (DEFAULT from report, PIF at $0).
@@ -1184,7 +1207,7 @@ function renderTable(){
       <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
       <td style="white-space:nowrap"><select class="badge ${badgeCls}" onchange="setDealStatus('${d._id}',this.value)" title="${d.status_override?'Manually pinned — sync will not change this status':'Status (auto) — pick one to pin it manually'}">${['NEW','ACTIVE','PIF','COMPLETED','DEFAULT'].map(s=>`<option value="${s}"${s===d.status?' selected':''}>${s}</option>`).join('')}${d.status_override?'<option value="__AUTO__">↺ release to auto</option>':''}</select>${d.status_override?'<span class="ovr-dot" title="Manually pinned — sync will not change this status">📌</span>':''}</td>
       <td style="font-size:11px;color:var(--text2)">${d.funder||'—'}</td>
-      <td style="color:var(--text2)">${d.kickback?fmt$(d.kickback):'—'}</td>
+      <td style="white-space:nowrap"><input class="kb-edit" type="number" step="0.01" value="${d.kickback||''}" placeholder="—" onchange="saveKickbackInline('${d._id}',this.value)" title="${d.kickback_paid?'Already distributed in a closed PNL month — changes will NOT flow to a new payout':'Kickback (upfront bank) — saves on enter/blur'}">${d.kickback_paid?'<span style="font-size:10px;color:var(--green)" title="Distributed">✓</span>':''}</td>
       <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
       <td style="color:var(--text2)">${fmt$(d.daily_payment)}${d.frequency==='Weekly'?'/wk':''}</td>
       <td style="white-space:nowrap">
