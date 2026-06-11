@@ -85,7 +85,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 
 /* TABLE */
-.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 16: bounded so headers pin while the list scrolls */
+.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 17: bounded so headers pin while the list scrolls */
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
 thead th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);border-bottom:1px solid var(--border);background:var(--bg3);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.05em;text-transform:uppercase}
@@ -180,7 +180,7 @@ select.badge{appearance:none;-webkit-appearance:none;cursor:pointer;border-radiu
 select.badge:hover{filter:brightness(1.2)}
 .ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
 
-/* Build 15: frozen Date Funded + Name columns (All Deals), inline kickback editing */
+/* Build 17: frozen Date Funded + Name columns (All Deals), inline kickback editing */
 #panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);min-width:78px}
 #panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
 #panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
@@ -230,7 +230,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 16 — sticky headers</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 17 — sticky headers</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -647,6 +647,8 @@ const REQUIRED_FIELDS = [
   {name:'OrigFee',     type:'number', options:{precision:2}},
   {name:'KickbackPaid', type:'number', options:{precision:0}},
   {name:'StatusOverride', type:'number', options:{precision:0}},
+  {name:'PaidToday',   type:'number', options:{precision:2}},
+  {name:'PaidMTD',     type:'number', options:{precision:2}},
 ];
 
 async function ensureFields() {
@@ -738,7 +740,10 @@ function fieldsToDeal(id, f) {
     orig_fee:     f.OrigFee       || 0,
     kickback_paid:f.KickbackPaid  || 0,
     status_override:f.StatusOverride|| 0,
-    finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5
+    finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5,
+    paid_today:   f.PaidToday    || 0,
+    paid_mtd:     f.PaidMTD      || 0,
+    collections_state: f.CollectionsState || ''   // Beacon-owned — Master Sheet only displays it
   };
 }
 
@@ -998,6 +1003,13 @@ async function saveDeal() {
     if(priors.length){
       priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
       _prior=priors[0];
+      if(_prior.merchant!==deal.merchant){
+        // QB-name guard (build 17): one spelling per merchant, forever. A refi that
+        // arrives as "PENDLETON PAWN" when the book says "PENDLETONPAWN" silently
+        // breaks Beacon's name matching — so adopt the book's spelling and say so.
+        showNotice('QB name normalized to "'+_prior.merchant+'" (you typed "'+deal.merchant+'") to match the existing deal chain.','info',9000);
+        deal.merchant=_prior.merchant;
+      }
       deal.status='ACTIVE'; deal.deal_type='REFI'; deal.prev_lead_id=_prior.lead_id||'';
     } else { deal.status='NEW'; }
   }
@@ -1044,7 +1056,7 @@ async function deleteDeal(airtableId, merchant) {
 
 // ─── DAILY REPORT SYNC ───────────────────────────────────
 
-// Inline kickback editing (build 15): type in the cell, saves on enter/blur.
+// Inline kickback editing (build 17): type in the cell, saves on enter/blur.
 async function saveKickbackInline(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
   const v=parseFloat(val)||0;
@@ -1061,6 +1073,14 @@ async function saveKickbackInline(id, val){
 // Manual status toggle (build 14): picking a status PINS it (StatusOverride=1) so the
 // daily sync cannot flip it back. "Release to auto" clears the pin; the current status
 // stays until the next sync re-applies its own triggers (DEFAULT from report, PIF at $0).
+
+// CollectionsState chip (build 17) — Beacon's second status layer, display-only here.
+// Shows only exception states; OK/blank stays clean.
+function csChip(d){
+  const s=d.collections_state; if(!s||s==='OK') return '';
+  const col={'BOUNCING':'#e5534b','SUSPENDED':'#d4a72c','RESUME SCHEDULED':'#539bf5','LEGAL':'#986ee2'}[s]||'#888';
+  return `<span title="Collections (Beacon): ${s}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:#fff;background:${col};vertical-align:middle;white-space:nowrap">${s==='RESUME SCHEDULED'?'RESUME SCHED':s}</span>`;
+}
 async function setDealStatus(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
   try{
@@ -1089,7 +1109,7 @@ async function handleDailyReport(input) {
       for(let i=0;i<rows.length;i++){const r=rows[i];if(r&&r.some(c=>typeof c==='string'&&c.toLowerCase().includes('customer'))){headers=r.map(h=>String(h||'').toLowerCase().trim());dataRows=rows.slice(i+1);break;}}
       if(!headers.length){headers=rows[0]?rows[0].map(h=>String(h||'').toLowerCase().trim()):[];dataRows=rows.slice(1);}
       const ci=n=>headers.findIndex(h=>h.includes(n));
-      const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status'),leadI=ci('lead'),purchI=ci('purchased');
+      const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status'),leadI=ci('lead'),purchI=ci('purchased'),paidI=ci('paid today'),pmtdI=ci('paid this month');
       let updates=[],ambiguous=0;
       // Match precedence (June 10, 2026): LeadID alone when unique; LeadID+RTR
       // composite when the same merchant has multiple deals under one LeadID
@@ -1119,7 +1139,7 @@ async function handleDailyReport(input) {
             if(stat==='DEFAULT'&&m.status!=='DEFAULT') newStatus='DEFAULT';
             else if(bal<=0&&['NEW','ACTIVE'].includes(m.status)) newStatus='PIF';
           }
-          updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(newStatus?{Status:newStatus}:{}), ...(lead&&!m.lead_id?{LeadID:lead}:{}) }});
+          updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(paidI>=0?{PaidToday:parseFloat(row[paidI])||0}:{}), ...(pmtdI>=0?{PaidMTD:parseFloat(row[pmtdI])||0}:{}), ...(newStatus?{Status:newStatus}:{}), ...(lead&&!m.lead_id?{LeadID:lead}:{}) }});
         }
       });
       if(ambiguous>0) showNotice(ambiguous+' row'+(ambiguous!==1?'s':'')+' skipped — same LeadID on multiple deals and amounts did not disambiguate. Update those balances manually.','warn',9000);
@@ -1205,7 +1225,7 @@ function renderTable(){
       <td class="${pnl>=0?'pnl-pos':'pnl-neg'}">${fmt$(pnl)}</td>
       <td style="color:var(--text2);white-space:nowrap">${lenTxt}</td>
       <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
-      <td style="white-space:nowrap"><select class="badge ${badgeCls}" onchange="setDealStatus('${d._id}',this.value)" title="${d.status_override?'Manually pinned — sync will not change this status':'Status (auto) — pick one to pin it manually'}">${['NEW','ACTIVE','PIF','COMPLETED','DEFAULT'].map(s=>`<option value="${s}"${s===d.status?' selected':''}>${s}</option>`).join('')}${d.status_override?'<option value="__AUTO__">↺ release to auto</option>':''}</select>${d.status_override?'<span class="ovr-dot" title="Manually pinned — sync will not change this status">📌</span>':''}</td>
+      <td style="white-space:nowrap"><select class="badge ${badgeCls}" onchange="setDealStatus('${d._id}',this.value)" title="${d.status_override?'Manually pinned — sync will not change this status':'Status (auto) — pick one to pin it manually'}">${['NEW','ACTIVE','PIF','COMPLETED','DEFAULT'].map(s=>`<option value="${s}"${s===d.status?' selected':''}>${s}</option>`).join('')}${d.status_override?'<option value="__AUTO__">↺ release to auto</option>':''}</select>${d.status_override?'<span class="ovr-dot" title="Manually pinned — sync will not change this status">📌</span>':''}${csChip(d)}</td>
       <td style="font-size:11px;color:var(--text2)">${d.funder||'—'}</td>
       <td style="white-space:nowrap"><input class="kb-edit" type="number" step="0.01" value="${d.kickback||''}" placeholder="—" onchange="saveKickbackInline('${d._id}',this.value)" title="${d.kickback_paid?'Already distributed in a closed PNL month — changes will NOT flow to a new payout':'Kickback (upfront bank) — saves on enter/blur'}">${d.kickback_paid?'<span style="font-size:10px;color:var(--green)" title="Distributed">✓</span>':''}</td>
       <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
