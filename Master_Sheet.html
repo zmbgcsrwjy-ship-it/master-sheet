@@ -85,7 +85,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 
 /* TABLE */
-.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 17: bounded so headers pin while the list scrolls */
+.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 18: bounded so headers pin while the list scrolls */
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
 thead th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);border-bottom:1px solid var(--border);background:var(--bg3);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.05em;text-transform:uppercase}
@@ -180,7 +180,7 @@ select.badge{appearance:none;-webkit-appearance:none;cursor:pointer;border-radiu
 select.badge:hover{filter:brightness(1.2)}
 .ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
 
-/* Build 17: frozen Date Funded + Name columns (All Deals), inline kickback editing */
+/* Build 18: frozen Date Funded + Name columns (All Deals), inline kickback editing */
 #panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);min-width:78px}
 #panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
 #panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
@@ -230,7 +230,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 17 — sticky headers</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 18 — sticky headers</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -241,7 +241,7 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
         <div class="nav-item" id="nav-pnl" onclick="setView('pnl')">🧮 PNL</div>
         <div class="nav-section">Actions</div>
-        <div class="nav-item" onclick="openScreenshotModal()">📸 Add from screenshot</div>
+        <div class="nav-item" onclick="document.getElementById('crm-file').click()">⭐ Import CRM export</div><div class="nav-item" onclick="openScreenshotModal()">📸 Add from screenshot</div>
         <div class="nav-item" onclick="openModal()">➕ Add manually</div>
         <div class="nav-item" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</div>
         <div class="nav-item" onclick="exportExcel()">⬇️ Export to Excel</div>
@@ -261,7 +261,7 @@ select.badge:hover{filter:brightness(1.2)}
           <p>Live sync with Airtable — you and Sal always see the same book</p>
         </div>
         <div class="btn-row">
-          <button class="btn btn-blue" onclick="openScreenshotModal()">📸 Add from screenshot</button>
+          <input type="file" id="crm-file" accept=".csv" style="display:none" onchange="importCrmExport(this.files[0])"><button class="btn btn-green" style="box-shadow:0 0 0 1.5px rgba(80,200,120,.55)" onclick="document.getElementById('crm-file').click()" title="The preferred way to add deals — the end-of-day CRM deals export. Cleaner data, industry + owner contact included.">⭐ Import CRM export</button><button class="btn btn-blue" onclick="openScreenshotModal()">📸 Add from screenshot</button>
           <button class="btn btn-green" onclick="openModal()">➕ Add manually</button>
           <button class="btn" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</button>
           <button class="btn" onclick="exportExcel()">⬇️ Export Excel</button>
@@ -649,6 +649,11 @@ const REQUIRED_FIELDS = [
   {name:'StatusOverride', type:'number', options:{precision:0}},
   {name:'PaidToday',   type:'number', options:{precision:2}},
   {name:'PaidMTD',     type:'number', options:{precision:2}},
+  {name:'Industry',    type:'singleLineText'},
+  {name:'State',       type:'singleLineText'},
+  {name:'OwnerName',   type:'singleLineText'},
+  {name:'OwnerEmail',  type:'singleLineText'},
+  {name:'OwnerPhone',  type:'singleLineText'},
 ];
 
 async function ensureFields() {
@@ -743,6 +748,11 @@ function fieldsToDeal(id, f) {
     finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5,
     paid_today:   f.PaidToday    || 0,
     paid_mtd:     f.PaidMTD      || 0,
+    industry:     f.Industry     || '',
+    state:        f.State        || '',
+    owner_name:   f.OwnerName    || '',
+    owner_email:  f.OwnerEmail   || '',
+    owner_phone:  f.OwnerPhone   || '',
     collections_state: f.CollectionsState || ''   // Beacon-owned — Master Sheet only displays it
   };
 }
@@ -768,6 +778,87 @@ async function loadDeals() {
   } finally {
     hideLoading();
   }
+}
+
+
+// ── CRM deals-export import (build 18) — the PREFERRED deal intake ──
+// End-of-day ritual: upload the CRM csv; anything not on the book gets added
+// through the same lifecycle law as saveDeal (NEW vs REFI by QB-name chain,
+// prior auto-COMPLETED). Dedupe key: Lead ID. Re-running is always safe.
+async function importCrmExport(file){
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const wb = XLSX.read(text, {type:'string'});
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false});
+    const h = rows[0].map(x=>String(x||'').trim().toLowerCase());
+    const ci = n=>h.findIndex(x=>x===n);
+    const C = {lead:ci('lead id'), merch:ci('merchant'), start:ci('start date'), funder:ci('funder'),
+      rep:ci('rep'), iso:ci('iso'), bookpct:ci('book %'), ffee:ci('funding fee'), ofee:ci('origination fee'),
+      comm:ci('commission'), funded:ci('funded'), purch:ci('purchased'),
+      freq:h.findIndex(x=>x.includes('payments freq')), pay:ci('estimated payments'),
+      industry:ci('industry'), state:ci('state'), oname:ci('owner name'), oemail:ci('owner email'),
+      ocell:ci('owner cell'), ophone:ci('owner phone')};
+    if(C.lead<0||C.merch<0||C.funded<0){ showNotice('That does not look like the CRM deals export — headers not recognized.','error'); return; }
+    const money=s=>parseFloat(String(s==null?'':s).replace(/[$,]/g,''))||0;
+    const squish=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const mdy=s=>{ const m=String(s||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m? m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0') : ''; };
+    const existingLeads=new Set(deals.map(d=>String(d.lead_id||'').trim()).filter(Boolean));
+    const newRows=[];
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i]; if(!r||!r[C.merch]) continue;
+      const lead=String(r[C.lead]||'').trim();
+      if(lead && existingLeads.has(lead)) continue;
+      newRows.push(r);
+    }
+    if(!newRows.length){ showNotice('Book is current — every deal in this export is already on the sheet.','success',7000); return; }
+    const names=newRows.map(r=>'\u2022 '+String(r[C.merch]).trim()+'  ('+mdy(r[C.start])+' \u00b7 $'+money(r[C.funded]).toLocaleString()+')');
+    const preview=names.slice(0,15).join('\n')+(names.length>15?'\n\u2026 and '+(names.length-15)+' more':'');
+    if(!confirm('CRM export: '+newRows.length+' deal'+(newRows.length!==1?'s':'')+' not on the book yet:\n\n'+preview+'\n\nAdd '+(newRows.length!==1?'them':'it')+' now?')) return;
+    showLoading('Importing '+newRows.length+' deal'+(newRows.length!==1?'s':'')+' from CRM...');
+    let added=0, refis=0;
+    for(const r of newRows){
+      const merchant=String(r[C.merch]).trim().toUpperCase();
+      const funded=money(r[C.funded]), rtr=money(r[C.purch]);
+      let bookpct=money(r[C.bookpct])||100; if(bookpct<=1.5) bookpct*=100;
+      if(bookpct>100) bookpct=100;   // hard ceiling, same as the form
+      const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
+      const comm=money(r[C.comm]);
+      const ml=calcML(funded,bookpct,fees,comm);
+      const priors=deals.filter(x=>squish(x.merchant)===squish(merchant)&&['NEW','ACTIVE','PIF'].includes(x.status));
+      let status='NEW', dealtype='NEW', prev='', prior=null;
+      if(priors.length){
+        priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+        prior=priors[0]; status='ACTIVE'; dealtype='REFI'; prev=prior.lead_id||'';
+      }
+      const fields={Merchant:merchant, LeadID:String(r[C.lead]||'').trim(), DateFunded:mdy(r[C.start]),
+        Funded:funded, RTR:rtr, Factor:funded? Math.round(rtr/funded*1000)/1000 : 0,
+        DDFee:ffee, OrigFee:ofee, BankFees:fees, BookPct:bookpct, BookFunded:funded*bookpct/100,
+        CommPct:funded? Math.round(comm/funded*10000)/100 : 0, CommAmount:comm, Kickback:0,
+        MaxLoss:ml, Balance:rtr, PctPaid:0, PNL:calcPNL(rtr,rtr,bookpct,ml),
+        Status:status, DealType:dealtype, PrevLeadID:prev,
+        Frequency:(C.freq>=0&&String(r[C.freq]||'').trim())||'Daily',
+        DailyPayment:C.pay>=0?money(r[C.pay]):0,
+        Rep:C.rep>=0?String(r[C.rep]||'').trim():'', ISO:C.iso>=0?String(r[C.iso]||'').trim():'',
+        Funder:(C.funder>=0?String(r[C.funder]||'').trim():'')||'HBP', FinanceFeePct:0.5,
+        Industry:C.industry>=0?String(r[C.industry]||'').trim():'',
+        State:C.state>=0?String(r[C.state]||'').trim():'',
+        OwnerName:C.oname>=0?String(r[C.oname]||'').trim():'',
+        OwnerEmail:C.oemail>=0?String(r[C.oemail]||'').trim():'',
+        OwnerPhone:String((C.ocell>=0&&r[C.ocell])||(C.ophone>=0&&r[C.ophone])||'').trim()};
+      await atFetch('POST','',{records:[{fields}], typecast:true});
+      added++;
+      if(prior){
+        refis++;
+        await atFetch('PATCH','',{records:[{id:prior._id, fields:{Status:'COMPLETED'}}]});
+        const pl=deals.find(x=>x._id===prior._id); if(pl) pl.status='COMPLETED';
+      }
+      deals.push({_id:'pending-'+added, merchant:merchant, status:status, lead_id:String(r[C.lead]||'').trim(), date_funded:mdy(r[C.start])});
+    }
+    await loadDeals();
+    showNotice('CRM import: '+added+' deal'+(added!==1?'s':'')+' added'+(refis?(' \u00b7 '+refis+' refi'+(refis!==1?'s':'')+' detected, priors auto-COMPLETED'):'')+'.','success',10000);
+  } catch(err){ showNotice('CRM import failed: '+err.message,'error'); }
+  finally{ hideLoading(); const fi=document.getElementById('crm-file'); if(fi) fi.value=''; }
 }
 
 async function createDeal(deal) {
@@ -1004,7 +1095,7 @@ async function saveDeal() {
       priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
       _prior=priors[0];
       if(_prior.merchant!==deal.merchant){
-        // QB-name guard (build 17): one spelling per merchant, forever. A refi that
+        // QB-name guard (build 18): one spelling per merchant, forever. A refi that
         // arrives as "PENDLETON PAWN" when the book says "PENDLETONPAWN" silently
         // breaks Beacon's name matching — so adopt the book's spelling and say so.
         showNotice('QB name normalized to "'+_prior.merchant+'" (you typed "'+deal.merchant+'") to match the existing deal chain.','info',9000);
@@ -1056,7 +1147,7 @@ async function deleteDeal(airtableId, merchant) {
 
 // ─── DAILY REPORT SYNC ───────────────────────────────────
 
-// Inline kickback editing (build 17): type in the cell, saves on enter/blur.
+// Inline kickback editing (build 18): type in the cell, saves on enter/blur.
 async function saveKickbackInline(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
   const v=parseFloat(val)||0;
@@ -1074,7 +1165,7 @@ async function saveKickbackInline(id, val){
 // daily sync cannot flip it back. "Release to auto" clears the pin; the current status
 // stays until the next sync re-applies its own triggers (DEFAULT from report, PIF at $0).
 
-// CollectionsState chip (build 17) — Beacon's second status layer, display-only here.
+// CollectionsState chip (build 18) — Beacon's second status layer, display-only here.
 // Shows only exception states; OK/blank stays clean.
 function csChip(d){
   const s=d.collections_state; if(!s||s==='OK') return '';
