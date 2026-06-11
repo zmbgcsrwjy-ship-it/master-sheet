@@ -163,6 +163,16 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
 /* LOADING OVERLAY */
 #loading-overlay{position:fixed;inset:0;background:rgba(15,17,23,.85);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px}
 #loading-overlay p{font-size:13px;color:var(--text2)}
+
+/* PNL tab (build 13): muted sections, condensed rows, payout divider */
+#panel-pnl td,#panel-pnl th{padding:5px 10px;font-size:12.5px}
+.pnl-sec{font-weight:700;font-size:11px;letter-spacing:.5px;padding:4px 10px!important}
+.pnl-sec-blue{background:rgba(91,141,239,.12);color:#9db9f5;border-left:3px solid #5b8def}
+.pnl-sec-green{background:rgba(55,198,111,.10);color:#6fd396;border-left:3px solid #37c66f}
+.pnl-sec-red{background:rgba(226,87,76,.10);color:#f08c84;border-left:3px solid #e2574c}
+.pnl-sec-yellow{background:rgba(232,198,63,.10);color:#e3cd7a;border-left:3px solid #e8c63f}
+.pnl-div{border-left:2px solid var(--border)}
+.pnl-grace{color:var(--text3);font-style:italic}
 </style>
 </head>
 <body>
@@ -206,7 +216,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 12 — pnl</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 13 — pnl v2</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -307,7 +317,6 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
                 <th>Total Funding</th><th>Avg Deal Size</th><th>Avg Deal Length</th>
                 <th>Average Fee</th><th>Banks</th><th>Kickbacks</th>
                 <th>Total PNL</th><th>Finance Fees</th><th>Clawback</th><th>Legal</th>
-                <th style="border-left:2px solid var(--border)">FF Due (4-mo lag)</th><th>Sal Payout</th><th>Matt Payout</th>
               </tr></thead>
               <tbody id="monthly-body"></tbody>
             </table>
@@ -322,11 +331,11 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
           </span></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Item</th><th>Total PNL</th><th>Our End (50%)</th><th>Paid Out</th><th>Available</th><th>Sal</th><th>Matt</th></tr></thead>
+              <thead><tr><th>Item</th><th>Total PNL</th><th>Our End (50%)</th><th>Settled</th><th>Available</th><th class="pnl-div">Sal</th><th>Matt</th></tr></thead>
               <tbody id="pnl-body"></tbody>
             </table>
           </div>
-          <div style="font-size:11px;color:var(--text3);padding:8px 4px">House split: Highland Hill Capital 50% of book PNL (global). Kickbacks 100% ours, distributed once after funding. FF is full book-level cost on a 4-month lag. Legal is entered on the Monthly tab. Negative cohorts pay $0 — no clawback; they must climb back above their paid line.</div>
+          <div style="font-size:11px;color:var(--text3);padding:8px 4px">House split: Highland Hill Capital 50% of book PNL and 50% of legal (global). Kickbacks 100% ours, distributed once after funding. FF is full book-level cost on a 4-month lag. Legal total is entered on the Monthly tab. Each funding month enters the payout 5 months after funding (HHC grace period); after that, losses deduct and recoveries credit back — the Settled column is a running account.</div>
         </div>
         <div class="panel" id="panel-renewal" style="display:none">
           <div class="panel-header"><h3>REFI eligible</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -1307,6 +1316,7 @@ const HOUSE_SPLIT = 0.5; // Highland Hill Capital takes 50% of book PNL — glob
 const addMonthsYM=(ym,n)=>{const[y,m]=ym.split('-').map(Number);const t=(y*12+m-1)+n;return `${Math.floor(t/12)}-${String(t%12+1).padStart(2,'0')}`;};
 const ffByMonthFrom=ds=>{const map={};ds.forEach(d=>{if(!d.date_funded)return;const ym=d.date_funded.slice(0,7);map[ym]=(map[ym]||0)+(d.finance_fee||0);});Object.keys(map).forEach(k=>{if(!map[k])delete map[k];});return map;};
 function monthLabel(ym){ const [y,m]=ym.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]+'-'+y.slice(2); }
+function monthLabelFull(ym){ const [y,m]=ym.split('-'); return ['January','February','March','April','May','June','July','August','September','October','November','December'][parseInt(m)-1]+' '+y; }
 
 // ─── PNL TAB ─────────────────────────────────────────────
 // Cohort book PNL (live) × HOUSE_SPLIT = our end → minus PnlLedger paid → Available.
@@ -1358,47 +1368,57 @@ async function loadPnlState(){
 async function computePnl(){
   try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
   const curYM = new Date().toISOString().slice(0,7);
-  // cohorts
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
+  // 5-month HHC grace: a funding month enters the payout 5 months after funding.
+  // After grace, the month SETTLES in full each close-out: losses deduct, recoveries credit back.
+  // pnlLedger.paid = net settled to date (can be negative).
   const cohorts = Object.keys(groups).sort().map(ym=>{
     const pnl = groups[ym].reduce((s,d)=>s+(d.pnl||0),0);
     const ourEnd = pnl*HOUSE_SPLIT;
     const paid = pnlLedger[ym]?pnlLedger[ym].paid:0;
     const avail = ourEnd - paid;
-    const payable = Math.max(0, avail);
-    return {ym, label: monthLabel(ym)+' cohort', pnl, ourEnd, paid, avail, payable};
+    const grace = addMonthsYM(ym,5) > curYM;
+    const payable = grace ? 0 : avail;
+    return {ym, label: monthLabel(ym), pnl, ourEnd, paid, avail, grace, graceUntil: addMonthsYM(ym,5), payable};
   });
-  // kickbacks not yet distributed (100% ours, no house cut)
   const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid)
     .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback}));
-  // FF on 4-month lag + legal for the snapshot month
   const ffDue = ffByMonthFrom(deals)[addMonthsYM(curYM,-4)]||0;
-  const legal = (monthlyManual[curYM]&&monthlyManual[curYM].legal)||0;
+  const legalTotal = (monthlyManual[curYM]&&monthlyManual[curYM].legal)||0;
+  const legalOurEnd = legalTotal*HOUSE_SPLIT; // legal is 50% house split too (June 11, 2026)
   const kickTotal = kicks.reduce((s,k)=>s+k.amount,0);
   const payableTotal = cohorts.reduce((s,c)=>s+c.payable,0);
-  const each = (payableTotal + kickTotal - ffDue - legal)/2;
-  return {month: curYM, cohorts, kicks, ffDue, legal, kickTotal, payableTotal, each};
+  const each = (payableTotal + kickTotal - ffDue - legalOurEnd)/2;
+  return {month: curYM, cohorts, kicks, ffDue, legalTotal, legalOurEnd, kickTotal, payableTotal, each};
 }
 
 function pnlRowsHtml(p){
-  const sec=(label,color)=>`<tr><td colspan="7" style="background:${color};color:#0b0d12;font-weight:800;font-size:12px;letter-spacing:.4px">${label}</td></tr>`;
+  const sec=(label,cls)=>`<tr><td colspan="7" class="pnl-sec ${cls}">${label}</td></tr>`;
   const money=(v,red)=>`<td class="${red||v<0?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
+  const moneyDiv=(v,red)=>`<td class="pnl-div ${red||v<0?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
+  // tolerate legacy (build 12) snapshots
+  const legalOurEnd = p.legalOurEnd!=null ? p.legalOurEnd : (p.legal||0);
+  const legalTotal  = p.legalTotal!=null ? p.legalTotal : (p.legal||0);
   let h='';
-  h+=sec('MONTHLY PNL — BY COHORT','#5b8def');
+  h+=sec('MONTHLY PNL','pnl-sec-blue');
   if(!p.cohorts.length) h+='<tr><td colspan="7" style="color:var(--text3)">No funded deals yet.</td></tr>';
   p.cohorts.forEach(c=>{
-    const half=c.payable/2;
-    h+=`<tr><td style="font-weight:600">${c.label}</td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}<td class="${c.avail<0?'pnl-neg':'pnl-pos'}" style="font-weight:700">${fmt$(c.avail)}</td>${money(half)}${money(half)}</tr>`;
+    if(c.grace){
+      h+=`<tr class="pnl-grace"><td>${c.label} <span style="font-size:10.5px">· grace until ${monthLabelFull(c.graceUntil)}</span></td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}${money(c.avail)}<td class="pnl-div">—</td><td>—</td></tr>`;
+    } else {
+      const half=c.payable/2;
+      h+=`<tr><td style="font-weight:600">${c.label}</td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}<td class="${c.avail<0?'pnl-neg':'pnl-pos'}" style="font-weight:700">${fmt$(c.avail)}</td>${moneyDiv(half)}${money(half)}</tr>`;
+    }
   });
-  h+=sec('KICKBACKS — UPFRONT BANK (100% OURS)','#37c66f');
+  h+=sec('KICKBACKS — UPFRONT BANK (100% OURS)','pnl-sec-green');
   if(!p.kicks.length) h+='<tr><td colspan="7" style="color:var(--text3)">No undistributed kickbacks.</td></tr>';
-  p.kicks.forEach(k=>{ h+=`<tr><td style="font-weight:600">${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${money(k.amount/2)}${money(k.amount/2)}</tr>`; });
-  h+=sec('FINANCE FEES — 4-MONTH LAG','#e2574c');
-  h+=`<tr><td style="font-weight:600">FF due (${monthLabel(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
-  h+=sec('LEGAL FEES — OUR END (manual, Monthly tab)','#e8c63f');
-  h+=`<tr><td style="font-weight:600">Legal (${monthLabel(p.month)})</td>${money(-p.legal,p.legal>0)}${money(-p.legal,p.legal>0)}<td>—</td>${money(-p.legal,p.legal>0)}${money(-p.legal/2,p.legal>0)}${money(-p.legal/2,p.legal>0)}</tr>`;
-  h+=`<tr><td style="font-weight:800;background:var(--bg3)">PAYOUT</td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td class="${p.each>=0?'pnl-pos':'pnl-neg'}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td><td class="${p.each>=0?'pnl-pos':'pnl-neg'}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td></tr>`;
+  p.kicks.forEach(k=>{ h+=`<tr><td style="font-weight:600">${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${moneyDiv(k.amount/2)}${money(k.amount/2)}</tr>`; });
+  h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-red');
+  h+=`<tr><td style="font-weight:600">FF due (${monthLabel(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${moneyDiv(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
+  h+=sec('LEGAL FEES — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-yellow');
+  h+=`<tr><td style="font-weight:600">Legal (${monthLabel(p.month)})</td>${money(-legalTotal,legalTotal>0)}${money(-legalOurEnd,legalOurEnd>0)}<td>—</td>${money(-legalOurEnd,legalOurEnd>0)}${moneyDiv(-legalOurEnd/2,legalOurEnd>0)}${money(-legalOurEnd/2,legalOurEnd>0)}</tr>`;
+  h+=`<tr><td style="font-weight:800;background:var(--bg3)">PAYOUT</td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td class="pnl-div ${p.each>=0?'pnl-pos':'pnl-neg'}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td><td class="${p.each>=0?'pnl-pos':'pnl-neg'}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td></tr>`;
   return h;
 }
 
@@ -1407,13 +1427,12 @@ async function renderPnl(historyMonth){
   const btn=document.getElementById('pnl-close-btn'), hist=document.getElementById('pnl-history');
   body.innerHTML='<tr><td colspan="7" style="color:var(--text3)">Loading PNL...</td></tr>';
   try{ await loadPnlState(); }catch(e){ pnlLedger={}; pnlSnapshots=[]; }
-  // history dropdown
   const keep = historyMonth!==undefined?historyMonth:hist.value;
-  hist.innerHTML='<option value="">Current (in progress)</option>'+pnlSnapshots.map(s=>`<option value="${s.month}"${s.month===keep?' selected':''}>${monthLabel(s.month)} — closed</option>`).join('');
+  hist.innerHTML='<option value="">Current (in progress)</option>'+pnlSnapshots.map(s=>`<option value="${s.month}"${s.month===keep?' selected':''}>${monthLabelFull(s.month)} — closed</option>`).join('');
   if(keep){
     const snap=pnlSnapshots.find(s=>s.month===keep);
     if(snap){
-      title.textContent='PNL — '+monthLabel(snap.month)+' (closed '+(snap.closedAt?snap.closedAt.slice(0,10):'')+')';
+      title.textContent='PNL — '+monthLabelFull(snap.month)+' (closed '+(snap.closedAt?snap.closedAt.slice(0,10):'')+')';
       btn.style.display='none';
       try{ body.innerHTML=pnlRowsHtml(JSON.parse(snap.data)); }
       catch(e){ body.innerHTML='<tr><td colspan="7" class="pnl-neg">Snapshot data unreadable.</td></tr>'; }
@@ -1422,7 +1441,7 @@ async function renderPnl(historyMonth){
   }
   const p=await computePnl();
   const closed=pnlSnapshots.some(s=>s.month===p.month);
-  title.textContent='PNL — '+monthLabel(p.month)+(closed?' (already closed)':' (in progress)');
+  title.textContent='PNL — '+monthLabelFull(p.month)+(closed?' (already closed)':' (in progress)');
   btn.style.display=closed?'none':'';
   body.innerHTML=pnlRowsHtml(p);
 }
@@ -1431,25 +1450,23 @@ async function closeOutMonth(){
   try{
     await loadPnlState();
     const p=await computePnl();
-    if(pnlSnapshots.some(s=>s.month===p.month)){ showNotice(monthLabel(p.month)+' is already closed — see history.','warn'); renderPnl(); return; }
-    const ok=confirm('Close out '+monthLabel(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nCohort distributions: '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+'\nFF deducted: '+fmt$(p.ffDue)+'\nLegal deducted: '+fmt$(p.legal)+'\n\nThis locks the snapshot and rolls Available into the paid ledger. It cannot be re-run for this month.');
+    if(pnlSnapshots.some(s=>s.month===p.month)){ showNotice(monthLabelFull(p.month)+' is already closed — see history.','warn'); renderPnl(); return; }
+    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nMature month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+'\nFF deducted: '+fmt$(p.ffDue)+'\nLegal deducted (our end): '+fmt$(p.legalOurEnd)+'\n\nThis locks the snapshot and settles every mature month into the ledger (losses deduct, recoveries credit). It cannot be re-run for this month.');
     if(!ok) return;
-    showLoading('Closing out '+monthLabel(p.month)+'...');
-    // 1. snapshot
+    showLoading('Closing out '+monthLabelFull(p.month)+'...');
     await atFetchT('PnlSnapshots','POST','',{records:[{fields:{Month:p.month, ClosedAt:new Date().toISOString(), SalPayout:Math.round(p.each*100)/100, MattPayout:Math.round(p.each*100)/100, DataJSON:JSON.stringify(p)}}]});
-    // 2. ledger upserts (positive cohorts only)
+    // settle every mature month in full — positive or negative — so Available zeroes out
     for(const c of p.cohorts){
-      if(c.payable<=0) continue;
+      if(c.grace || c.payable===0) continue;
       const newPaid=Math.round((c.paid+c.payable)*100)/100;
       if(pnlLedger[c.ym]&&pnlLedger[c.ym]._id) await atFetchT('PnlLedger','PATCH','',{records:[{id:pnlLedger[c.ym]._id, fields:{PaidToDate:newPaid}}]});
       else await atFetchT('PnlLedger','POST','',{records:[{fields:{Cohort:c.ym, PaidToDate:newPaid}}]});
     }
-    // 3. mark kickbacks distributed (Airtable max 10 records per call)
     const kickRecs=p.kicks.map(k=>({id:k._id, fields:{KickbackPaid:1}}));
     for(let i=0;i<kickRecs.length;i+=10) await atFetch('PATCH','',{records:kickRecs.slice(i,i+10)});
     p.kicks.forEach(k=>{const d=deals.find(x=>x._id===k._id); if(d) d.kickback_paid=1;});
     hideLoading();
-    showNotice(monthLabel(p.month)+' closed. '+fmt$(p.each)+' each to you and Matt. Snapshot saved to history.','success',8000);
+    showNotice(monthLabelFull(p.month)+' closed. '+fmt$(p.each)+' each to you and Matt. Snapshot saved to history.','success',8000);
     renderPnl('');
   }catch(err){ hideLoading(); showNotice('Close-out failed: '+err.message,'error',8000); }
 }
@@ -1460,15 +1477,12 @@ async function computeMonthlyRows(){
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
   Object.keys(monthlyManual).forEach(ym=>{ if(!groups[ym]) groups[ym]=[]; });
-  // FF 4-month lag: finance fees from month M are PAID in month M+4.
-  const ffByMonth=ffByMonthFrom(deals);
+  // current month always gets a row so Legal/Clawback can be entered (PNL tab reads Legal from here)
   const nowYM=new Date().toISOString().slice(0,7);
-  // months owing a lagged FF payment get a row even with zero fundings (up to current month)
-  Object.keys(ffByMonth).forEach(ym=>{const t=addMonthsYM(ym,4);if(t<=nowYM&&!groups[t])groups[t]=[];});
-  const ffDueFor=ym=>ffByMonth[addMonthsYM(ym,-4)]||0;
+  if(!groups[nowYM]) groups[nowYM]=[];
   const months=Object.keys(groups).sort();
   const bdLen=d=>d.frequency==='Weekly'?(d.term||0)*5:(d.term||0);
-  const mkRow=(label, ds, manual, ym, isTotal, ffDue)=>{
+  const mkRow=(label, ds, manual, ym, isTotal)=>{
     const tdf=ds.length, nw=ds.filter(d=>d.deal_type!=='REFI').length, rf=ds.filter(d=>d.deal_type==='REFI').length;
     const funding=ds.reduce((s,d)=>s+(d.funded||0),0);
     const banks=ds.reduce((s,d)=>s+(d.bank_fees||0),0);
@@ -1476,29 +1490,27 @@ async function computeMonthlyRows(){
     const pnl=ds.reduce((s,d)=>s+(d.pnl||0),0);
     const ffees=ds.reduce((s,d)=>s+(d.finance_fee||0),0);
     const legal=manual.legal||0, clawback=manual.clawback||0;
-    const pay=(pnl-(ffDue||0)-legal)/2; // 50/50 Sal & Matt — PNL minus FF (4-mo lag) minus Legal
     return {label, ym, isTotal, tdf, nw, rf, funding,
       avgSize: tdf?funding/tdf:null,
       avgLen: tdf?ds.reduce((s,d)=>s+bdLen(d),0)/tdf:null,
       avgFee: funding?banks/funding*100:null,
-      banks, bonus, pnl, ffees, clawback, legal, ffDue:ffDue||0, pay};
+      banks, bonus, pnl, ffees, clawback, legal};
   };
   const rows=[]; let yearAcc={}, lastYear=null;
   const flushYear=y=>{
     if(!y||!yearAcc[y]) return;
     const a=yearAcc[y];
-    rows.push(mkRow('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback}, '', true, a.ffDue));
+    rows.push(mkRow('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback}, '', true));
   };
   months.forEach(ym=>{
     const y=ym.slice(0,4);
     if(lastYear&&y!==lastYear){ flushYear(lastYear); }
     lastYear=y;
-    yearAcc[y]=yearAcc[y]||{deals:[],legal:0,clawback:0,ffDue:0};
+    yearAcc[y]=yearAcc[y]||{deals:[],legal:0,clawback:0};
     const man=monthlyManual[ym]||{legal:0,clawback:0};
-    const ffDue=ffDueFor(ym);
     yearAcc[y].deals=yearAcc[y].deals.concat(groups[ym]);
-    yearAcc[y].legal+=man.legal||0; yearAcc[y].clawback+=man.clawback||0; yearAcc[y].ffDue+=ffDue;
-    rows.push(mkRow(monthLabel(ym), groups[ym], man, ym, false, ffDue));
+    yearAcc[y].legal+=man.legal||0; yearAcc[y].clawback+=man.clawback||0;
+    rows.push(mkRow(monthLabel(ym), groups[ym], man, ym, false));
   });
   flushYear(lastYear);
   return rows;
@@ -1506,7 +1518,7 @@ async function computeMonthlyRows(){
 
 async function renderMonthly(){
   const body=document.getElementById('monthly-body'), empty=document.getElementById('monthly-empty');
-  body.innerHTML='<tr><td colspan="17" style="color:var(--text3)">Loading monthly data...</td></tr>';
+  body.innerHTML='<tr><td colspan="14" style="color:var(--text3)">Loading monthly data...</td></tr>';
   const rows=await computeMonthlyRows();
   if(!rows.length){ body.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
@@ -1516,9 +1528,6 @@ async function renderMonthly(){
       ? `<td style="${style}">${fmt$(r.clawback)}</td><td style="${style}">${fmt$(r.legal)}</td>`
       : `<td><input class="m-edit" type="number" step="0.01" value="${r.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Clawback',this.value)"></td>`+
         `<td><input class="m-edit" type="number" step="0.01" value="${r.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Legal',this.value)"></td>`;
-    const payCells=`<td style="${style};border-left:2px solid var(--border);color:var(--amber)">${r.ffDue?'('+fmt$(r.ffDue)+')':'—'}</td>`+
-      `<td class="${r.pay>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(r.pay)}</td>`+
-      `<td class="${r.pay>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(r.pay)}</td>`;
     return `<tr>
       <td style="${style};white-space:nowrap">${r.label}</td>
       <td style="${style}">${r.tdf}</td><td style="${style}">${r.nw}</td><td style="${style}">${r.rf}</td>
@@ -1531,7 +1540,6 @@ async function renderMonthly(){
       <td class="${r.pnl>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(r.pnl)}</td>
       <td style="${style};color:var(--amber)">(${fmt$(r.ffees)})</td>
       ${manualCells}
-      ${payCells}
     </tr>`;
   }).join('');
 }
@@ -1578,21 +1586,21 @@ async function exportExcel(){
   // ── Sheet 5: Monthly (same math as the Monthly view — one source of truth) ──
   const mrows=await computeMonthlyRows();
   addSheet('Monthly',
-    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Kickbacks','Total PNL','Finance Fees','Clawback','Legal','FF Due (4-mo lag)','Sal Payout','Matt Payout'],
-    mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.funding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.bonus),n(r.pnl),n(r.ffees),n(r.clawback),n(r.legal),n(r.ffDue),n(r.pay),n(r.pay)]),
-    [11,5,5,5,13,13,17,12,10,11,11,12,10,9,16,11,11]);
+    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Kickbacks','Total PNL','Finance Fees','Clawback','Legal'],
+    mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.funding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.bonus),n(r.pnl),n(r.ffees),n(r.clawback),n(r.legal)]),
+    [11,5,5,5,13,13,17,12,10,11,11,12,10,9]);
 
   // ── Sheet 6: PNL (current in-progress month, same engine as the PNL tab) ──
   try{
     await loadPnlState();
     const p=await computePnl();
     const prows=[];
-    p.cohorts.forEach(c=>prows.push([c.label,n(c.pnl),n(c.ourEnd),n(c.paid),n(c.avail),n(c.payable/2),n(c.payable/2)]));
+    p.cohorts.forEach(c=>prows.push([c.label+(c.grace?' (grace until '+monthLabelFull(c.graceUntil)+')':''),n(c.pnl),n(c.ourEnd),n(c.paid),n(c.avail),c.grace?null:n(c.payable/2),c.grace?null:n(c.payable/2)]));
     p.kicks.forEach(k=>prows.push(['Kickback — '+k.label,n(k.amount),n(k.amount),null,n(k.amount),n(k.amount/2),n(k.amount/2)]));
     prows.push(['FF due (4-mo lag)',n(-p.ffDue),n(-p.ffDue),null,n(-p.ffDue),n(-p.ffDue/2),n(-p.ffDue/2)]);
-    prows.push(['Legal',n(-p.legal),n(-p.legal),null,n(-p.legal),n(-p.legal/2),n(-p.legal/2)]);
+    prows.push(['Legal (50% house split)',n(-p.legalTotal),n(-p.legalOurEnd),null,n(-p.legalOurEnd),n(-p.legalOurEnd/2),n(-p.legalOurEnd/2)]);
     prows.push(['PAYOUT',null,null,null,null,n(p.each),n(p.each)]);
-    addSheet('PNL',['Item','Total PNL','Our End (50%)','Paid Out','Available','Sal','Matt'],prows,[26,12,14,11,12,11,11]);
+    addSheet('PNL',['Item','Total PNL','Our End (50%)','Settled','Available','Sal','Matt'],prows,[30,12,14,11,12,11,11]);
   }catch(e){ /* PNL tables unreachable — export the other 5 sheets anyway */ }
   XLSX.writeFile(wb,'Master_Sheet_'+new Date().toISOString().split('T')[0]+'.xlsx');
   showNotice('Exported workbook with 6 sheets: All Deals, REFI Eligible, PIF, Defaults, Monthly, PNL.','info',6000);
