@@ -1169,14 +1169,24 @@ async function saveKickbackInline(id, val){
 // Shows only exception states; OK/blank stays clean.
 
 // Merchant contact card (build 18) — CRM-fed. Hover the name for the details.
-function contactTip(d){
-  const bits=[];
-  if(d.industry) bits.push(d.industry + (d.state?' · '+d.state:''));
-  else if(d.state) bits.push(d.state);
-  if(d.owner_name) bits.push('👤 '+d.owner_name);
-  if(d.owner_phone) bits.push('📞 '+d.owner_phone);
-  if(d.owner_email) bits.push('✉ '+d.owner_email);
-  return bits.length ? '\n\n'+bits.join('\n') : '';
+function contactCard(d){
+  const rows=[];
+  if(d.industry||d.state) rows.push('<span style="color:var(--text3)">'+esc(d.industry||'')+(d.industry&&d.state?' · ':'')+esc(d.state||'')+'</span>');
+  if(d.owner_name) rows.push('👤 '+esc(d.owner_name));
+  if(d.owner_phone) rows.push('📞 <a href="tel:'+esc(d.owner_phone)+'" style="color:#539bf5" onclick="event.stopPropagation()">'+esc(d.owner_phone)+'</a>');
+  if(d.owner_email) rows.push('✉ <a href="mailto:'+esc(d.owner_email)+'" style="color:#539bf5" onclick="event.stopPropagation()">'+esc(d.owner_email)+'</a>');
+  return rows.join('<span style="opacity:.3;margin:0 10px">|</span>');
+}
+function toggleContact(id, ev){
+  if(ev) ev.stopPropagation();
+  const d=deals.find(x=>x._id===id); if(!d||!hasContact(d)) return;
+  const tr=ev&&ev.target?ev.target.closest('tr'):null; if(!tr) return;
+  const nxt=tr.nextElementSibling;
+  if(nxt && nxt.classList && nxt.classList.contains('contact-row')){ nxt.remove(); return; }
+  document.querySelectorAll('.contact-row').forEach(x=>x.remove());
+  const det=document.createElement('tr'); det.className='contact-row';
+  det.innerHTML='<td colspan="30" style="background:rgba(83,155,245,.06);border-left:2px solid #539bf5;padding:8px 14px"><div style="position:sticky;left:14px;width:fit-content;font-size:12.5px;white-space:nowrap">'+contactCard(d)+'</div></td>';
+  tr.after(det);
 }
 function hasContact(d){ return !!(d.industry||d.owner_name||d.owner_phone||d.owner_email); }
 
@@ -1312,7 +1322,7 @@ function renderTable(){
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
-      <td style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(d.merchant)}${esc(contactTip(d))}">${d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}</td>
+      <td onclick="toggleContact('${d._id}',event)" style="font-weight:600;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}">${d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}</td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
       <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
