@@ -206,7 +206,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 11 — excel export</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 12 — pnl</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -215,6 +215,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
         <div class="nav-item" id="nav-pif" onclick="setView('pif')">💰 PIF <span class="nav-badge" id="pif-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)">0</span></div>
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
         <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
+        <div class="nav-item" id="nav-pnl" onclick="setView('pnl')">🧮 PNL</div>
         <div class="nav-section">Actions</div>
         <div class="nav-item" onclick="openScreenshotModal()">📸 Add from screenshot</div>
         <div class="nav-item" onclick="openModal()">➕ Add manually</div>
@@ -304,7 +305,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
               <thead><tr>
                 <th>Month</th><th>TDF</th><th>New</th><th>REFI</th>
                 <th>Total Funding</th><th>Avg Deal Size</th><th>Avg Deal Length</th>
-                <th>Average Fee</th><th>Banks</th><th>Bank Bonus</th>
+                <th>Average Fee</th><th>Banks</th><th>Kickbacks</th>
                 <th>Total PNL</th><th>Finance Fees</th><th>Clawback</th><th>Legal</th>
                 <th style="border-left:2px solid var(--border)">FF Due (4-mo lag)</th><th>Sal Payout</th><th>Matt Payout</th>
               </tr></thead>
@@ -314,6 +315,19 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
           <div id="monthly-empty" class="empty-state" style="display:none"><div class="icon">📅</div><h3>No funded deals yet</h3><p>Monthly totals appear as deals land.</p></div>
         </div>
 
+        <div class="panel" id="panel-pnl" style="display:none">
+          <div class="panel-header"><h3 id="pnl-title">PNL</h3><span style="display:flex;align-items:center;gap:8px">
+            <select id="pnl-history" onchange="renderPnl(this.value)" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">Current (in progress)</option></select>
+            <button class="btn btn-green" id="pnl-close-btn" onclick="closeOutMonth()">🔒 Close out month</button>
+          </span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Item</th><th>Total PNL</th><th>Our End (50%)</th><th>Paid Out</th><th>Available</th><th>Sal</th><th>Matt</th></tr></thead>
+              <tbody id="pnl-body"></tbody>
+            </table>
+          </div>
+          <div style="font-size:11px;color:var(--text3);padding:8px 4px">House split: Highland Hill Capital 50% of book PNL (global). Kickbacks 100% ours, distributed once after funding. FF is full book-level cost on a 4-month lag. Legal is entered on the Monthly tab. Negative cohorts pay $0 — no clawback; they must climb back above their paid line.</div>
+        </div>
         <div class="panel" id="panel-renewal" style="display:none">
           <div class="panel-header"><h3>REFI eligible</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <select id="refi-rep-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All reps</option></select>
@@ -403,7 +417,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
       <div class="form-row"><label>ISO</label><input id="fi-iso" type="text"></div>
       <div class="form-row"><label>Commission %</label><input id="fi-commpct" type="number" step="0.01" oninput="autoCalc()"></div>
       <div class="form-row"><label>Commission $ <small style="color:var(--text3)">auto</small></label><input id="fi-comm" readonly></div>
-      <div class="form-row"><label>Rep kickback ($) <small style="color:var(--text3)">optional</small></label><input id="fi-kickback" type="number" placeholder="0"></div>
+      <div class="form-row"><label>Kickback ($) <small style="color:var(--text3)">upfront bank · optional</small></label><input id="fi-kickback" type="number" placeholder="0"></div>
       <div class="form-section">Calculated</div>
       <div class="form-row"><label>Max Loss ($) <small style="color:var(--text3)">auto</small></label><input id="fi-maxloss" readonly></div>
       <div class="form-row"><label>PNL ($) <small style="color:var(--text3)">auto · updates on sync</small></label><input id="fi-pnl" readonly></div>
@@ -608,6 +622,7 @@ const REQUIRED_FIELDS = [
   {name:'DealType',    type:'singleSelect', options:{choices:[{name:'NEW'},{name:'REFI'}]}},
   {name:'PrevLeadID',  type:'singleLineText'},
   {name:'OrigFee',     type:'number', options:{precision:2}},
+  {name:'KickbackPaid', type:'number', options:{precision:0}},
 ];
 
 async function ensureFields() {
@@ -661,6 +676,7 @@ function dealToFields(d) {
     DealType:     d.deal_type    || 'NEW',
     PrevLeadID:   d.prev_lead_id || '',
     OrigFee:      d.orig_fee     || 0,
+    KickbackPaid: d.kickback_paid|| 0,
     FinanceFeePct:d.finance_fee_pct!=null?d.finance_fee_pct:0.5
   };
 }
@@ -695,6 +711,7 @@ function fieldsToDeal(id, f) {
     deal_type:    f.DealType      || 'NEW',
     prev_lead_id: f.PrevLeadID    || '',
     orig_fee:     f.OrigFee       || 0,
+    kickback_paid:f.KickbackPaid  || 0,
     finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5
   };
 }
@@ -703,6 +720,7 @@ async function loadDeals() {
   showLoading('Loading deals from Airtable...');
   try {
     await ensureFields();
+    try{ await ensurePnlTables(); }catch(e){ /* schema access missing — PNL tab will surface errors */ }
     await loadSettings();
     let allRecords = [], offset = null;
     do {
@@ -1060,9 +1078,9 @@ async function handleDailyReport(input) {
 // ─── VIEWS ───────────────────────────────────────────────
 function setView(v){
   currentView=v;
-  ['book','renewal','pif','defaults','monthly'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
-  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',monthly:'Monthly totals'}[v];
-  if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='monthly') renderMonthly();
+  ['book','renewal','pif','defaults','monthly','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
+  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',monthly:'Monthly totals',pnl:'PNL'}[v];
+  if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='monthly') renderMonthly(); if(v==='pnl') renderPnl();
 }
 
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
@@ -1230,7 +1248,7 @@ function populateIsoFilter(){
   sel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option value="${i.replace(/"/g,'&quot;')}">${i}</option>`).join('');
   sel.value=cur;
 }
-function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='pif')renderPif(); if(currentView==='defaults')renderDefaults(); }
+function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='pif')renderPif(); if(currentView==='defaults')renderDefaults(); if(currentView==='pnl')renderPnl(); }
 
 function showNotice(msg,type='info',dur=5000){
   const el=document.getElementById('notice');
@@ -1284,7 +1302,158 @@ async function saveMonthlyCell(month, field, value){
     showNotice(field+' saved for '+month,'success');
   }catch(err){ showNotice('Save failed: '+err.message,'error'); }
 }
+// Shared month math — used by Monthly view, PNL tab, and Excel export. One source of truth.
+const HOUSE_SPLIT = 0.5; // Highland Hill Capital takes 50% of book PNL — global, per Sal (June 11, 2026)
+const addMonthsYM=(ym,n)=>{const[y,m]=ym.split('-').map(Number);const t=(y*12+m-1)+n;return `${Math.floor(t/12)}-${String(t%12+1).padStart(2,'0')}`;};
+const ffByMonthFrom=ds=>{const map={};ds.forEach(d=>{if(!d.date_funded)return;const ym=d.date_funded.slice(0,7);map[ym]=(map[ym]||0)+(d.finance_fee||0);});Object.keys(map).forEach(k=>{if(!map[k])delete map[k];});return map;};
 function monthLabel(ym){ const [y,m]=ym.split('-'); return ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)-1]+'-'+y.slice(2); }
+
+// ─── PNL TAB ─────────────────────────────────────────────
+// Cohort book PNL (live) × HOUSE_SPLIT = our end → minus PnlLedger paid → Available.
+// Negative cohorts pay $0, no clawback. Kickbacks 100% ours, one-time after funding.
+// FF = full book-level cost on the 4-month lag. Legal = manual (Monthly tab), our end.
+// Close-out snapshots the month to PnlSnapshots and rolls Available into the ledger.
+let pnlLedger = {};      // cohort 'YYYY-MM' -> {_id, paid}
+let pnlSnapshots = [];   // [{_id, month, closedAt, sal, matt, data}]
+
+async function ensurePnlTables(){
+  const key = getAirtableKey();
+  const res = await fetch(AT_META_URL, { headers:{'Authorization':`Bearer ${key}`} });
+  if (!res.ok) return;
+  const data = await res.json();
+  const have = new Set((data.tables||[]).map(t=>t.name));
+  const mk = async (name, fields) => {
+    await fetch(AT_META_URL, { method:'POST',
+      headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
+      body: JSON.stringify({name, fields}) });
+  };
+  if(!have.has('PnlLedger')) await mk('PnlLedger', [
+    {name:'Cohort', type:'singleLineText'},
+    {name:'PaidToDate', type:'number', options:{precision:2}}]);
+  if(!have.has('PnlSnapshots')) await mk('PnlSnapshots', [
+    {name:'Month', type:'singleLineText'},
+    {name:'ClosedAt', type:'singleLineText'},
+    {name:'SalPayout', type:'number', options:{precision:2}},
+    {name:'MattPayout', type:'number', options:{precision:2}},
+    {name:'DataJSON', type:'multilineText'}]);
+}
+
+async function loadPnlState(){
+  pnlLedger = {}; pnlSnapshots = [];
+  let offset=null;
+  do{
+    const data = await atFetchT('PnlLedger','GET', offset?`?offset=${offset}`:'');
+    data.records.forEach(r=>{ if(r.fields.Cohort) pnlLedger[r.fields.Cohort]={_id:r.id, paid:r.fields.PaidToDate||0}; });
+    offset = data.offset;
+  } while(offset);
+  offset=null;
+  do{
+    const data = await atFetchT('PnlSnapshots','GET', offset?`?offset=${offset}`:'');
+    data.records.forEach(r=>{ if(r.fields.Month) pnlSnapshots.push({_id:r.id, month:r.fields.Month, closedAt:r.fields.ClosedAt||'', sal:r.fields.SalPayout||0, matt:r.fields.MattPayout||0, data:r.fields.DataJSON||''}); });
+    offset = data.offset;
+  } while(offset);
+  pnlSnapshots.sort((a,b)=>b.month.localeCompare(a.month));
+}
+
+async function computePnl(){
+  try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
+  const curYM = new Date().toISOString().slice(0,7);
+  // cohorts
+  const groups={};
+  deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
+  const cohorts = Object.keys(groups).sort().map(ym=>{
+    const pnl = groups[ym].reduce((s,d)=>s+(d.pnl||0),0);
+    const ourEnd = pnl*HOUSE_SPLIT;
+    const paid = pnlLedger[ym]?pnlLedger[ym].paid:0;
+    const avail = ourEnd - paid;
+    const payable = Math.max(0, avail);
+    return {ym, label: monthLabel(ym)+' cohort', pnl, ourEnd, paid, avail, payable};
+  });
+  // kickbacks not yet distributed (100% ours, no house cut)
+  const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid)
+    .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback}));
+  // FF on 4-month lag + legal for the snapshot month
+  const ffDue = ffByMonthFrom(deals)[addMonthsYM(curYM,-4)]||0;
+  const legal = (monthlyManual[curYM]&&monthlyManual[curYM].legal)||0;
+  const kickTotal = kicks.reduce((s,k)=>s+k.amount,0);
+  const payableTotal = cohorts.reduce((s,c)=>s+c.payable,0);
+  const each = (payableTotal + kickTotal - ffDue - legal)/2;
+  return {month: curYM, cohorts, kicks, ffDue, legal, kickTotal, payableTotal, each};
+}
+
+function pnlRowsHtml(p){
+  const sec=(label,color)=>`<tr><td colspan="7" style="background:${color};color:#0b0d12;font-weight:800;font-size:12px;letter-spacing:.4px">${label}</td></tr>`;
+  const money=(v,red)=>`<td class="${red||v<0?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
+  let h='';
+  h+=sec('MONTHLY PNL — BY COHORT','#5b8def');
+  if(!p.cohorts.length) h+='<tr><td colspan="7" style="color:var(--text3)">No funded deals yet.</td></tr>';
+  p.cohorts.forEach(c=>{
+    const half=c.payable/2;
+    h+=`<tr><td style="font-weight:600">${c.label}</td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}<td class="${c.avail<0?'pnl-neg':'pnl-pos'}" style="font-weight:700">${fmt$(c.avail)}</td>${money(half)}${money(half)}</tr>`;
+  });
+  h+=sec('KICKBACKS — UPFRONT BANK (100% OURS)','#37c66f');
+  if(!p.kicks.length) h+='<tr><td colspan="7" style="color:var(--text3)">No undistributed kickbacks.</td></tr>';
+  p.kicks.forEach(k=>{ h+=`<tr><td style="font-weight:600">${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${money(k.amount/2)}${money(k.amount/2)}</tr>`; });
+  h+=sec('FINANCE FEES — 4-MONTH LAG','#e2574c');
+  h+=`<tr><td style="font-weight:600">FF due (${monthLabel(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
+  h+=sec('LEGAL FEES — OUR END (manual, Monthly tab)','#e8c63f');
+  h+=`<tr><td style="font-weight:600">Legal (${monthLabel(p.month)})</td>${money(-p.legal,p.legal>0)}${money(-p.legal,p.legal>0)}<td>—</td>${money(-p.legal,p.legal>0)}${money(-p.legal/2,p.legal>0)}${money(-p.legal/2,p.legal>0)}</tr>`;
+  h+=`<tr><td style="font-weight:800;background:var(--bg3)">PAYOUT</td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td class="${p.each>=0?'pnl-pos':'pnl-neg'}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td><td class="${p.each>=0?'pnl-pos':'pnl-neg'}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td></tr>`;
+  return h;
+}
+
+async function renderPnl(historyMonth){
+  const body=document.getElementById('pnl-body'), title=document.getElementById('pnl-title');
+  const btn=document.getElementById('pnl-close-btn'), hist=document.getElementById('pnl-history');
+  body.innerHTML='<tr><td colspan="7" style="color:var(--text3)">Loading PNL...</td></tr>';
+  try{ await loadPnlState(); }catch(e){ pnlLedger={}; pnlSnapshots=[]; }
+  // history dropdown
+  const keep = historyMonth!==undefined?historyMonth:hist.value;
+  hist.innerHTML='<option value="">Current (in progress)</option>'+pnlSnapshots.map(s=>`<option value="${s.month}"${s.month===keep?' selected':''}>${monthLabel(s.month)} — closed</option>`).join('');
+  if(keep){
+    const snap=pnlSnapshots.find(s=>s.month===keep);
+    if(snap){
+      title.textContent='PNL — '+monthLabel(snap.month)+' (closed '+(snap.closedAt?snap.closedAt.slice(0,10):'')+')';
+      btn.style.display='none';
+      try{ body.innerHTML=pnlRowsHtml(JSON.parse(snap.data)); }
+      catch(e){ body.innerHTML='<tr><td colspan="7" class="pnl-neg">Snapshot data unreadable.</td></tr>'; }
+      return;
+    }
+  }
+  const p=await computePnl();
+  const closed=pnlSnapshots.some(s=>s.month===p.month);
+  title.textContent='PNL — '+monthLabel(p.month)+(closed?' (already closed)':' (in progress)');
+  btn.style.display=closed?'none':'';
+  body.innerHTML=pnlRowsHtml(p);
+}
+
+async function closeOutMonth(){
+  try{
+    await loadPnlState();
+    const p=await computePnl();
+    if(pnlSnapshots.some(s=>s.month===p.month)){ showNotice(monthLabel(p.month)+' is already closed — see history.','warn'); renderPnl(); return; }
+    const ok=confirm('Close out '+monthLabel(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nCohort distributions: '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+'\nFF deducted: '+fmt$(p.ffDue)+'\nLegal deducted: '+fmt$(p.legal)+'\n\nThis locks the snapshot and rolls Available into the paid ledger. It cannot be re-run for this month.');
+    if(!ok) return;
+    showLoading('Closing out '+monthLabel(p.month)+'...');
+    // 1. snapshot
+    await atFetchT('PnlSnapshots','POST','',{records:[{fields:{Month:p.month, ClosedAt:new Date().toISOString(), SalPayout:Math.round(p.each*100)/100, MattPayout:Math.round(p.each*100)/100, DataJSON:JSON.stringify(p)}}]});
+    // 2. ledger upserts (positive cohorts only)
+    for(const c of p.cohorts){
+      if(c.payable<=0) continue;
+      const newPaid=Math.round((c.paid+c.payable)*100)/100;
+      if(pnlLedger[c.ym]&&pnlLedger[c.ym]._id) await atFetchT('PnlLedger','PATCH','',{records:[{id:pnlLedger[c.ym]._id, fields:{PaidToDate:newPaid}}]});
+      else await atFetchT('PnlLedger','POST','',{records:[{fields:{Cohort:c.ym, PaidToDate:newPaid}}]});
+    }
+    // 3. mark kickbacks distributed (Airtable max 10 records per call)
+    const kickRecs=p.kicks.map(k=>({id:k._id, fields:{KickbackPaid:1}}));
+    for(let i=0;i<kickRecs.length;i+=10) await atFetch('PATCH','',{records:kickRecs.slice(i,i+10)});
+    p.kicks.forEach(k=>{const d=deals.find(x=>x._id===k._id); if(d) d.kickback_paid=1;});
+    hideLoading();
+    showNotice(monthLabel(p.month)+' closed. '+fmt$(p.each)+' each to you and Matt. Snapshot saved to history.','success',8000);
+    renderPnl('');
+  }catch(err){ hideLoading(); showNotice('Close-out failed: '+err.message,'error',8000); }
+}
+
 // One source of truth for monthly math — used by BOTH the Monthly view and the Excel export.
 async function computeMonthlyRows(){
   try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
@@ -1292,13 +1461,11 @@ async function computeMonthlyRows(){
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
   Object.keys(monthlyManual).forEach(ym=>{ if(!groups[ym]) groups[ym]=[]; });
   // FF 4-month lag: finance fees from month M are PAID in month M+4.
-  const addMonths=(ym,n)=>{const[y,m]=ym.split('-').map(Number);const t=(y*12+m-1)+n;return `${Math.floor(t/12)}-${String(t%12+1).padStart(2,'0')}`;};
-  const ffByMonth={};
-  Object.entries(groups).forEach(([ym,ds])=>{const f=ds.reduce((s,d)=>s+(d.finance_fee||0),0);if(f>0)ffByMonth[ym]=f;});
+  const ffByMonth=ffByMonthFrom(deals);
   const nowYM=new Date().toISOString().slice(0,7);
   // months owing a lagged FF payment get a row even with zero fundings (up to current month)
-  Object.keys(ffByMonth).forEach(ym=>{const t=addMonths(ym,4);if(t<=nowYM&&!groups[t])groups[t]=[];});
-  const ffDueFor=ym=>ffByMonth[addMonths(ym,-4)]||0;
+  Object.keys(ffByMonth).forEach(ym=>{const t=addMonthsYM(ym,4);if(t<=nowYM&&!groups[t])groups[t]=[];});
+  const ffDueFor=ym=>ffByMonth[addMonthsYM(ym,-4)]||0;
   const months=Object.keys(groups).sort();
   const bdLen=d=>d.frequency==='Weekly'?(d.term||0)*5:(d.term||0);
   const mkRow=(label, ds, manual, ym, isTotal, ffDue)=>{
@@ -1382,7 +1549,7 @@ async function exportExcel(){
 
   // ── Sheet 1: All Deals (legacy column order) ──
   addSheet('All Deals',
-    ['Date Funded','Name','Bank Fees','Commission','Rep','Funded','Payback','Factor','Book %','Book Funded','Book Payback','Spread','Book Portion of Comm','Book Profit','Finance Fee','Max Loss','Balance Left','Paid Down','PNL','Length of Deal','% Paid','Status','Funder','Rep Kickback','ISO','Payment','Frequency','Lead ID'],
+    ['Date Funded','Name','Bank Fees','Commission','Rep','Funded','Payback','Factor','Book %','Book Funded','Book Payback','Spread','Book Portion of Comm','Book Profit','Finance Fee','Max Loss','Balance Left','Paid Down','PNL','Length of Deal','% Paid','Status','Funder','Kickback','ISO','Payment','Frequency','Lead ID'],
     deals.map(d=>[fmtDate(d.date_funded),d.merchant,n(d.bank_fees),n(d.comm_amount),d.rep,n(d.funded),n(d.rtr),d.factor,n(d.book_pct),n(d.book_funded),n(d.book_payback),n(d.spread),n(d.book_comm),n(d.book_profit),n(d.finance_fee),n(d.max_loss),n(d.balance),n(d.paid_down),n(d.pnl),(d.frequency==='Weekly'?d.term+' wk':d.term+' BD'),n((d.pct_paid||0)*100),d.status,d.funder,n(d.kickback),d.iso,n(d.daily_payment),d.frequency,d.lead_id]),
     [11,22,10,11,16,10,10,7,7,11,12,9,10,10,10,10,11,10,10,11,7,10,8,11,16,9,9,9]);
 
@@ -1411,12 +1578,24 @@ async function exportExcel(){
   // ── Sheet 5: Monthly (same math as the Monthly view — one source of truth) ──
   const mrows=await computeMonthlyRows();
   addSheet('Monthly',
-    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Bank Bonus','Total PNL','Finance Fees','Clawback','Legal','FF Due (4-mo lag)','Sal Payout','Matt Payout'],
+    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Kickbacks','Total PNL','Finance Fees','Clawback','Legal','FF Due (4-mo lag)','Sal Payout','Matt Payout'],
     mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.funding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.bonus),n(r.pnl),n(r.ffees),n(r.clawback),n(r.legal),n(r.ffDue),n(r.pay),n(r.pay)]),
     [11,5,5,5,13,13,17,12,10,11,11,12,10,9,16,11,11]);
 
+  // ── Sheet 6: PNL (current in-progress month, same engine as the PNL tab) ──
+  try{
+    await loadPnlState();
+    const p=await computePnl();
+    const prows=[];
+    p.cohorts.forEach(c=>prows.push([c.label,n(c.pnl),n(c.ourEnd),n(c.paid),n(c.avail),n(c.payable/2),n(c.payable/2)]));
+    p.kicks.forEach(k=>prows.push(['Kickback — '+k.label,n(k.amount),n(k.amount),null,n(k.amount),n(k.amount/2),n(k.amount/2)]));
+    prows.push(['FF due (4-mo lag)',n(-p.ffDue),n(-p.ffDue),null,n(-p.ffDue),n(-p.ffDue/2),n(-p.ffDue/2)]);
+    prows.push(['Legal',n(-p.legal),n(-p.legal),null,n(-p.legal),n(-p.legal/2),n(-p.legal/2)]);
+    prows.push(['PAYOUT',null,null,null,null,n(p.each),n(p.each)]);
+    addSheet('PNL',['Item','Total PNL','Our End (50%)','Paid Out','Available','Sal','Matt'],prows,[26,12,14,11,12,11,11]);
+  }catch(e){ /* PNL tables unreachable — export the other 5 sheets anyway */ }
   XLSX.writeFile(wb,'Master_Sheet_'+new Date().toISOString().split('T')[0]+'.xlsx');
-  showNotice('Exported workbook with 5 sheets: All Deals, REFI Eligible, PIF, Defaults, Monthly.','info',6000);
+  showNotice('Exported workbook with 6 sheets: All Deals, REFI Eligible, PIF, Defaults, Monthly, PNL.','info',6000);
 }
 </script>
 </body>
