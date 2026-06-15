@@ -85,13 +85,16 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 
 /* TABLE */
-.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 22: bounded so headers pin while the list scrolls */
+.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 23: bounded so headers pin while the list scrolls */
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
-/* build 22: density modes — Compact fits the full sheet on a 1080p screen */
+/* build 23: density modes — Compact fits the full sheet on a 1080p screen */
 body.compact table{font-size:10.5px;min-width:0}
 body.compact thead th{padding:6px 8px;font-size:9px}
-body.compact td{padding:5px 8px !important}
+body.compact td{padding:5px 6px !important}
+body.compact thead th{padding:6px 6px}
+/* tighten the money/number columns; the name column stays roomy & single-line */
+table td, table th{white-space:nowrap}
 body.compact .metric-card .val{font-size:18px}
 body.compact .metric-card{padding:12px 14px}
 body.compact .sidebar{width:200px}
@@ -190,7 +193,7 @@ select.badge{appearance:none;-webkit-appearance:none;cursor:pointer;border-radiu
 select.badge:hover{filter:brightness(1.2)}
 .ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
 
-/* Build 22: frozen Date Funded + Name columns (All Deals), inline kickback editing */
+/* Build 23: frozen Date Funded + Name columns (All Deals), inline kickback editing */
 #panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);min-width:78px}
 #panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
 #panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
@@ -240,7 +243,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 22 — sticky headers</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 23 — sticky headers</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -791,7 +794,7 @@ async function loadDeals() {
 }
 
 
-// ── CRM deals-export import (build 22) — the PREFERRED deal intake ──
+// ── CRM deals-export import (build 23) — the PREFERRED deal intake ──
 // End-of-day ritual: upload the CRM csv; anything not on the book gets added
 // through the same lifecycle law as saveDeal (NEW vs REFI by QB-name chain,
 // prior auto-COMPLETED). Dedupe key: Lead ID. Re-running is always safe.
@@ -1107,7 +1110,7 @@ async function saveDeal() {
       priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
       _prior=priors[0];
       if(_prior.merchant!==deal.merchant){
-        // QB-name guard (build 22): one spelling per merchant, forever. A refi that
+        // QB-name guard (build 23): one spelling per merchant, forever. A refi that
         // arrives as "PENDLETON PAWN" when the book says "PENDLETONPAWN" silently
         // breaks Beacon's name matching — so adopt the book's spelling and say so.
         showNotice('QB name normalized to "'+_prior.merchant+'" (you typed "'+deal.merchant+'") to match the existing deal chain.','info',9000);
@@ -1159,7 +1162,7 @@ async function deleteDeal(airtableId, merchant) {
 
 // ─── DAILY REPORT SYNC ───────────────────────────────────
 
-// Inline kickback editing (build 22): type in the cell, saves on enter/blur.
+// Inline kickback editing (build 23): type in the cell, saves on enter/blur.
 async function saveKickbackInline(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
   const v=parseFloat(val)||0;
@@ -1177,10 +1180,10 @@ async function saveKickbackInline(id, val){
 // daily sync cannot flip it back. "Release to auto" clears the pin; the current status
 // stays until the next sync re-applies its own triggers (DEFAULT from report, PIF at $0).
 
-// CollectionsState chip (build 22) — Beacon's second status layer, display-only here.
+// CollectionsState chip (build 23) — Beacon's second status layer, display-only here.
 // Shows only exception states; OK/blank stays clean.
 
-// Merchant contact card (build 22) — CRM-fed. Hover the name for the details.
+// Merchant contact card (build 23) — CRM-fed. Hover the name for the details.
 
 function setDensity(mode){
   document.body.classList.toggle('compact', mode==='compact');
@@ -1351,7 +1354,7 @@ function renderTable(){
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
-      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;min-width:185px;max-width:235px;white-space:normal;word-break:break-word;line-height:1.25;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}">${d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}</td>
+      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}">${d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}</td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
       <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
