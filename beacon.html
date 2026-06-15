@@ -76,9 +76,9 @@
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
   .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
-  /* v78: density — Compact fits Beacon on a 1080p screen */
+  /* v79: density — Compact fits Beacon on a 1080p screen */
   body.compact .layout { grid-template-columns: 260px 1fr; }
-  /* v78: collapse must beat the compact column rule (specificity fix) */
+  /* v79: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
   body.compact table.matrix td, body.compact table.matrix th { padding-top: 4px; padding-bottom: 4px; }
@@ -493,10 +493,7 @@
   .cal-cell.no-data .day-num, .cal-cell.future .day-num { color: var(--text); font-weight: 600; }
   .cal-cell .day-meta { font-size: 10px; color: var(--text-2); display: flex; gap: 3px; justify-content: flex-start; align-items: flex-end; flex-wrap: wrap; }
   .cal-tag { display:inline-block; padding:1px 6px; border-radius:9px; font-size:9.5px; font-weight:700; line-height:1.45; letter-spacing:.02em; white-space:nowrap; }
-  .cal-tag-bnc  { background: rgba(83,155,245,.16);  color:#6fb0ff; }
   .cal-tag-stop { background: rgba(229,83,75,.18);   color:#ff8079; }
-  .cal-tag-sol  { background: rgba(63,185,123,.18);  color:#56d196; }
-  .cal-tag-note { background: rgba(212,167,44,.16);  color:#e0b84c; }
   
   /* Heatmap red — only revocations drive it */
   .cal-cell.heat-1 { background: #FCEFEF; }
@@ -1223,7 +1220,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v78 · live</span>
+      <span class="build-tag">v79 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1507,7 +1504,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v78 — AIRTABLE DATA LAYER
+// BEACON v79 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -2693,7 +2690,7 @@ function renderCalendar() {
     dayNum.textContent = d;
     topRow.appendChild(dayNum);
     const _tags = document.createElement("div");
-    _tags.style.cssText = "display:flex;gap:3px;align-items:center;flex-wrap:wrap;justify-content:flex-end";
+    _tags.style.cssText = "display:flex;flex-direction:column;gap:3px;align-items:flex-end";
     if (!isWeekend && dayResumes.length > 0) {
       const pill = document.createElement("span");
       pill.className = "resume-pill";
@@ -2701,35 +2698,18 @@ function renderCalendar() {
       _tags.appendChild(pill);
     }
     if (!isWeekend && dayHist && dayHist.stats) {
-      const rc = dayHist.stats.resolved_count || 0;
-      const nc = dayHist.stats.note_count || 0;
-      if (rc > 0) {
+      const stp = dayHist.stats.stop_count_today || 0;
+      if (stp > 0) {
         const t = document.createElement("span");
-        t.className = "cal-tag cal-tag-sol";
-        t.textContent = rc + " \u2713";
-        t.title = rc + " resolution" + (rc===1?"":"s") + " logged";
-        _tags.appendChild(t);
-      }
-      if (nc > 0) {
-        const t = document.createElement("span");
-        t.className = "cal-tag cal-tag-note";
-        t.textContent = nc + " \u270e";
-        t.title = nc + " note" + (nc===1?"":"s");
+        t.className = "cal-tag cal-tag-stop";
+        t.textContent = stp + " stop" + (stp===1?"":"s");
+        t.title = stp + " stop/revocation" + (stp===1?"":"s") + " this day";
         _tags.appendChild(t);
       }
     }
     if (_tags.childNodes.length) topRow.appendChild(_tags);
     cell.appendChild(topRow);
     
-    // Bottom row: bounce count / stop count (only when there's history, never on weekends)
-    if (!isWeekend && dayHist && dayHist.stats) {
-      const meta = document.createElement("div");
-      meta.className = "day-meta";
-      const total = (dayHist.bounce_events || []).length;
-      const stops = dayHist.stats.stop_count_today || 0;
-      meta.innerHTML = '<span class="cal-tag cal-tag-bnc">' + total + ' bnc</span>' + (stops > 0 ? '<span class="cal-tag cal-tag-stop">' + stops + ' stop' + (stops===1?'':'s') + '</span>' : '');
-      cell.appendChild(meta);
-    }
     
     // Click handler — clickable if has data, not a weekend, not a future-no-resume day
     if (!isWeekend && hasData && !(isFuture && dayResumes.length === 0)) {
@@ -5336,7 +5316,7 @@ async function beaconBoot(){
   initTheme();
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v78 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  console.log("%c BEACON v79 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
 // Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0
