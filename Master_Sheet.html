@@ -85,10 +85,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 
 /* TABLE */
-.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 25: bounded so headers pin while the list scrolls */
+.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 28: bounded so headers pin while the list scrolls */
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
-/* build 25: density modes — Compact fits the full sheet on a 1080p screen */
+/* build 28: density modes — Compact fits the full sheet on a 1080p screen */
 body.compact table{font-size:10.5px;min-width:0}
 body.compact thead th{padding:6px 8px;font-size:9px}
 body.compact td{padding:5px 6px !important}
@@ -98,7 +98,7 @@ table td, table th{white-space:nowrap}
 body.compact .metric-card .val{font-size:18px}
 body.compact .metric-card{padding:12px 14px}
 body.compact .sidebar{width:200px}
-/* build 26: collapse must beat the compact width rule (specificity fix) */
+/* build 28: collapse must beat the compact width rule (specificity fix) */
 body.compact .sidebar.collapsed{width:0;padding:0}
 .density-toggle{display:inline-flex;border:1px solid var(--border2);border-radius:var(--radius-sm);overflow:hidden;margin-right:8px;vertical-align:middle}
 .density-toggle button{background:var(--bg3);color:var(--text3);border:none;padding:6px 11px;font-size:11px;cursor:pointer;font-weight:600}
@@ -156,6 +156,12 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
 .notice-warn{background:var(--amber-bg);color:var(--amber);border-color:var(--amber-border)}
 .notice-error{background:var(--red-bg);color:var(--red);border-color:var(--red-border)}
 .notice-info{background:var(--blue-bg);color:var(--blue);border-color:var(--blue-border)}
+.sortable{cursor:pointer;user-select:none}.sortable:hover{color:var(--text)}.sort-ind{font-size:10px;color:var(--blue)}
+.field-missing{border-color:var(--amber)!important;box-shadow:0 0 0 2px var(--amber-bg)!important}
+.bbadge{display:inline-block;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.02em;margin-left:6px;vertical-align:middle;white-space:nowrap}
+.bbadge-stop{background:rgba(229,83,75,.18);color:#ff8079}
+.bbadge-bnc{background:rgba(212,167,44,.16);color:#e0b84c}
+.bbadge-now{background:rgba(229,83,75,.16);color:#ff6b6b;border:1px solid rgba(229,83,75,.4)}
 
 /* UPLOAD */
 .upload-zone{border:2px dashed var(--border2);border-radius:var(--radius);padding:2.5rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem}
@@ -175,6 +181,16 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
 .rep-deals{padding:10px 18px 14px}
 .rep-deal-card{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--radius-sm);background:var(--bg3);margin-bottom:8px;gap:16px;flex-wrap:wrap;border:1px solid var(--border)}
 .rep-deal-card:last-child{margin-bottom:0}
+.pif-group{margin-bottom:18px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden}
+.pif-group-head{padding:10px 16px;background:var(--bg3);display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700}
+.pif-group-meta{font-size:11px;color:var(--text3);font-weight:400}
+.pif-table{width:100%;border-collapse:collapse;font-size:12px}
+.pif-table td{padding:9px 16px;border-top:1px solid var(--border);white-space:nowrap}
+.pif-table tr:hover td{background:var(--bg-hover,rgba(255,255,255,.02))}
+.pif-name{font-weight:600;color:var(--text)}
+.pif-card-icn{opacity:.5;font-size:10px;margin-left:5px}
+.pif-dim{color:var(--text3)}
+.pif-paid{color:var(--green);font-weight:700;text-align:right;font-size:11px;letter-spacing:.03em}
 
 /* LOADING OVERLAY */
 #loading-overlay{position:fixed;inset:0;background:rgba(15,17,23,.85);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:12px}
@@ -195,7 +211,7 @@ select.badge{appearance:none;-webkit-appearance:none;cursor:pointer;border-radiu
 select.badge:hover{filter:brightness(1.2)}
 .ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
 
-/* Build 25: frozen Date Funded + Name columns (All Deals), inline kickback editing */
+/* Build 28: frozen Date Funded + Name columns (All Deals), inline kickback editing */
 #panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);min-width:78px}
 #panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
 #panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
@@ -245,7 +261,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 27 — drag-drop modals</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 28 — drag-drop modals</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -389,7 +405,17 @@ select.badge:hover{filter:brightness(1.2)}
 
         <div class="panel" id="panel-defaults" style="display:none">
           <div class="panel-header"><h3>Defaults</h3></div>
-          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Merchant</th><th>Rep</th><th>Funded</th><th>RTR</th><th>Balance</th><th>% Paid</th><th>Max Loss</th><th>PNL</th><th></th></tr></thead><tbody id="tbody-defaults"></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr>
+            <th class="sortable" onclick="sortDefaults('date_funded')">Date<span class="sort-ind" data-k="date_funded"></span></th>
+            <th class="sortable" onclick="sortDefaults('merchant')">Merchant<span class="sort-ind" data-k="merchant"></span></th>
+            <th class="sortable" onclick="sortDefaults('rep')">Rep<span class="sort-ind" data-k="rep"></span></th>
+            <th class="sortable" onclick="sortDefaults('funded')">Funded<span class="sort-ind" data-k="funded"></span></th>
+            <th class="sortable" onclick="sortDefaults('rtr')">RTR<span class="sort-ind" data-k="rtr"></span></th>
+            <th class="sortable" onclick="sortDefaults('balance')">Balance<span class="sort-ind" data-k="balance"></span></th>
+            <th class="sortable" onclick="sortDefaults('pct_paid')">% Paid<span class="sort-ind" data-k="pct_paid"></span></th>
+            <th class="sortable" onclick="sortDefaults('max_loss')">Max Loss<span class="sort-ind" data-k="max_loss"></span></th>
+            <th class="sortable" onclick="sortDefaults('pnl')">PNL<span class="sort-ind" data-k="pnl"></span></th>
+            <th></th></tr></thead><tbody id="tbody-defaults"></tbody></table></div>
           <div id="defaults-empty" class="empty-state" style="display:none"><div class="icon">🎯</div><h3>No defaults</h3><p>Keep it that way.</p></div>
         </div>
       </div>
@@ -399,7 +425,7 @@ select.badge:hover{filter:brightness(1.2)}
 
 <input type="file" id="daily-input" accept=".xlsx" style="display:none" onchange="closeDailyModal();handleDailyReport(this)">
 
-<!-- CRM IMPORT MODAL (build 27) -->
+<!-- CRM IMPORT MODAL (build 28) -->
 <div id="crm-modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeCrmModal()">
   <div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
     <div class="modal-title">⭐ Import CRM export</div>
@@ -417,7 +443,7 @@ select.badge:hover{filter:brightness(1.2)}
   </div>
 </div>
 
-<!-- DAILY SYNC MODAL (build 27) -->
+<!-- DAILY SYNC MODAL (build 28) -->
 <div id="daily-modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeDailyModal()">
   <div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
     <div class="modal-title">🔄 Sync daily report</div>
@@ -497,6 +523,7 @@ select.badge:hover{filter:brightness(1.2)}
       <div class="form-row"><label>PNL ($) <small style="color:var(--text3)">auto · updates on sync</small></label><input id="fi-pnl" readonly></div>
       <div class="formula-note">Max Loss = (Funded × Book%) − Bank Fees + (Comm × Book%) &nbsp;·&nbsp; PNL = (Paid Down × Book%) − Max Loss</div>
     </div>
+    <div id="modal-notice" class="notice" style="margin:0 0 12px"></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-green" id="save-btn" onclick="saveDeal()">✓ Add to book</button>
@@ -808,6 +835,46 @@ function fieldsToDeal(id, f) {
   };
 }
 
+// Bounce history per deal (lead_id -> {codes:Set, worst, count}). Read-only; Beacon owns Bounces.
+// Lets the underwriter see prior payment trouble before refinancing.
+const STOP_RCODES = ['R02','R05','R07','R08','R10','R16','R29'];
+let bounceByLead = {};
+async function loadBounceSummary(){
+  bounceByLead = {};
+  let recs=[], offset=null;
+  do {
+    const data = await atFetchT('Bounces','GET', offset?`?offset=${offset}`:'');
+    recs = recs.concat(data.records); offset = data.offset;
+  } while(offset);
+  // map each bounce to its deal's lead_id via the deal record link, else parse the "MERCHANT — date" key
+  const ridToLead = {}; deals.forEach(d=>{ if(d._id) ridToLead[d._id]=d.lead_id; });
+  for(const r of recs){
+    const f=r.fields||{};
+    const rid=(f.Deal&&f.Deal[0])||null;
+    const lead = rid && ridToLead[rid];
+    if(lead==null||lead==='') continue;
+    const code=(f['Return Code']||'').toUpperCase().trim();
+    const sev=(f.Severity||'').toUpperCase();
+    const e = bounceByLead[lead] = bounceByLead[lead] || {codes:new Set(), count:0, hasStop:false};
+    e.count++;
+    if(code) e.codes.add(code);
+    if(sev==='STOP' || STOP_RCODES.includes(code)) e.hasStop=true;
+  }
+}
+// Returns small HTML badges for a deal's bounce history (stop codes first, then BOUNCING state).
+function bounceBadges(d){
+  let out='';
+  const e = bounceByLead[d.lead_id];
+  if(e && e.hasStop){
+    const stopCodes=[...e.codes].filter(c=>STOP_RCODES.includes(c));
+    const label = stopCodes.length ? stopCodes.join('/') : 'STOP';
+    out += `<span class="bbadge bbadge-stop" title="Had a stop-payment / hard return (${label}) — review before refinancing">⛔ ${label}</span>`;
+  } else if(e && e.count>0){
+    out += `<span class="bbadge bbadge-bnc" title="${e.count} prior bounce${e.count!==1?'s':''} on record">⚠ ${e.count} bnc</span>`;
+  }
+  if(d.collections_state==='BOUNCING') out += `<span class="bbadge bbadge-now" title="Bouncing now (per Beacon)">BOUNCING</span>`;
+  return out;
+}
 async function loadDeals() {
   showLoading('Loading deals from Airtable...');
   try {
@@ -822,6 +889,7 @@ async function loadDeals() {
       offset = data.offset;
     } while (offset);
     deals = allRecords.map(r => decorate(fieldsToDeal(r.id, r.fields)));
+    try { await loadBounceSummary(); } catch(e){ console.warn('bounce summary load failed (badges will be limited):', e); }
     document.getElementById('sync-info').textContent = '⏱ ' + new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
     renderAll();
   } catch(err) {
@@ -832,7 +900,7 @@ async function loadDeals() {
 }
 
 
-// ── CRM deals-export import (build 25) — the PREFERRED deal intake ──
+// ── CRM deals-export import (build 28) — the PREFERRED deal intake ──
 // End-of-day ritual: upload the CRM csv; anything not on the book gets added
 // through the same lifecycle law as saveDeal (NEW vs REFI by QB-name chain,
 // prior auto-COMPLETED). Dedupe key: Lead ID. Re-running is always safe.
@@ -949,7 +1017,7 @@ function closeSSModal() { document.getElementById('ss-modal-bg').style.display =
 function handleDrop(e) { e.preventDefault(); document.getElementById('upload-zone').classList.remove('drag'); const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) processImage(f); }
 function handleImageUpload(input) { if(input.files[0]) processImage(input.files[0]); }
 
-// build 27: CRM import + daily sync use a drop-zone modal, mirroring the screenshot flow
+// build 28: CRM import + daily sync use a drop-zone modal, mirroring the screenshot flow
 function openCrmModal(){ var i=document.getElementById('crm-file'); if(i)i.value=''; var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); document.getElementById('crm-modal-bg').style.display='flex'; }
 function closeCrmModal(){ var m=document.getElementById('crm-modal-bg'); if(m)m.style.display='none'; }
 function handleCrmDrop(e){ e.preventDefault(); var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return; if(!(f.name||'').toLowerCase().endsWith('.csv')){ showNotice('CRM import expects a .csv file.','error'); return; } closeCrmModal(); importCrmExport(f); }
@@ -1111,12 +1179,12 @@ function openModal(prefill) {
   else { fillForm({}); }
   document.getElementById('modal-bg').style.display='flex';
 }
-function closeModal(){ document.getElementById('modal-bg').style.display='none'; editingId=null; }
+function closeModal(){ document.getElementById('modal-bg').style.display='none'; editingId=null; window._ackBlanks=false; clearModalNotice(); document.querySelectorAll('.modal .field-missing').forEach(e=>e.classList.remove('field-missing')); }
 
 async function saveDeal() {
   const f=parseFloat(document.getElementById('fi-funded').value)||0;
   const bp=parseFloat(document.getElementById('fi-bookpct').value)||100;
-  if(bp>100){ showNotice('Book % cannot exceed 100. Fix it before saving.','error'); return; }
+  if(bp>100){ showModalNotice('Book % cannot exceed 100. Fix it before saving.','error'); return; }
   const cp=parseFloat(document.getElementById('fi-commpct').value)||0;
   const rtr=parseFloat(document.getElementById('fi-rtr').value)||0;
   const fees=parseFloat(document.getElementById('fi-bankfees').value)||0;
@@ -1142,7 +1210,17 @@ async function saveDeal() {
     max_loss:ml,pnl:calcPNL(rtr,rtr,bp,ml),status:'NEW'
   };
   if(watchdogBlocksSave()) return;
-  if(!deal.merchant){ showNotice('Merchant name is required.','warn'); return; }
+  if(!deal.merchant){ showModalNotice('Merchant name is required.','error'); document.getElementById('fi-merchant').classList.add('field-missing'); return; }
+  // soft check: warn (don't block) on blank recommended fields, highlighting them
+  if(!editingId){
+    const missing=flagBlankFields();
+    if(missing.length && !window._ackBlanks){
+      window._ackBlanks=true;
+      showModalNotice('Heads up — these are blank: '+missing.join(', ')+'. Click "Add to book" again to save anyway, or fill them in.','warn');
+      return;
+    }
+  }
+  window._ackBlanks=false; clearModalNotice();
   // ── Deal lifecycle engine (June 10, 2026) ──
   // First funding for a QB name -> NEW. Funding with a prior open deal (balance
   // remaining) -> REFI: new deal ACTIVE, prior auto-COMPLETED. Funding after a
@@ -1156,7 +1234,7 @@ async function saveDeal() {
       priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
       _prior=priors[0];
       if(_prior.merchant!==deal.merchant){
-        // QB-name guard (build 25): one spelling per merchant, forever. A refi that
+        // QB-name guard (build 28): one spelling per merchant, forever. A refi that
         // arrives as "PENDLETON PAWN" when the book says "PENDLETONPAWN" silently
         // breaks Beacon's name matching — so adopt the book's spelling and say so.
         showNotice('QB name normalized to "'+_prior.merchant+'" (you typed "'+deal.merchant+'") to match the existing deal chain.','info',9000);
@@ -1188,7 +1266,7 @@ async function saveDeal() {
     closeModal();
     await loadDeals();
   } catch(err) {
-    showNotice('Save failed: '+err.message,'error');
+    showModalNotice('Save failed: '+err.message,'error');
   } finally {
     btn.disabled=false; btn.innerHTML=editingId?'✓ Save changes':'✓ Add to book';
   }
@@ -1208,7 +1286,7 @@ async function deleteDeal(airtableId, merchant) {
 
 // ─── DAILY REPORT SYNC ───────────────────────────────────
 
-// Inline kickback editing (build 25): type in the cell, saves on enter/blur.
+// Inline kickback editing (build 28): type in the cell, saves on enter/blur.
 async function saveKickbackInline(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
   const v=parseFloat(val)||0;
@@ -1226,10 +1304,10 @@ async function saveKickbackInline(id, val){
 // daily sync cannot flip it back. "Release to auto" clears the pin; the current status
 // stays until the next sync re-applies its own triggers (DEFAULT from report, PIF at $0).
 
-// CollectionsState chip (build 25) — Beacon's second status layer, display-only here.
+// CollectionsState chip (build 28) — Beacon's second status layer, display-only here.
 // Shows only exception states; OK/blank stays clean.
 
-// Merchant contact card (build 25) — CRM-fed. Hover the name for the details.
+// Merchant contact card (build 28) — CRM-fed. Hover the name for the details.
 
 function setDensity(mode){
   document.body.classList.toggle('compact', mode==='compact');
@@ -1370,7 +1448,7 @@ function getFiltered(){
     if(rf&&d.rep!==rf) return false;
     if(isoF&&d.iso!==isoF) return false;
     if(qf){
-      // build 26: search business name, owner name, lead ID, and phone (digit-normalized)
+      // build 28: search business name, owner name, lead ID, and phone (digit-normalized)
       const hay=(String(d.merchant||'')+' '+String(d.owner_name||'')+' '+String(d.lead_id||'')+' '+String(d.owner_phone||'')).toLowerCase();
       const qDigits=qf.replace(/\D/g,'');
       const phoneDigits=String(d.owner_phone||'').replace(/\D/g,'');
@@ -1459,7 +1537,7 @@ function renderRenewal(){
   if(!rows.length){body.innerHTML='<tr><td colspan="7" style="color:var(--text3);text-align:center;padding:20px">No eligible deals match these filters.</td></tr>';return;}
   body.innerHTML=rows.map(d=>`<tr>
     <td style="white-space:nowrap">${fmtDate(d.date_funded)}</td>
-    <td style="font-weight:600">${d.merchant}</td>
+    <td style="font-weight:600">${d.merchant}${bounceBadges(d)}</td>
     <td>${fmt$(d.balance)}</td>
     <td style="color:var(--green);font-weight:700">${Math.round((d.pct_paid||0)*100)}%</td>
     <td>${d.rep||'—'}</td>
@@ -1468,12 +1546,26 @@ function renderRenewal(){
   </tr>`).join('');
 }
 
+let defaultsSort={key:'date_funded',dir:-1};
+function sortDefaults(key){
+  if(defaultsSort.key===key) defaultsSort.dir*=-1; else defaultsSort={key,dir: (key==='merchant'||key==='rep')?1:-1};
+  renderDefaults();
+}
 function renderDefaults(){
   const defs=deals.filter(d=>d.status==='DEFAULT');
   const tbody=document.getElementById('tbody-defaults'),empty=document.getElementById('defaults-empty');
   if(!defs.length){tbody.innerHTML='';empty.style.display='';return;}
   empty.style.display='none';
   const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  const k=defaultsSort.key, dir=defaultsSort.dir;
+  defs.sort((a,b)=>{
+    let va=a[k], vb=b[k];
+    if(k==='date_funded'){ va=new Date(va||0); vb=new Date(vb||0); }
+    else if(typeof va==='string'||typeof vb==='string'){ va=String(va||'').toLowerCase(); vb=String(vb||'').toLowerCase(); return va<vb?-1*dir:va>vb?dir:0; }
+    return ((va||0)-(vb||0))*dir;
+  });
+  // header arrows
+  document.querySelectorAll('#panel-defaults .sort-ind').forEach(s=>{ s.textContent = (s.dataset.k===k)?(dir>0?' ▲':' ▼'):''; });
   tbody.innerHTML=defs.map(d=>{const pnl=d.pnl||0;return`<tr>
     <td style="font-size:11px;color:var(--text3)">${fmtDate(d.date_funded)}</td>
     <td style="font-weight:600">${d.merchant}</td>
@@ -1491,16 +1583,26 @@ function renderPif(){
   const body=document.getElementById('pif-body'),empty=document.getElementById('pif-empty');
   if(!pifs.length){body.innerHTML='';empty.style.display='';return;}
   empty.style.display='none';
+  const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  const cdata=d=>hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):'';
   const byRep={};
   pifs.forEach(d=>{const r=d.rep||'Unassigned';(byRep[r]=byRep[r]||[]).push(d);});
-  body.innerHTML=Object.entries(byRep).map(([rep,ds])=>`
-    <div class="rep-group">
-      <div class="rep-header"><span>👤 ${rep}</span><span style="font-size:11px;color:var(--text3);font-weight:400">${ds.length} PIF deal${ds.length!==1?'s':''}</span></div>
-      <div class="rep-deals">${ds.map(d=>`<div class="rep-deal-card">
-        <div><div style="font-weight:700;font-size:13px">${d.merchant}</div><div style="font-size:11px;color:var(--text3);margin-top:2px">Funded ${fmtDate(d.date_funded)} · ${fmt$(d.funded)} @ ${d.factor||'—'}</div></div>
-        <div style="text-align:right"><div style="font-size:12px;color:var(--green);font-weight:700">PAID IN FULL</div><div style="font-size:11px;color:var(--text3)">${d.lead_id?'lead '+d.lead_id:''}</div></div>
-      </div>`).join('')}</div>
-    </div>`).join('');
+  body.innerHTML=Object.entries(byRep).map(([rep,ds])=>{
+    const tot=ds.reduce((s,d)=>s+(d.funded||0),0);
+    return `<div class="pif-group">
+      <div class="pif-group-head"><span>👤 ${rep}</span><span class="pif-group-meta">${ds.length} PIF · ${fmt$(tot)} funded lifetime</span></div>
+      <table class="pif-table"><tbody>
+      ${ds.map(d=>`<tr>
+        <td class="pif-name" onclick="toggleContact(this,event)" data-contact="${cdata(d)}" style="cursor:${hasContact(d)?'pointer':'default'}">${d.merchant}${hasContact(d)?'<span class="pif-card-icn">📇</span>':''}${bounceBadges(d)}</td>
+        <td class="pif-dim">${fmtDate(d.date_funded)}</td>
+        <td class="pif-dim">${fmt$(d.funded)}</td>
+        <td class="pif-dim">factor ${d.factor||'—'}</td>
+        <td class="pif-dim">${d.lead_id?'lead '+d.lead_id:'—'}</td>
+        <td class="pif-paid">PAID IN FULL</td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  }).join('');
 }
 function renderMetrics(){
   const active=deals.filter(d=>['NEW','ACTIVE'].includes(d.status)),defs=deals.filter(d=>d.status==='DEFAULT');
@@ -1535,6 +1637,20 @@ function populateIsoFilter(){
 }
 function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='pif')renderPif(); if(currentView==='defaults')renderDefaults(); if(currentView==='pnl')renderPnl(); }
 
+function showModalNotice(msg,type='warn'){
+  const el=document.getElementById('modal-notice');
+  el.textContent=msg; el.className='notice show notice-'+type;
+  el.scrollIntoView({block:'nearest'});
+}
+function clearModalNotice(){ const el=document.getElementById('modal-notice'); if(el) el.className='notice'; }
+// highlight blank recommended fields; returns list of missing labels
+function flagBlankFields(){
+  const recommended=[['fi-funded','Funded'],['fi-rtr','RTR / Payback'],['fi-factor','Factor'],['fi-term','Term'],['fi-daily','Daily payment'],['fi-rep','Rep'],['fi-date','Date funded']];
+  document.querySelectorAll('.modal .field-missing').forEach(e=>e.classList.remove('field-missing'));
+  const missing=[];
+  recommended.forEach(([id,label])=>{ const el=document.getElementById(id); if(el && !String(el.value).trim()){ el.classList.add('field-missing'); missing.push(label); } });
+  return missing;
+}
 function showNotice(msg,type='info',dur=5000){
   const el=document.getElementById('notice');
   el.textContent=msg; el.className='notice show notice-'+type;
