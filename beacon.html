@@ -76,7 +76,7 @@
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
   .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
-  /* v76: density — Compact fits Beacon on a 1080p screen */
+  /* v77: density — Compact fits Beacon on a 1080p screen */
   body.compact .layout { grid-template-columns: 260px 1fr; }
   /* v77: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
@@ -1491,7 +1491,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v76 — AIRTABLE DATA LAYER
+// BEACON v77 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -1761,7 +1761,9 @@ function beaconParseBounceWB(wb){
       consec:parseInt(r[col.consec])||0, mtd:parseInt(r[col.mtd])||0,
       rep:col.rep>=0?String(r[col.rep]||'').trim():'', iso:col.iso>=0?String(r[col.iso]||'').trim():'' });
   }
-  const reportDate = bounces.map(b=>b.settleDate).filter(Boolean).sort().pop()||null;
+  // The dashboard "day" = the date bounces RETURNED (uniform across a report), not the
+  // settlement date (Pinnacle stamps several settlement dates per report — splitting the morning).
+  const reportDate = bounces.map(b=>b.returnDate||b.settleDate).filter(Boolean).sort().pop()||null;
   return {bounces, reportDate};
 }
 function beaconMatchDeal(bounce, merchants){
@@ -1780,13 +1782,14 @@ function beaconMatchDeal(bounce, merchants){
 async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceName){
   const toCreate=[]; const unmatched=[]; const ambiguous=[]; const skipped=[];
   for (const b of parsed.bounces){
-    const key=b.merchant+' — '+b.settleDate;
+    const bDay=b.returnDate||b.settleDate;
+    const key=b.merchant+' — '+bDay;
     if (existingBounceKeys.has(key)){ skipped.push(key); continue; }
     const m=beaconMatchDeal(b, merchants);
     if (!m.deal){ unmatched.push(b.merchant); continue; }
     if (m.ambiguous) ambiguous.push(b.merchant);
     const sev = (b.type==='stop'||b.type==='revocation') ? 'STOP' : (b.consec>1?'CONSEC':'NEW');
-    toCreate.push({fields:{ 'Bounce':key, 'Deal':[m.deal._rid], 'Date':b.settleDate, 'Amount':b.amount,
+    toCreate.push({fields:{ 'Bounce':key, 'Deal':[m.deal._rid], 'Date':bDay, 'Amount':b.amount,
       'Return Code':b.returnCode, 'Severity':sev, 'Consecutive Count':b.consec,
       'Rep':b.rep, 'Source Report':sourceName||'', 'Hit Date':b.hitDate||null, 'Return Date':b.returnDate||null }});
   }
