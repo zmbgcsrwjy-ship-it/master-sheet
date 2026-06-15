@@ -76,9 +76,9 @@
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
   .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
-  /* v79: density — Compact fits Beacon on a 1080p screen */
+  /* v80: density — Compact fits Beacon on a 1080p screen */
   body.compact .layout { grid-template-columns: 260px 1fr; }
-  /* v79: collapse must beat the compact column rule (specificity fix) */
+  /* v80: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
   body.compact table.matrix td, body.compact table.matrix th { padding-top: 4px; padding-bottom: 4px; }
@@ -1220,7 +1220,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v79 · live</span>
+      <span class="build-tag">v80 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1282,7 +1282,6 @@
     </div>
     <span class="cal-spacer"></span>
     <button class="cal-today-btn" onclick="goToday()">Today</button>
-    <button class="cal-today-btn" id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="margin-left:8px">\u21bb Refresh</button>
   </div>
   <div class="cal-grid" id="cal-grid"></div>
 </div>
@@ -1489,6 +1488,7 @@
   </div>
 </div>
 
+<button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="position:fixed;left:20px;bottom:20px;z-index:90;display:inline-flex;align-items:center;gap:7px;background:#141b2d;color:#cdd6e6;border:1px solid #2c3a57;border-radius:10px;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)">↻ Refresh</button>
 <div class="save-toast" id="toast"></div>
 <div id="sync-progress" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(8,12,20,.72);align-items:center;justify-content:center;backdrop-filter:blur(2px)">
   <div style="background:#141b2d;border:1px solid #2c3a57;border-radius:14px;padding:26px 30px;min-width:320px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.5)">
@@ -1496,7 +1496,6 @@
     <div id="sync-progress-icon" style="display:none;font-size:34px;margin-bottom:10px"></div>
     <div id="sync-progress-title" style="font-size:15px;font-weight:700;color:#e6edf3;margin-bottom:5px"></div>
     <div id="sync-progress-sub" style="font-size:12.5px;color:#8b96ad;line-height:1.5"></div>
-    <button id="sync-progress-close" onclick="hideSyncProgress()" style="display:none;margin-top:16px;background:#539bf5;color:#fff;border:none;border-radius:8px;padding:8px 22px;font-size:13px;font-weight:600;cursor:pointer">Done</button>
   </div>
 </div>
 <style>@keyframes bxspin{to{transform:rotate(360deg)}}</style>
@@ -1504,7 +1503,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v79 — AIRTABLE DATA LAYER
+// BEACON v80 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -2522,16 +2521,13 @@ function renderMonthPicker() {
   const currentY = parseInt(calMonth.split('-')[0]);
   const currentM = parseInt(calMonth.split('-')[1]);
   // Year range: 5 years back, 1 year forward (since cal-next is capped at 12 months out)
-  const minYear = 2025;                 // open history back to 2025 (no earlier data exists)
-  const maxYear = Math.max(todayY + 1, parseInt(calMonth.split('-')[0]));
+  const minYear = 2025;                 // floor at 2025 (no earlier data exists)
+  const maxYear = 2100;                 // forward fully unlocked — any future year selectable
   const prevDisabled = y <= minYear ? "disabled" : "";
   const nextDisabled = y >= maxYear ? "disabled" : "";
   let cells = "";
   for (let m = 1; m <= 12; m++) {
-    // Future months beyond the cap (today + 12 months) get disabled
-    const cellDate = new Date(y, m - 1, 1);
-    const limitDate = new Date(todayY, todayM - 1 + 12, 1);
-    const isFutureBeyondCap = cellDate > limitDate;
+    const isFutureBeyondCap = false;   // months fully unlocked
     const isCurrent = (y === currentY && m === currentM);
     const isThisMonth = (y === todayY && m === todayM);
     let cls = "mp-cell";
@@ -2628,7 +2624,7 @@ function renderCalendar() {
     const d = new Date(ty, tm - 1 + 12, 1);
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2, '0');
   })();
-  document.getElementById("cal-next").disabled = calMonth >= forwardLimit;
+  document.getElementById("cal-next").disabled = false;   // forward navigation unlocked
   
   const grid = document.getElementById("cal-grid");
   grid.innerHTML = "";
@@ -5281,7 +5277,6 @@ function saveAndDownload() {
 function showSyncProgress(title, sub){
   document.getElementById('sync-progress-spin').style.display='block';
   document.getElementById('sync-progress-icon').style.display='none';
-  document.getElementById('sync-progress-close').style.display='none';
   document.getElementById('sync-progress-title').textContent=title||'Working\u2026';
   document.getElementById('sync-progress-sub').textContent=sub||'';
   document.getElementById('sync-progress').style.display='flex';
@@ -5293,7 +5288,9 @@ function finishSyncProgress(ok, title, sub){
   ic.style.display='block'; ic.textContent= ok ? '\u2705' : '\u26a0\ufe0f';
   document.getElementById('sync-progress-title').textContent=title||(ok?'Done':'Problem');
   document.getElementById('sync-progress-sub').textContent=sub||'';
-  document.getElementById('sync-progress-close').style.display='inline-block';
+  // No click needed — confirmation shows, then auto-dismisses. Errors linger longer so they're read.
+  clearTimeout(window._syncAutoHide);
+  window._syncAutoHide = setTimeout(hideSyncProgress, ok ? 1500 : 4500);
 }
 function hideSyncProgress(){ document.getElementById('sync-progress').style.display='none'; }
 async function beaconManualRefresh(){
@@ -5316,7 +5313,7 @@ async function beaconBoot(){
   initTheme();
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v79 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  console.log("%c BEACON v80 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
 // Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0
