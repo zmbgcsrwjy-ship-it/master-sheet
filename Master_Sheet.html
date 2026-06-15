@@ -98,9 +98,13 @@ table td, table th{white-space:nowrap}
 body.compact .metric-card .val{font-size:18px}
 body.compact .metric-card{padding:12px 14px}
 body.compact .sidebar{width:200px}
+/* build 26: collapse must beat the compact width rule (specificity fix) */
+body.compact .sidebar.collapsed{width:0;padding:0}
 .density-toggle{display:inline-flex;border:1px solid var(--border2);border-radius:var(--radius-sm);overflow:hidden;margin-right:8px;vertical-align:middle}
 .density-toggle button{background:var(--bg3);color:var(--text3);border:none;padding:6px 11px;font-size:11px;cursor:pointer;font-weight:600}
 .density-toggle button.on{background:var(--blue);color:#fff}
+/* build 26: drag-over highlight for CRM/daily file buttons */
+.btn.drag{outline:2px dashed var(--blue);outline-offset:2px;filter:brightness(1.15)}
 thead th{padding:10px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);border-bottom:1px solid var(--border);background:var(--bg3);white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.05em;text-transform:uppercase}
 thead th:hover{color:var(--text2)}
 tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
@@ -243,7 +247,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 25 — sticky headers</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 26 — collapse fix, search, drag-drop</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -274,9 +278,9 @@ select.badge:hover{filter:brightness(1.2)}
           <p>Live sync with Airtable — you and Sal always see the same book</p>
         </div>
         <div class="btn-row">
-          <input type="file" id="crm-file" accept=".csv" style="display:none" onchange="importCrmExport(this.files[0])"><button class="btn btn-green" style="box-shadow:0 0 0 1.5px rgba(80,200,120,.55)" onclick="document.getElementById('crm-file').click()" title="The preferred way to add deals — the end-of-day CRM deals export. Cleaner data, industry + owner contact included.">⭐ Import CRM export</button><button class="btn btn-blue" onclick="openScreenshotModal()">📸 Add from screenshot</button>
+          <input type="file" id="crm-file" accept=".csv" style="display:none" onchange="importCrmExport(this.files[0])"><button class="btn btn-green" style="box-shadow:0 0 0 1.5px rgba(80,200,120,.55)" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleBtnDrop(event,'crm')" onclick="document.getElementById('crm-file').click()" title="The preferred way to add deals — the end-of-day CRM deals export. Cleaner data, industry + owner contact included. Drag a .csv here or click.">⭐ Import CRM export</button><button class="btn btn-blue" onclick="openScreenshotModal()">📸 Add from screenshot</button>
           <button class="btn btn-green" onclick="openModal()">➕ Add manually</button>
-          <button class="btn" onclick="document.getElementById('daily-input').click()">🔄 Sync daily report</button>
+          <button class="btn" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleBtnDrop(event,'daily')" onclick="document.getElementById('daily-input').click()" title="Drag the daily .xlsx here or click.">🔄 Sync daily report</button>
           <button class="btn" onclick="exportExcel()">⬇️ Export Excel</button>
         </div>
       </div>
@@ -300,7 +304,7 @@ select.badge:hover{filter:brightness(1.2)}
               <span class="density-toggle"><button id="dens-cozy" onclick="setDensity('cozy')">Comfortable</button><button id="dens-compact" onclick="setDensity('compact')">Compact</button></span><select id="f-status" onchange="renderTable()"><option value="">All statuses</option><option value="NEW">New</option><option value="ACTIVE">Active</option><option value="PIF">PIF</option><option value="COMPLETED">Completed</option><option value="DEFAULT">Default</option></select>
               <select id="f-rep" onchange="renderTable()"><option value="">All reps</option></select>
               <select id="f-iso" onchange="renderTable()"><option value="">All ISOs</option></select>
-              <input id="f-search" type="text" placeholder="Search merchant or lead ID..." oninput="renderTable()" style="min-width:170px">
+              <input id="f-search" type="text" placeholder="Search name, business, phone, or lead ID..." oninput="renderTable()" style="min-width:170px">
             </div>
           </div>
           <div class="table-wrap">
@@ -479,7 +483,7 @@ let editingId = null; // airtable record id when editing
 let sortCol = 'date_funded', sortDir = -1, currentView = 'book';
 
 const fmt$ = n => '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtK = n => { const v=Number(n||0), a=Math.abs(v), s=v<0?'-':''; return a>=1e6 ? s+'$'+(a/1e6).toFixed(1)+'M' : a>=1e3 ? s+'$'+(a/1e3).toFixed(0)+'K' : fmt$(v); };
+const fmtK = n => { const v=Number(n||0), a=Math.abs(v), s=v<0?'-':''; return a>=1e6 ? s+'$'+(a/1e6).toFixed(3)+'M' : a>=1e3 ? s+'$'+(a/1e3).toFixed(0)+'K' : fmt$(v); };
 const fmtDate = iso => { if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${parseInt(m)}/${parseInt(d)}/${y}`; };
 const calcML = (f,bp,fees,comm) => (f*bp/100)-fees+(comm*bp/100);
 const calcPNL = (rtr,bal,bp,ml) => ((rtr-bal)*bp/100)-ml;
@@ -911,6 +915,22 @@ function closeSSModal() { document.getElementById('ss-modal-bg').style.display =
 function handleDrop(e) { e.preventDefault(); document.getElementById('upload-zone').classList.remove('drag'); const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) processImage(f); }
 function handleImageUpload(input) { if(input.files[0]) processImage(input.files[0]); }
 
+// build 26: drag-and-drop for CRM import + daily sync buttons (parallels the screenshot drop zone)
+function handleBtnDrop(e, kind){
+  e.preventDefault();
+  if(e.currentTarget&&e.currentTarget.classList) e.currentTarget.classList.remove('drag');
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if(!f) return;
+  const name=(f.name||'').toLowerCase();
+  if(kind==='crm'){
+    if(!name.endsWith('.csv')){ showNotice('CRM import expects a .csv file.','error'); return; }
+    importCrmExport(f);
+  } else if(kind==='daily'){
+    if(!name.endsWith('.xlsx')){ showNotice('Daily report expects an .xlsx file.','error'); return; }
+    handleDailyReport(f);
+  }
+}
+
 async function processImage(file) {
   const apiKey = getAnthropicKey();
   if (!apiKey) { showNotice('No Anthropic API key. Update credentials via the sidebar.', 'error'); return; }
@@ -1244,7 +1264,7 @@ async function setDealStatus(id, val){
 }
 
 async function handleDailyReport(input) {
-  const file=input.files[0]; if(!file) return; input.value='';
+  const file=(input&&input.files)?input.files[0]:input; if(!file) return; if(input&&input.files) input.value='';
   const reader=new FileReader();
   reader.onload=async e=>{
     try{
@@ -1323,7 +1343,14 @@ function getFiltered(){
     if(sf&&d.status!==sf) return false;
     if(rf&&d.rep!==rf) return false;
     if(isoF&&d.iso!==isoF) return false;
-    if(qf&&!d.merchant.toLowerCase().includes(qf)&&!String(d.lead_id||'').toLowerCase().includes(qf)) return false;
+    if(qf){
+      // build 26: search business name, owner name, lead ID, and phone (digit-normalized)
+      const hay=(String(d.merchant||'')+' '+String(d.owner_name||'')+' '+String(d.lead_id||'')+' '+String(d.owner_phone||'')).toLowerCase();
+      const qDigits=qf.replace(/\D/g,'');
+      const phoneDigits=String(d.owner_phone||'').replace(/\D/g,'');
+      const match = hay.includes(qf) || (qDigits.length>=3 && phoneDigits.includes(qDigits));
+      if(!match) return false;
+    }
     return true;
   }).sort((a,b)=>{
     let av=a[sortCol]??0,bv=b[sortCol]??0;
