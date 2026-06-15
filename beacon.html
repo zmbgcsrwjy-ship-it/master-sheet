@@ -76,9 +76,9 @@
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
   .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
-  /* v80: density — Compact fits Beacon on a 1080p screen */
+  /* v81: density — Compact fits Beacon on a 1080p screen */
   body.compact .layout { grid-template-columns: 260px 1fr; }
-  /* v80: collapse must beat the compact column rule (specificity fix) */
+  /* v81: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
   body.compact table.matrix td, body.compact table.matrix th { padding-top: 4px; padding-bottom: 4px; }
@@ -89,7 +89,7 @@
   .bx-density button.on { background:#539bf5; color:#fff; }
   .layout.collapsed { grid-template-columns: 44px 1fr; }
   
-  .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 56px; overflow-y: auto; position: sticky; top: 0; height: 100vh; }
+  .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 56px; overflow-y: auto; overflow-x: hidden; position: sticky; top: 0; height: 100vh; }
   .layout.collapsed .sidebar { padding: 24px 6px; padding-top: 56px; }
   .layout.collapsed .sidebar > *:not(.sidebar-toggle) { display: none; }
   .sidebar-toggle { position: absolute; top: 14px; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; color: var(--text-2); z-index: 2; }
@@ -193,7 +193,7 @@
   .watch-card.active-tier.is-weekly:hover { background: var(--sev-wkly-bg); }
   .watch-card.active-tier.is-weekly .watch-tag { background: var(--sev-wkly); color: #fff; }
   .watch-card.quiet { border-left-color: var(--border-strong); opacity: 0.85; }
-  .watch-card .watch-name { font-weight: 600; color: var(--text); margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+  .watch-card .watch-name { font-weight: 600; color: var(--text); margin-bottom: 2px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .watch-card.hot .watch-name { color: var(--sev-stop); }
   .watch-card .watch-tag { 
     font-size: 9.5px; 
@@ -201,7 +201,7 @@
     padding: 2px 6px; 
     border-radius: 3px; 
     letter-spacing: 0.04em; 
-    flex-shrink: 0;
+    white-space: nowrap;
   }
   .watch-card.hot .watch-tag { background: var(--sev-stop); color: #fff; }
   .watch-card.active-tier .watch-tag { background: var(--watch-active); color: #fff; }
@@ -327,7 +327,7 @@
   .us-confirm { margin-top: 8px; width: 100%; background: var(--text); color: var(--surface); border: 0; padding: 7px; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
   .us-confirm:disabled { background: var(--text-3); cursor: default; }
   
-  .main { padding: 32px 36px 120px; max-width: 1440px; }
+  .main { padding: 32px 36px 120px; max-width: 1440px; margin-left: auto; margin-right: auto; }
   
   header.brief-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 24px; }
   .brief-title h1 { 
@@ -1169,6 +1169,7 @@
 <aside class="sidebar">
   <button class="sidebar-toggle" onclick="toggleSidebar()" title="Collapse sidebar">‹</button>
   
+  <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻ Refresh</button>
   <div class="watch-list">
     <div class="watch-list-header">
       <span class="watch-list-title">Watch List</span>
@@ -1220,7 +1221,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v80 · live</span>
+      <span class="build-tag">v81 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1236,7 +1237,7 @@
   <button class="tab-btn active" id="tab-daily-btn" onclick="showTab('daily')">Daily Collections<span class="badge" id="daily-count-badge">0</span></button>
   <button class="tab-btn" id="tab-legal-btn" onclick="showTab('legal')">Legal Cases</button>
   <div class="tab-bar-actions">
-    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">1⃣ Sync daily report <span class="btn-sub">(xlsx)</span></button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">2⃣ Sync bounce report <span class="btn-sub">(xlsx)</span></button><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span>
+    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">Sync daily report <span class="btn-sub">(xlsx)</span></button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">Sync bounce report <span class="btn-sub">(xlsx)</span></button><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span>
 <div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:9000;align-items:center;justify-content:center">
   <div style="background:#141b2d;border:1px solid #2a3550;border-radius:14px;padding:28px;width:min(640px,92vw);box-shadow:0 18px 60px rgba(0,0,0,.5)">
     <div id="sync-modal-title" style="font-size:19px;font-weight:700;color:#e6edf3;margin-bottom:4px"></div>
@@ -1488,7 +1489,6 @@
   </div>
 </div>
 
-<button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="position:fixed;left:20px;bottom:20px;z-index:90;display:inline-flex;align-items:center;gap:7px;background:#141b2d;color:#cdd6e6;border:1px solid #2c3a57;border-radius:10px;padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.35)">↻ Refresh</button>
 <div class="save-toast" id="toast"></div>
 <div id="sync-progress" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(8,12,20,.72);align-items:center;justify-content:center;backdrop-filter:blur(2px)">
   <div style="background:#141b2d;border:1px solid #2c3a57;border-radius:14px;padding:26px 30px;min-width:320px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.5)">
@@ -1503,7 +1503,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v80 — AIRTABLE DATA LAYER
+// BEACON v81 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -1672,7 +1672,12 @@ function beaconReconstruct(raw, todayISO){
   merchants.forEach(m=>{ if(m.bounced_today) m.mtd_bounces=mtdPerDeal[m._rid]||1; });
 
   // ---- actions → resolutions, notes, legal cases (chronological replay) ----
-  const acts = raw.actions.slice().sort((a,b)=>String(a.fields.When||'').localeCompare(String(b.fields.When||'')));
+  const _clearRank = r => { const p=bParseNotePayload((r.fields||{}).Note||''); return (p&&p.kind==='clear')?1:0; };
+  const acts = raw.actions.slice().sort((a,b)=>{
+    const wa=String(a.fields.When||''), wb=String(b.fields.When||'');
+    if (wa!==wb) return wa.localeCompare(wb);
+    return _clearRank(a)-_clearRank(b);
+  });
   let legalCasesOut = [];
   const noteRidMap = {}; // leadKey|date -> action record id (for note upserts)
   const resolvedByDate = {}; // dISO -> count of resolution actions
@@ -1991,7 +1996,7 @@ function setBxDensity(mode){
 
 function openSyncModal(kind){
   _syncKind = kind;
-  document.getElementById('sync-modal-title').textContent = kind==='daily' ? '1\u20e3 Sync daily report' : '2\u20e3 Sync bounce report';
+  document.getElementById('sync-modal-title').textContent = kind==='daily' ? 'Sync daily report' : 'Sync bounce report';
   document.getElementById('sync-modal-sub').textContent = kind==='daily'
     ? 'The Pinnacle DAILY report \u2014 updates every balance, % paid, paid-today, and status across the book.'
     : 'The Pinnacle BOUNCE report \u2014 lights up today\u2019s board. Run the daily first.';
@@ -2873,8 +2878,10 @@ function renderForDate() {
   document.getElementById("t-stop-sub").textContent = fmt$(stats.stop_exp || 0) + " exposure";
   document.getElementById("t-cons").textContent = stats.consec_count || 0;
   document.getElementById("t-cons-sub").textContent = fmt$(stats.consec_exp || 0) + " exposure";
-  document.getElementById("t-wkly").textContent = stats.weekly_count || 0;
-  document.getElementById("t-wkly-sub").textContent = fmt$(stats.weekly_exp || 0) + " exposure";
+    const wklyToday = state.filter(m => m.bounced_today && isWeeklyDeal(m));
+    const wklyExp = wklyToday.reduce((s,m)=>s+(m.balance||0),0);
+    document.getElementById("t-wkly").textContent = wklyToday.length;
+    document.getElementById("t-wkly-sub").textContent = fmt$(wklyExp) + " exposure";
   document.getElementById("t-new").textContent = stats.new_count || 0;
   document.getElementById("t-new-sub").textContent = fmt$(stats.new_exp || 0) + " exposure";
   document.getElementById("f-action-total").textContent = stats.action_count || 0;
@@ -5313,7 +5320,7 @@ async function beaconBoot(){
   initTheme();
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v80 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  console.log("%c BEACON v81 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
 // Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0
