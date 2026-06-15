@@ -76,9 +76,9 @@
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
   .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
-  /* v81: density — Compact fits Beacon on a 1080p screen */
+  /* v82: density — Compact fits Beacon on a 1080p screen */
   body.compact .layout { grid-template-columns: 260px 1fr; }
-  /* v81: collapse must beat the compact column rule (specificity fix) */
+  /* v82: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
   body.compact table.matrix td, body.compact table.matrix th { padding-top: 4px; padding-bottom: 4px; }
@@ -1221,7 +1221,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v81 · live</span>
+      <span class="build-tag">v82 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1503,7 +1503,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v81 — AIRTABLE DATA LAYER
+// BEACON v82 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -1755,7 +1755,8 @@ function beaconReconstruct(raw, todayISO){
     completed_count:raw.deals.filter(r=>(r.fields&&r.fields.Status)==='COMPLETED').length,
     total_tracked:merchants.length
   }, sToday);
-  statsOut.action_count=0;
+  // action_count = merchants with a failed pull today (statsFor set it = nsf_count); don't zero it.
+  statsOut.action_count = sToday.action_count || sToday.nsf_count || 0;
 
   merchants.forEach(m=>{ delete m._freqField; });
   return {state:merchants, history:historyOut, legalCases:legalCasesOut, STATS:statsOut, TODAY_ISO:today, noteRidMap};
@@ -2854,15 +2855,14 @@ function renderForDate() {
   // Update metrics & severity tiles for selected date
   let stats;
   if (today) {
-    stats = STATS;
-    stats.failed_pulls = stats.failed_pulls_today;
+    stats = STATS;   // STATS.failed_pulls is already the correct today total (sum of bounce amounts)
   } else if (history[viewDate]) {
     stats = history[viewDate].stats;
   } else {
     stats = { failed_pulls: 0, nsf_count: 0, stop_count_today: 0, stop_exp: 0, consec_exp: 0, weekly_exp: 0, new_exp: 0, stop_count_today: 0, consec_count: 0, weekly_count: 0, new_count: 0, action_count: 0 };
   }
   
-  document.getElementById("m-failed").textContent = fmt$(stats.failed_pulls_today || stats.failed_pulls || 0);
+  document.getElementById("m-failed").textContent = fmt$(stats.failed_pulls || 0);
   document.getElementById("m-failed-sub").textContent = (stats.nsf_count || 0) + " NSF · " + (stats.stop_count_today || stats.stop_count || 0) + " stop" + ((stats.stop_count_today||stats.stop_count||0)===1?"":"s");
   
   const totalAtRisk = (stats.stop_exp||0) + (stats.weekly_exp||0) + (stats.consec_exp||0) + (stats.new_exp||0);
@@ -5320,7 +5320,7 @@ async function beaconBoot(){
   initTheme();
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v81 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  console.log("%c BEACON v82 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
 // Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0
