@@ -76,6 +76,15 @@
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
   .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
+  /* v75: density — Compact fits Beacon on a 1080p screen */
+  body.compact .layout { grid-template-columns: 260px 1fr; }
+  body.compact table.matrix { font-size: 11px; }
+  body.compact table.matrix td, body.compact table.matrix th { padding-top: 4px; padding-bottom: 4px; }
+  body.compact .metrics, body.compact .sev-tiles { gap: 8px; margin-bottom: 12px; }
+  body.compact .metric-val { font-size: 20px; }
+  .bx-density { display:inline-flex; border:1px solid #2c3a57; border-radius:7px; overflow:hidden; margin-left:10px; vertical-align:middle; }
+  .bx-density button { background:#16203a; color:#7c89a5; border:none; padding:5px 10px; font-size:11px; cursor:pointer; font-weight:600; }
+  .bx-density button.on { background:#539bf5; color:#fff; }
   .layout.collapsed { grid-template-columns: 44px 1fr; }
   
   .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 56px; overflow-y: auto; position: sticky; top: 0; height: 100vh; }
@@ -1207,7 +1216,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v74 · live</span>
+      <span class="build-tag">v75 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1223,7 +1232,7 @@
   <button class="tab-btn active" id="tab-daily-btn" onclick="showTab('daily')">Daily Collections<span class="badge" id="daily-count-badge">0</span></button>
   <button class="tab-btn" id="tab-legal-btn" onclick="showTab('legal')">Legal Cases</button>
   <div class="tab-bar-actions">
-    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">1⃣ Sync daily report <span class="btn-sub">(xlsx)</span></button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">2⃣ Sync bounce report <span class="btn-sub">(xlsx)</span></button>
+    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">1⃣ Sync daily report <span class="btn-sub">(xlsx)</span></button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">2⃣ Sync bounce report <span class="btn-sub">(xlsx)</span></button><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span>
 <div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:9000;align-items:center;justify-content:center">
   <div style="background:#141b2d;border:1px solid #2a3550;border-radius:14px;padding:28px;width:min(640px,92vw);box-shadow:0 18px 60px rgba(0,0,0,.5)">
     <div id="sync-modal-title" style="font-size:19px;font-weight:700;color:#e6edf3;margin-bottom:4px"></div>
@@ -1480,7 +1489,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v74 — AIRTABLE DATA LAYER
+// BEACON v75 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -1947,6 +1956,14 @@ function beaconBuildDailyUpdates(wb, rawDeals){
 
 
 let _syncKind = 'daily';
+function setBxDensity(mode){
+  document.body.classList.toggle('compact', mode==='compact');
+  try{ localStorage.setItem('beacon_density', mode); }catch(e){}
+  var c=document.getElementById('bx-compact'), z=document.getElementById('bx-cozy');
+  if(c&&z){ c.classList.toggle('on', mode==='compact'); z.classList.toggle('on', mode!=='compact'); }
+}
+(function(){ try{ var m=localStorage.getItem('beacon_density')||'cozy'; if(document.readyState!=='loading') setBxDensity(m); else document.addEventListener('DOMContentLoaded',function(){ setBxDensity(m); }); }catch(e){} })();
+
 function openSyncModal(kind){
   _syncKind = kind;
   document.getElementById('sync-modal-title').textContent = kind==='daily' ? '1\u20e3 Sync daily report' : '2\u20e3 Sync bounce report';
@@ -5237,7 +5254,7 @@ async function beaconBoot(){
   initTheme();
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v74 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  console.log("%c BEACON v75 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
 // Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0
