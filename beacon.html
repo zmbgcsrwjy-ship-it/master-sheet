@@ -76,9 +76,9 @@
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
   .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
-  /* v82: density — Compact fits Beacon on a 1080p screen */
+  /* v83: density — Compact fits Beacon on a 1080p screen */
   body.compact .layout { grid-template-columns: 260px 1fr; }
-  /* v82: collapse must beat the compact column rule (specificity fix) */
+  /* v83: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
   body.compact table.matrix td, body.compact table.matrix th { padding-top: 4px; padding-bottom: 4px; }
@@ -252,6 +252,7 @@
   .sidebar-card.wkly:hover { background: var(--sev-wkly-bg); }
   .sidebar-card.upcoming { border-left-color: var(--good-bar); background: var(--good-bg); }
   .sidebar-card.upcoming:hover { background: var(--good-bg); border-left-color: var(--good); filter: brightness(0.96); }
+  .openstop-chip { display:inline-block; background:var(--sev-stop); color:#fff; font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:4px; letter-spacing:.03em; margin-right:6px; white-space:nowrap; }
   .sidebar-card.unresolved-stop { border-left-color: var(--sev-stop-bar); background: var(--sev-stop-tint); }
   .sidebar-card.unresolved-stop:hover { background: var(--sev-stop-bg); }
   .sidebar-card.unresolved-stop .name { color: var(--sev-stop); }
@@ -1221,7 +1222,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v82 · live</span>
+      <span class="build-tag">v83 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1503,7 +1504,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 // ============================================================
-// BEACON v82 — AIRTABLE DATA LAYER
+// BEACON v83 — AIRTABLE DATA LAYER
 // Replaces the Python builder + baked data + localStorage model.
 // Runs in browser (inlined into beacon.html) and in node (test harness).
 // Contract v1.1 lanes: Beacon writes Bounces, Actions, Deals.CollectionsState ONLY.
@@ -1664,6 +1665,29 @@ function beaconReconstruct(raw, todayISO){
     m.streak_len=Number(f['Consecutive Count'])||0; m.sev_class=sev; m.group_order=bGroupOrder(sev);
     m.bucket='BOUNCED'; m.hit_date=f['Hit Date']||''; m.return_date=f['Return Date']||'';
   }
+  // ---- OPEN STOPS: a stop on any prior day that was never resolved must persist ----
+  // A stop on a weekly deal won't reappear daily, but an unresolved stopped-payment can
+  // never be forgotten. Find the most recent stop per deal up to today; if no resolution
+  // was logged on/after that stop's date, the deal carries an open stop and stays on the board.
+  const stopByDeal = {};   // rid -> {date, code, amt, balance, hit, ret}
+  for (const d of dates){
+    if (d > today) continue;
+    for (const r of byDate[d]){
+      const f=r.fields||{}; const rid=(f.Deal&&f.Deal[0])||null; if(!rid) continue;
+      if (bSevClass(f.Severity)==='stop'){
+        stopByDeal[rid] = { date:d, code:f['Return Code']||'', amt:Number(f.Amount)||0,
+          hit:f['Hit Date']||'', ret:f['Return Date']||'' };
+      }
+    }
+  }
+  for (const rid in stopByDeal){
+    const m = dealsById[rid]; if(!m) continue;
+    const st = stopByDeal[rid];
+    // resolved if a resolution was recorded on/after the stop date (resolution_date set during action replay below)
+    // NOTE: action replay runs AFTER this block, so we defer the resolved-check to a second pass.
+    m._openStopCandidate = st;
+  }
+
   // mtd_bounces = bounces this calendar month up to & incl today, per deal
   const monthKey = today.slice(0,7);
   const mtdPerDeal = {};
@@ -1758,6 +1782,27 @@ function beaconReconstruct(raw, todayISO){
   // action_count = merchants with a failed pull today (statsFor set it = nsf_count); don't zero it.
   statsOut.action_count = sToday.action_count || sToday.nsf_count || 0;
 
+  // Finalize open stops: a candidate is a TRUE open stop only if not resolved on/after the stop date,
+  // and not already bouncing today (today's row already covers it), and no open legal case.
+  merchants.forEach(m=>{
+    const st = m._openStopCandidate;
+    if (st){
+      const resolvedAfter = m.resolution_type && m.resolution_date && m.resolution_date >= st.date;
+      const legal = (typeof legalCasesOut!=='undefined') && legalCasesOut.some(c=>c.lead_id===m.lead_id && c.status!=='settled');
+      if (!m.bounced_today && !resolvedAfter && !legal){
+        // Carry the stop forward onto the board as an unresolved open stop.
+        m.bucket = 'BOUNCED';
+        m.bounced_today = false;          // it did NOT bounce today — it's a carried-forward open stop
+        m.open_stop = true;
+        m.sev_class = 'stop';
+        m.group_order = bGroupOrder('stop');
+        m.bounce_amt = st.amt; m.return_code = st.code;
+        m.bounce_type = 'stop'; m.hit_date = st.hit; m.return_date = st.ret;
+        m.open_stop_date = st.date;
+      }
+    }
+    delete m._openStopCandidate;
+  });
   merchants.forEach(m=>{ delete m._freqField; });
   return {state:merchants, history:historyOut, legalCases:legalCasesOut, STATS:statsOut, TODAY_ISO:today, noteRidMap};
 }
@@ -2323,9 +2368,13 @@ function getWatchList() {
       continue;
     }
     
-    // HOT — unresolved stops bouncing today (legacy unresolved-stops criteria)
-    if (m.bounced_today && m.sev_class === 'stop' && !m.resolution_type && !hasOpenLegalCase(m.lead_id)) {
-      hot.push({ m, reason: 'unresolved-stop', label: 'STOP TODAY · ' + (m.return_code || 'EPM') });
+    // HOT — unresolved stops: bouncing today OR carried forward from a prior day (open_stop).
+    // A stopped payment can never be forgotten, even on a weekly deal that won't pull daily.
+    if ((m.bounced_today || m.open_stop) && m.sev_class === 'stop' && !m.resolution_type && !hasOpenLegalCase(m.lead_id)) {
+      const lbl = m.open_stop && !m.bounced_today
+        ? 'OPEN STOP · ' + (m.return_code || 'EPM') + ' · since ' + (m.open_stop_date ? fmtDate(m.open_stop_date) : '?')
+        : 'STOP TODAY · ' + (m.return_code || 'EPM');
+      hot.push({ m, reason: 'unresolved-stop', label: lbl });
       continue;
     }
     
@@ -3690,6 +3739,7 @@ function renderMainTable() {
         _displayOrder: displayOrder,
         _inflight: isInFlight(m) && !isLegalStill,
         _hasLegalCase: hasOpenLegalCase(m.lead_id),
+        _openStop: !!m.open_stop && !m.bounced_today,
       };
     });
   } else if (history[viewDate]) {
@@ -3926,6 +3976,7 @@ function buildRow(m, editable) {
   const noteInd = (editable ? hasAnyNote(m) : pastDateHasNotes(m)) ? '<span class="indicator notes" title="has notes"></span>' : '';
   
   let chips = "";
+  if (m._openStop) chips += '<span class="openstop-chip" title="Unresolved stop carried forward from ' + (m.open_stop_date?fmtDate(m.open_stop_date):'a prior day') + ' — not on today\'s report, but still open">⛔ OPEN STOP</span>';
   if (m._displayClass === "legal-still") chips += '<span class="legal-still-chip">LEGAL</span>';
   else if (m._inflight && editable) {
     // On today's view, the in-flight chip pairs with the live Resolve button on the right.
@@ -5320,7 +5371,7 @@ async function beaconBoot(){
   initTheme();
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v82 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  console.log("%c BEACON v83 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
 // Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0
