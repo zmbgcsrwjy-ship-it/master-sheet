@@ -56,8 +56,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .topbar-left h2{font-size:15px;font-weight:700}
 .topbar-left p{font-size:12px;color:var(--text3);margin-top:2px}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap}
-.content{padding:24px;flex:1;overflow:hidden;display:flex;flex-direction:column}
-#notice{flex-shrink:0}
+.content{padding:24px;flex:1;overflow-y:auto}
 
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:500}
@@ -71,7 +70,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .btn-sm{padding:4px 9px;font-size:11px}
 
 /* METRICS */
-.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px;flex-shrink:0}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px}
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
 .metric-card .lbl{font-size:10px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
 .metric-card .val{font-size:24px;font-weight:700;line-height:1}
@@ -79,17 +78,15 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .val-green{color:var(--green)}.val-red{color:var(--red)}.val-amber{color:var(--amber)}.val-blue{color:var(--blue)}
 
 /* PANEL */
-.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
-.panel-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.panel-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .panel-header h3{font-size:13px;font-weight:700}
 .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .filters select,.filters input{font-size:12px;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text);outline:none}
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 
 /* TABLE */
-.table-wrap{overflow:auto;flex:1;min-height:0} /* build 32: flex-filled, only scroller — no page scroll */
-#pif-body{flex:1;overflow:auto;min-height:0}
-#pif-body thead th{position:sticky;top:0;z-index:3}
+.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 29: bounded so headers pin while the list scrolls */
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
 /* build 29: density modes — Compact fits the full sheet on a 1080p screen */
@@ -275,7 +272,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 32 — one-page scroll · weekly purple everywhere</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 33 — revert scroll · term after %paid · frozen contact card</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -424,10 +421,10 @@ select.badge:hover{filter:brightness(1.2)}
             <th class="sortable" onclick="sortDefaults('merchant')">Merchant<span class="sort-ind" data-k="merchant"></span></th>
             <th class="sortable" onclick="sortDefaults('rep')">Rep<span class="sort-ind" data-k="rep"></span></th>
             <th class="sortable" onclick="sortDefaults('funded')">Funded<span class="sort-ind" data-k="funded"></span></th>
-            <th class="sortable" onclick="sortDefaults('term')">Term<span class="sort-ind" data-k="term"></span></th>
             <th class="sortable" onclick="sortDefaults('rtr')">RTR<span class="sort-ind" data-k="rtr"></span></th>
             <th class="sortable" onclick="sortDefaults('balance')">Balance<span class="sort-ind" data-k="balance"></span></th>
             <th class="sortable" onclick="sortDefaults('pct_paid')">% Paid<span class="sort-ind" data-k="pct_paid"></span></th>
+            <th class="sortable" onclick="sortDefaults('term')">Term<span class="sort-ind" data-k="term"></span></th>
             <th class="sortable" onclick="sortDefaults('max_loss')">Max Loss<span class="sort-ind" data-k="max_loss"></span></th>
             <th class="sortable" onclick="sortDefaults('pnl')">PNL<span class="sort-ind" data-k="pnl"></span></th>
             <th></th></tr></thead><tbody id="tbody-defaults"></tbody></table></div>
@@ -1356,7 +1353,7 @@ function toggleContact(el, ev){
     if(c.e) bits.push('<span style="'+pill+'">✉ <a href="mailto:'+hx(String(c.e).trim())+'" style="color:#539bf5;text-decoration:none" onclick="event.stopPropagation()">'+hx(String(c.e).trim().toLowerCase())+'</a></span>');
     if(!bits.length) return;
     var det=document.createElement('tr'); det.className='contact-row';
-    det.innerHTML='<td colspan="30" style="padding:7px 10px;background:transparent;border:0"><div style="position:sticky;left:14px;width:fit-content;display:inline-flex;align-items:center;gap:8px;background:#151e31;border:1px solid #2c3a57;border-left:3px solid #539bf5;border-radius:10px;padding:8px 12px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.3)">'+bits.join('')+'</div></td>';
+    det.innerHTML='<td colspan="30" style="position:sticky;left:0;z-index:4;width:auto;min-width:0;max-width:none;overflow:visible;padding:7px 14px;background:transparent;border:0"><div style="width:fit-content;display:inline-flex;align-items:center;gap:8px;background:#151e31;border:1px solid #2c3a57;border-left:3px solid #539bf5;border-radius:10px;padding:8px 12px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.3)">'+bits.join('')+'</div></td>';
     tr.after(det);
   }catch(err){ console.error('contact card:', err); }
 }
@@ -1594,8 +1591,8 @@ function renderDefaults(){
     <td style="font-size:11px;color:var(--text3)">${fmtDate(d.date_funded)}</td>
     <td style="font-weight:600">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}</td>
     <td style="font-size:11px;color:var(--text2)">${d.rep||'—'}</td>
-    <td>${fmt$(d.funded)}</td><td style="white-space:nowrap">${d.term?(d.frequency==='Weekly'?'<span class="wk-name">'+d.term+' weeks</span>':d.term+' days'):'—'}</td><td>${fmt$(d.rtr)}</td><td>${fmt$(d.balance)}</td>
-    <td>${(d.pct_paid*100).toFixed(1)}%</td>
+    <td>${fmt$(d.funded)}</td><td>${fmt$(d.rtr)}</td><td>${fmt$(d.balance)}</td>
+    <td>${(d.pct_paid*100).toFixed(1)}%</td><td style="white-space:nowrap">${d.term?(d.frequency==='Weekly'?'<span class="wk-name">'+d.term+' weeks</span>':d.term+' days'):'—'}</td>
     <td style="color:var(--red)">${fmt$(d.max_loss||0)}</td>
     <td class="${pnl>=0?'pnl-pos':'pnl-neg'}">${fmt$(pnl)}</td>
     <td><button class="btn btn-sm" onclick='openModal(deals.find(x=>x._id==="${esc(d._id)}"))'>✏️</button></td>
