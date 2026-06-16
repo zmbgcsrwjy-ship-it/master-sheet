@@ -184,7 +184,7 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
 .rep-deal-card{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:var(--radius-sm);background:var(--bg3);margin-bottom:8px;gap:16px;flex-wrap:wrap;border:1px solid var(--border)}
 .rep-deal-card:last-child{margin-bottom:0}
 .pif-table{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;border:1px solid var(--border);border-radius:var(--radius-sm)}
-.pif-table td{padding:9px 16px;border-top:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pif-table td{padding:5px 12px;border-top:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pif-table tr:not(.pif-grouprow):hover td{background:var(--bg-hover,rgba(255,255,255,.02))}
 .pif-grouprow td{padding:0;border-top:1px solid var(--border)}
 .pif-grouprow-inner{padding:10px 16px;background:var(--bg3);display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700}
@@ -193,8 +193,9 @@ tr.month-break td{border-top:2px solid var(--blue)!important}
 .pif-card-icn{opacity:.5;font-size:10px;margin-left:5px}
 .pif-dim{color:var(--text3)}
 .pif-num{text-align:right}
-.pif-table th{padding:9px 16px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap}
+.pif-table th{padding:7px 12px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;border-bottom:1px solid var(--border);background:var(--bg2);white-space:nowrap}
 .pif-table th.pif-num{text-align:right}
+.pif-table td.pif-c,.pif-table th.pif-c{text-align:center}
 .pif-note-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 7px;font-size:12px;font-family:inherit}
 .pif-note-input:focus{outline:none;border-color:var(--blue)}
 .pif-paid{color:var(--green);font-weight:700;text-align:right;font-size:11px;letter-spacing:.03em}
@@ -219,9 +220,12 @@ select.badge:hover{filter:brightness(1.2)}
 .ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
 
 /* Build 29: frozen Date Funded + Name columns (All Deals), inline kickback editing */
-#panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);min-width:78px}
+#panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);width:106px;min-width:106px;max-width:106px;overflow:hidden}
 #panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
 #panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
+/* build 31: tighten REFI rows + center the Start Date column */
+#panel-renewal tbody td{padding:6px 14px}
+#panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
 .kb-edit{width:74px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px}
 .kb-edit:focus{border-color:var(--blue);outline:none}
@@ -268,7 +272,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 30 — refi sort · PIF list · weekly purple · meter</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 31 — frozen-col fix · refi+pif spacing</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -405,7 +409,7 @@ select.badge:hover{filter:brightness(1.2)}
         </div>
 
         <div class="panel" id="panel-pif" style="display:none">
-          <div class="panel-header"><h3>Paid in Full — renewal pipeline</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap"><select id="pif-rep-filter" onchange="renderPif()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All reps</option></select><span>Zero balance, no refi taken · prime renewal targets</span></span></div>
+          <div class="panel-header"><h3>Paid in Full — renewal pipeline</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap"><select id="pif-rep-filter" onchange="renderPif()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All reps</option></select><select id="pif-iso-filter" onchange="renderPif()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select><span>Zero balance, no refi taken · prime renewal targets</span></span></div>
           <div id="pif-body"></div>
           <div id="pif-empty" class="empty-state" style="display:none"><div class="icon">💰</div><h3>No PIF deals</h3><p>Deals land here when they pay to zero without a refi.</p></div>
         </div>
@@ -1555,7 +1559,7 @@ function renderRenewal(){
     <td style="white-space:nowrap">${fmtDate(d.date_funded)}</td>
     <td style="font-weight:600">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}${bounceBadges(d)}</td>
     <td>${fmt$(d.balance)}</td>
-    <td style="color:var(--green);font-weight:700">${Math.round((d.pct_paid||0)*100)}%</td>
+    <td class="${(d.pnl||0)>=0?'val-green':(d.pct_paid||0)>=0.5?'val-amber':'val-red'}" style="font-weight:700">${Math.round((d.pct_paid||0)*100)}%</td>
     <td>${d.rep||'—'}</td>
     <td>${d.iso||'—'}</td>
     <td style="color:var(--text2)">${d.lead_id||'—'}</td>
@@ -1602,15 +1606,17 @@ function sortPif(key){
 function renderPif(){
   const all=deals.filter(d=>d.status==='PIF');
   const body=document.getElementById('pif-body'),empty=document.getElementById('pif-empty');
-  const repSel=document.getElementById('pif-rep-filter');
-  // rep filter built from the PIF pool, preserving current selection
-  const keepRep=repSel?repSel.value:'';
+  const repSel=document.getElementById('pif-rep-filter'),isoSel=document.getElementById('pif-iso-filter');
+  // rep + ISO filters built from the PIF pool, preserving selections
+  const keepRep=repSel?repSel.value:'',keepIso=isoSel?isoSel.value:'';
   const reps=[...new Set(all.map(d=>d.rep||'Unassigned'))].sort();
+  const isos=[...new Set(all.map(d=>d.iso||'Unassigned'))].sort();
   if(repSel) repSel.innerHTML='<option value="">All reps</option>'+reps.map(r=>`<option${r===keepRep?' selected':''}>${r}</option>`).join('');
+  if(isoSel) isoSel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option${i===keepIso?' selected':''}>${i}</option>`).join('');
   if(!all.length){body.innerHTML='';empty.style.display='';return;}
   empty.style.display='none';
-  const fRep=repSel?repSel.value:'';
-  let rows=all.filter(d=>!fRep||(d.rep||'Unassigned')===fRep);
+  const fRep=repSel?repSel.value:'',fIso=isoSel?isoSel.value:'';
+  let rows=all.filter(d=>(!fRep||(d.rep||'Unassigned')===fRep)&&(!fIso||(d.iso||'Unassigned')===fIso));
   const k=pifSort.key,dir=pifSort.dir;
   rows.sort((a,b)=>{
     let va,vb;
@@ -1622,14 +1628,15 @@ function renderPif(){
   });
   const hesc=s=>String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const cdata=d=>hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):'';
-  if(!rows.length){body.innerHTML='<div style="color:var(--text3);text-align:center;padding:24px">No PIF deals for this rep.</div>';return;}
+  if(!rows.length){body.innerHTML='<div style="color:var(--text3);text-align:center;padding:24px">No PIF deals match these filters.</div>';return;}
   const head=`<tr>
+    <th class="sortable pif-c" onclick="sortPif('date_funded')">Date Funded<span class="sort-ind" data-k="date_funded"></span></th>
     <th class="sortable" onclick="sortPif('merchant')">Merchant<span class="sort-ind" data-k="merchant"></span></th>
-    <th class="sortable pif-num" onclick="sortPif('funded')">Funded<span class="sort-ind" data-k="funded"></span></th>
-    <th class="sortable" onclick="sortPif('factor')">Factor<span class="sort-ind" data-k="factor"></span></th>
-    <th class="sortable" onclick="sortPif('term')">Term<span class="sort-ind" data-k="term"></span></th>
-    <th class="sortable pif-num" onclick="sortPif('feepct')">Bank Fees %<span class="sort-ind" data-k="feepct"></span></th>
-    <th class="sortable" onclick="sortPif('lead_id')">Lead ID<span class="sort-ind" data-k="lead_id"></span></th>
+    <th class="sortable pif-c" onclick="sortPif('funded')">Funded<span class="sort-ind" data-k="funded"></span></th>
+    <th class="sortable pif-c" onclick="sortPif('factor')">Factor<span class="sort-ind" data-k="factor"></span></th>
+    <th class="sortable pif-c" onclick="sortPif('term')">Term<span class="sort-ind" data-k="term"></span></th>
+    <th class="sortable pif-c" onclick="sortPif('feepct')">Bank Fees %<span class="sort-ind" data-k="feepct"></span></th>
+    <th class="sortable pif-c" onclick="sortPif('lead_id')">Lead ID<span class="sort-ind" data-k="lead_id"></span></th>
     <th>Notes</th>
   </tr>`;
   const bodyRows=rows.map(d=>{
@@ -1638,20 +1645,22 @@ function renderPif(){
     const termStr=d.term?(d.frequency==='Weekly'?d.term+' weeks':d.term+' days'):'—';
     const nm=d.frequency==='Weekly'?`<span class="wk-name">${d.merchant}</span>`:d.merchant;
     return `<tr>
+      <td class="pif-c pif-dim">${fmtDate(d.date_funded)}</td>
       <td class="pif-name" onclick="toggleContact(this,event)" data-contact="${cdata(d)}" style="cursor:${hasContact(d)?'pointer':'default'}">${nm}${hasContact(d)?'<span class="pif-card-icn">📇</span>':''}${bounceBadges(d)}</td>
-      <td class="pif-num">${fmt$(d.funded)}</td>
-      <td class="pif-dim">${d.factor||'—'}</td>
-      <td class="pif-dim">${termStr}</td>
-      <td class="pif-num">${feeStr}</td>
-      <td class="pif-dim">${d.lead_id||'—'}</td>
+      <td class="pif-c">${fmt$(d.funded)}</td>
+      <td class="pif-c pif-dim">${d.factor||'—'}</td>
+      <td class="pif-c pif-dim">${termStr}</td>
+      <td class="pif-c">${feeStr}</td>
+      <td class="pif-c pif-dim">${d.lead_id||'—'}</td>
       <td><input class="pif-note-input" value="${hesc(d.notes)}" placeholder="Add note…" onclick="event.stopPropagation()" onchange="saveNote('${d._id}',this.value)" title="Saves on enter/blur — synced for both of you"></td>
     </tr>`;
   }).join('');
   body.innerHTML=`<table class="pif-table"><colgroup>
-    <col style="width:24%"><col style="width:13%"><col style="width:10%"><col style="width:13%"><col style="width:11%"><col style="width:11%"><col style="width:18%">
+    <col style="width:11%"><col style="width:22%"><col style="width:11%"><col style="width:8%"><col style="width:12%"><col style="width:10%"><col style="width:10%"><col style="width:16%">
   </colgroup><thead>${head}</thead><tbody>${bodyRows}</tbody></table>`;
   document.querySelectorAll('#panel-pif .sort-ind').forEach(s=>{ s.textContent=(s.dataset.k===k)?(dir>0?' ▲':' ▼'):''; });
 }
+
 async function saveNote(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
   const v=(val||'').trim();
