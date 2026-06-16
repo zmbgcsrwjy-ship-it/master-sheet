@@ -19,7 +19,7 @@
   --radius:8px;--radius-sm:5px;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
-body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+body{background:var(--bg);color:var(--text);height:100vh;overflow:hidden;display:flex;flex-direction:column}
 
 /* SETUP */
 #setup-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem}
@@ -34,7 +34,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 
 /* APP */
 #app{display:none;flex:1;flex-direction:column}
-.shell{display:flex;flex:1;min-height:100vh}
+.shell{display:flex;flex:1;min-height:0}
 .sidebar{width:235px;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;transition:width .2s ease,padding .2s ease}
 .sidebar.collapsed{width:0;overflow:hidden;border-right:none}
 .sb-toggle{position:sticky;top:50vh;align-self:flex-start;flex-shrink:0;width:18px;height:64px;background:var(--bg3);border:1px solid var(--border);border-left:none;border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:10px;z-index:50;user-select:none}
@@ -51,12 +51,13 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .sidebar-bottom{padding:12px;border-top:1px solid var(--border)}
 .sidebar-chip{font-size:11px;color:var(--text3);padding:5px 8px;cursor:pointer;border-radius:var(--radius-sm);transition:background .15s;display:flex;align-items:center;gap:5px}
 .sidebar-chip:hover{background:var(--bg3);color:var(--text2)}
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.topbar{padding:16px 24px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.topbar{padding:16px 24px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0}
 .topbar-left h2{font-size:15px;font-weight:700}
 .topbar-left p{font-size:12px;color:var(--text3);margin-top:2px}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap}
-.content{padding:24px;flex:1;overflow-y:auto}
+.content{padding:24px;flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+#notice{flex-shrink:0}
 
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:500}
@@ -70,7 +71,7 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .btn-sm{padding:4px 9px;font-size:11px}
 
 /* METRICS */
-.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px}
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px;flex-shrink:0}
 .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px}
 .metric-card .lbl{font-size:10px;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
 .metric-card .val{font-size:24px;font-weight:700;line-height:1}
@@ -78,15 +79,17 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .val-green{color:var(--green)}.val-red{color:var(--red)}.val-amber{color:var(--amber)}.val-blue{color:var(--blue)}
 
 /* PANEL */
-.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
-.panel-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+.panel-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;flex-shrink:0}
 .panel-header h3{font-size:13px;font-weight:700}
 .filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .filters select,.filters input{font-size:12px;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text);outline:none}
 .filters select:focus,.filters input:focus{border-color:var(--blue)}
 
 /* TABLE */
-.table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 29: bounded so headers pin while the list scrolls */
+.table-wrap{overflow:auto;flex:1;min-height:0} /* build 34: flex-filled scroll region — header pins, page doesn't scroll */
+#pif-body{flex:1;overflow:auto;min-height:0}
+#pif-body thead th{position:sticky;top:0;z-index:3}
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:collapse;font-size:12px;min-width:1100px}
 /* build 29: density modes — Compact fits the full sheet on a 1080p screen */
@@ -220,12 +223,13 @@ select.badge:hover{filter:brightness(1.2)}
 .ovr-dot{display:inline-block;margin-left:4px;font-size:9px;vertical-align:middle;cursor:help}
 
 /* Build 29: frozen Date Funded + Name columns (All Deals), inline kickback editing */
-#panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);width:106px;min-width:106px;max-width:106px;overflow:hidden}
+#panel-book thead th:nth-child(1),#panel-book tbody td:nth-child(1){position:sticky;left:0;z-index:2;background:var(--bg2);width:106px;min-width:106px;max-width:106px;overflow:hidden;text-align:center}
 #panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
 #panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
 /* build 31: tighten REFI rows + center the Start Date column */
 #panel-renewal tbody td{padding:6px 14px}
 #panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
+#panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
 .kb-edit{width:74px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px}
 .kb-edit:focus{border-color:var(--blue);outline:none}
@@ -272,7 +276,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 33 — revert scroll · term after %paid · frozen contact card</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 34 — table-scroll layout · length sort · date headers · pinned card</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -401,7 +405,7 @@ select.badge:hover{filter:brightness(1.2)}
           </span></div>
           <div class="table-wrap" id="renewal-table-wrap">
             <table>
-              <thead><tr><th class="sortable" onclick="sortRenewal('date_funded')">Start Date<span class="sort-ind" data-k="date_funded"></span></th><th>Merchant</th><th class="sortable" onclick="sortRenewal('balance')">Balance<span class="sort-ind" data-k="balance"></span></th><th class="sortable" onclick="sortRenewal('pct_paid')">% Paid<span class="sort-ind" data-k="pct_paid"></span></th><th>Rep</th><th>ISO</th><th>Lead ID</th></tr></thead>
+              <thead><tr><th class="sortable" onclick="sortRenewal('date_funded')">Date Funded<span class="sort-ind" data-k="date_funded"></span></th><th>Merchant</th><th class="sortable" onclick="sortRenewal('balance')">Balance<span class="sort-ind" data-k="balance"></span></th><th class="sortable" onclick="sortRenewal('pct_paid')">% Paid<span class="sort-ind" data-k="pct_paid"></span></th><th>Rep</th><th>ISO</th><th>Lead ID</th></tr></thead>
               <tbody id="renewal-body"></tbody>
             </table>
           </div>
@@ -417,7 +421,7 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="panel" id="panel-defaults" style="display:none">
           <div class="panel-header"><h3>Defaults</h3></div>
           <div class="table-wrap"><table><thead><tr>
-            <th class="sortable" onclick="sortDefaults('date_funded')">Date<span class="sort-ind" data-k="date_funded"></span></th>
+            <th class="sortable" onclick="sortDefaults('date_funded')">Date Funded<span class="sort-ind" data-k="date_funded"></span></th>
             <th class="sortable" onclick="sortDefaults('merchant')">Merchant<span class="sort-ind" data-k="merchant"></span></th>
             <th class="sortable" onclick="sortDefaults('rep')">Rep<span class="sort-ind" data-k="rep"></span></th>
             <th class="sortable" onclick="sortDefaults('funded')">Funded<span class="sort-ind" data-k="funded"></span></th>
@@ -1339,9 +1343,10 @@ function toggleContact(el, ev){
     if(!raw) return;
     var c = JSON.parse(decodeURIComponent(raw));
     var tr = el.closest('tr'); if(!tr) return;
+    var detachSync = function(row){ if(row && row._cScroller && row._cSync){ row._cScroller.removeEventListener('scroll', row._cSync); row._cScroller=null; row._cSync=null; } };
     var nxt = tr.nextElementSibling;
-    if(nxt && nxt.classList && nxt.classList.contains('contact-row')){ nxt.remove(); return; }
-    document.querySelectorAll('.contact-row').forEach(function(x){ x.remove(); });
+    if(nxt && nxt.classList && nxt.classList.contains('contact-row')){ detachSync(nxt); nxt.remove(); return; }
+    document.querySelectorAll('.contact-row').forEach(function(x){ detachSync(x); x.remove(); });
     var hx=function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
     var tc=function(s){ return String(s||'').toLowerCase().replace(/(^|[\s\-'])[a-z]/g, function(m){ return m.toUpperCase(); }); };
     var fp=function(s){ var d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return d.length===10 ? '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6) : String(s||''); };
@@ -1353,8 +1358,17 @@ function toggleContact(el, ev){
     if(c.e) bits.push('<span style="'+pill+'">✉ <a href="mailto:'+hx(String(c.e).trim())+'" style="color:#539bf5;text-decoration:none" onclick="event.stopPropagation()">'+hx(String(c.e).trim().toLowerCase())+'</a></span>');
     if(!bits.length) return;
     var det=document.createElement('tr'); det.className='contact-row';
-    det.innerHTML='<td colspan="30" style="position:sticky;left:0;z-index:4;width:auto;min-width:0;max-width:none;overflow:visible;padding:7px 14px;background:transparent;border:0"><div style="width:fit-content;display:inline-flex;align-items:center;gap:8px;background:#151e31;border:1px solid #2c3a57;border-left:3px solid #539bf5;border-radius:10px;padding:8px 12px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.3)">'+bits.join('')+'</div></td>';
+    det.innerHTML='<td colspan="30" style="padding:7px 14px;background:transparent;border:0"><div class="contact-card-inner" style="width:fit-content;display:inline-flex;align-items:center;gap:8px;background:#151e31;border:1px solid #2c3a57;border-left:3px solid #539bf5;border-radius:10px;padding:8px 12px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.3);will-change:transform">'+bits.join('')+'</div></td>';
     tr.after(det);
+    // build 34: sticky inside a table cell is unreliable, so pin the card by syncing it to the scroll container's scrollLeft
+    var scroller = el.closest('.table-wrap') || el.closest('#pif-body');
+    if(scroller){
+      var card = det.querySelector('.contact-card-inner');
+      var sync = function(){ if(card) card.style.transform = 'translateX('+scroller.scrollLeft+'px)'; };
+      det._cScroller = scroller; det._cSync = sync;
+      scroller.addEventListener('scroll', sync);
+      sync();
+    }
   }catch(err){ console.error('contact card:', err); }
 }
 
@@ -1474,6 +1488,7 @@ function getFiltered(){
   }).sort((a,b)=>{
     let av=a[sortCol]??0,bv=b[sortCol]??0;
     if(sortCol==='date_funded') return(new Date(av)-new Date(bv))*sortDir;
+    if(sortCol==='term'){ const na=(a.frequency==='Weekly'?(a.term||0)*5:(a.term||0)), nb=(b.frequency==='Weekly'?(b.term||0)*5:(b.term||0)); return (na-nb)*sortDir; }
     if(typeof av==='string') return av.localeCompare(bv)*sortDir;
     return(av-bv)*sortDir;
   });
@@ -1582,6 +1597,7 @@ function renderDefaults(){
   defs.sort((a,b)=>{
     let va=a[k], vb=b[k];
     if(k==='date_funded'){ va=new Date(va||0); vb=new Date(vb||0); }
+    else if(k==='term'){ va=a.frequency==='Weekly'?(a.term||0)*5:(a.term||0); vb=b.frequency==='Weekly'?(b.term||0)*5:(b.term||0); }
     else if(typeof va==='string'||typeof vb==='string'){ va=String(va||'').toLowerCase(); vb=String(vb||'').toLowerCase(); return va<vb?-1*dir:va>vb?dir:0; }
     return ((va||0)-(vb||0))*dir;
   });
@@ -1622,6 +1638,7 @@ function renderPif(){
   rows.sort((a,b)=>{
     let va,vb;
     if(k==='date_funded'){ va=new Date(a.date_funded||0); vb=new Date(b.date_funded||0); }
+    else if(k==='term'){ va=a.frequency==='Weekly'?(a.term||0)*5:(a.term||0); vb=b.frequency==='Weekly'?(b.term||0)*5:(b.term||0); }
     else if(k==='feepct'){ va=a.funded?(a.bank_fees/a.funded):0; vb=b.funded?(b.bank_fees/b.funded):0; }
     else if(k==='merchant'||k==='lead_id'){ va=String(a[k]||'').toLowerCase(); vb=String(b[k]||'').toLowerCase(); return va<vb?-1*dir:va>vb?dir:0; }
     else { va=a[k]; vb=b[k]; }
