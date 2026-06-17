@@ -277,7 +277,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 38 — weekly/daily payment now real $ (RTR ÷ payment count)</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 39 — lead-identity guard: deals keyed by Lead ID + date, refi links date-checked</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -966,11 +966,15 @@ async function importCrmExport(file){
       const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
       const comm=money(r[C.comm]);
       const ml=calcML(funded,bookpct,fees,comm);
-      const priors=deals.filter(x=>squish(x.merchant)===squish(merchant)&&['NEW','ACTIVE','PIF'].includes(x.status));
+      // Refi detection with date cross-check (build 39): bind to the most-recent prior that
+      // PRE-DATES this deal, by date funded — never just newest-by-name, which can cross a chain.
+      const incDate=new Date(mdy(r[C.start])||Date.now());
+      let priors=deals.filter(x=>squish(x.merchant)===squish(merchant)&&['NEW','ACTIVE','PIF'].includes(x.status));
+      priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+      const validPriors=priors.filter(p=>new Date(p.date_funded||0)<=incDate);
       let status='NEW', dealtype='NEW', prev='', prior=null;
-      if(priors.length){
-        priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
-        prior=priors[0]; status='ACTIVE'; dealtype='REFI'; prev=prior.lead_id||'';
+      if(validPriors.length){
+        prior=validPriors[0]; status='ACTIVE'; dealtype='REFI'; prev=prior.lead_id||'';
       }
       const fields={Merchant:merchant, LeadID:String(r[C.lead]||'').trim(), DateFunded:mdy(r[C.start]),
         Funded:funded, RTR:rtr, Factor:funded? Math.round(rtr/funded*1000)/1000 : 0,
@@ -1255,10 +1259,27 @@ async function saveDeal() {
   let _prior=null;
   if(!editingId){
     const squish=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+    // LEAD-IDENTITY GUARD (build 39): a deal's identity is its Lead ID + date funded, never its name.
+    // If this Lead ID already exists in the book, this is NOT a new deal — block the cross before it happens.
+    const incomingLead=String(deal.lead_id||'').trim();
+    if(incomingLead){
+      const dupe=deals.find(x=>String(x.lead_id||'').trim()===incomingLead);
+      if(dupe){
+        showModalNotice('Lead ID '+incomingLead+' already exists in the book (on "'+dupe.merchant+'", funded '+fmtDate(dupe.date_funded)+'). A Lead ID identifies one deal — it can\'t be added twice. If this is a correction, edit that deal instead.','error');
+        const b=document.getElementById('save-btn'); b.disabled=false; b.innerHTML='✓ Add to book'; return;
+      }
+    }
     const priors=deals.filter(x=>squish(x.merchant)===squish(deal.merchant)&&['NEW','ACTIVE','PIF'].includes(x.status));
     if(priors.length){
+      // Refi the most-recent OPEN deal in the chain. Cross-check by date: the prior must pre-date
+      // this funding — a "prior" funded AFTER this deal is a data error, not a real predecessor.
       priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
-      _prior=priors[0];
+      const incDate=new Date(deal.date_funded||Date.now());
+      const validPriors=priors.filter(p=>new Date(p.date_funded||0)<=incDate);
+      _prior=(validPriors.length?validPriors:priors)[0];
+      if(validPriors.length===0){
+        showNotice('Heads up: every open "'+deal.merchant+'" deal was funded AFTER this one ('+fmtDate(deal.date_funded)+'). Linking to the newest, but check the dates — a refi should post-date the deal it replaces.','warn',11000);
+      }
       if(_prior.merchant!==deal.merchant){
         // QB-name guard (build 29): one spelling per merchant, forever. A refi that
         // arrives as "PENDLETON PAWN" when the book says "PENDLETONPAWN" silently
