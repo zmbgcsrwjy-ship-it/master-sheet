@@ -279,7 +279,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 41 — month-end PNL freeze + negative-zero fix + closed-month button state</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 42 — close-out targets prior completed month (close Oct while in Nov)</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1915,19 +1915,22 @@ async function maybeFreezePriorMonth(){
 
 async function computePnl(){
   try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
-  const curYM = new Date().toISOString().slice(0,7);
+  const liveYM = new Date().toISOString().slice(0,7);
+  // The accounting month we work/close is the prior COMPLETED month — you close out October
+  // during November, after legal fees arrive. The current in-progress month is never closed.
+  const curYM = addMonthsYM(liveYM, -1);
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
   // 5-month HHC grace: a funding month enters the payout 5 months after funding.
   // After grace, the month SETTLES in full each close-out: losses deduct, recoveries credit back.
   // pnlLedger.paid = net settled to date (can be negative).
-  // If we've rolled into a new month but haven't closed the prior one, the prior month's
-  // cohorts read their FROZEN month-end PNL (not live balances contaminated by new-month payments).
-  const priorYM = addMonthsYM(curYM, -1);
-  const priorClosed = pnlSnapshots.some(s=>s.month===priorYM);
-  const useFreeze = !priorClosed;  // freeze applies until the prior month is formally closed
+  // The accounting month (curYM) is the one being closed. Its cohorts read their FROZEN
+  // month-end PNL so payments arriving in the live month can't contaminate it while we wait
+  // on legal fees. Freeze is keyed by the accounting month itself (frozen at its month-end).
+  const acctClosed = pnlSnapshots.some(s=>s.month===curYM);
+  const useFreeze = !acctClosed;
   const cohorts = Object.keys(groups).sort().map(ym=>{
-    const frozen = useFreeze ? pnlFreeze[ym+'|'+priorYM] : null;
+    const frozen = useFreeze ? pnlFreeze[ym+'|'+curYM] : null;
     const pnl = frozen ? frozen.pnl : groups[ym].reduce((s,d)=>s+(d.pnl||0),0);
     const ourEnd = pnl*HOUSE_SPLIT;
     const paid = pnlLedger[ym]?pnlLedger[ym].paid:0;
@@ -1996,9 +1999,9 @@ async function renderPnl(historyMonth){
   }
   const p=await computePnl();
   const closed=pnlSnapshots.some(s=>s.month===p.month);
-  title.textContent='PNL — '+monthLabelFull(p.month)+(closed?' (already closed)':' (in progress)');
+  title.textContent='PNL — '+monthLabelFull(p.month)+(closed?' (closed)':' (ready to close)');
   if(closed){ btn.style.display=''; btn.disabled=true; btn.textContent='✓ '+monthLabelFull(p.month)+' closed'; btn.classList.add('btn-dim'); }
-  else { btn.style.display=''; btn.disabled=false; btn.textContent='🔒 Close out month'; btn.classList.remove('btn-dim'); }
+  else { btn.style.display=''; btn.disabled=false; btn.textContent='🔒 Close out '+monthLabelFull(p.month); btn.classList.remove('btn-dim'); }
   body.innerHTML=pnlRowsHtml(p);
 }
 
