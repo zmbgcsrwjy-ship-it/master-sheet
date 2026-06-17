@@ -66,6 +66,8 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .btn-blue:hover{opacity:.85;background:var(--blue-bg)}
 .btn-green{background:var(--green-bg);border-color:var(--green-border);color:var(--green)}
 .btn-green:hover{opacity:.85;background:var(--green-bg)}
+.btn-dim{opacity:.55;cursor:default!important}
+.btn-dim:hover{opacity:.55}
 .btn-red{background:var(--red-bg);border-color:var(--red-border);color:var(--red)}
 .btn-sm{padding:4px 9px;font-size:11px}
 
@@ -277,7 +279,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 40 — Lead ID column added to All Deals (after Payment)</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 41 — month-end PNL freeze + negative-zero fix + closed-month button state</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -561,7 +563,7 @@ let deals = [];
 let editingId = null; // airtable record id when editing
 let sortCol = 'date_funded', sortDir = -1, currentView = 'book';
 
-const fmt$ = n => '$'+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt$ = n => { let v=Number(n||0); if(Math.abs(v)<0.005) v=0; return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fmtK = n => { const v=Number(n||0), a=Math.abs(v), s=v<0?'-':''; return a>=1e6 ? s+'$'+(a/1e6).toFixed(3)+'M' : a>=1e3 ? s+'$'+(a/1e3).toFixed(0)+'K' : fmt$(v); };
 const fmtDate = iso => { if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${parseInt(m)}/${parseInt(d)}/${y}`; };
 const calcML = (f,bp,fees,comm) => (f*bp/100)-fees+(comm*bp/100);
@@ -1464,6 +1466,10 @@ async function handleDailyReport(input) {
       });
       if(ambiguous>0) showNotice(ambiguous+' row'+(ambiguous!==1?'s':'')+' skipped — same LeadID on multiple deals and amounts did not disambiguate. Update those balances manually.','warn',9000);
       if(!updates.length){ showNotice('No matching active deals found in report.','warn'); return; }
+      // MONTH-END FREEZE (build 41): if this is the first sync of a new accounting month and the
+      // prior month hasn't been closed yet, freeze each cohort's current (pre-sync) book-PNL as the
+      // prior month-end value. Late payments in the new month then can't move the old month's PNL.
+      try { await maybeFreezePriorMonth(); } catch(e){ console.warn('month-end freeze skipped:', e); }
       showLoading('Syncing '+updates.length+' deals to Airtable...');
       // Batch update in groups of 10 (Airtable limit)
       for(let i=0;i<updates.length;i+=10){
@@ -1848,10 +1854,19 @@ async function ensurePnlTables(){
     {name:'SalPayout', type:'number', options:{precision:2}},
     {name:'MattPayout', type:'number', options:{precision:2}},
     {name:'DataJSON', type:'multilineText'}]);
+  // Month-end PNL freeze (build 41): when a new accounting month begins, each funding
+  // cohort's book-PNL is frozen as-of the prior month-end, so payments that land in the
+  // new month (while we wait on legal fees before close-out) can't contaminate the old month.
+  if(!have.has('PnlFreeze')) await mk('PnlFreeze', [
+    {name:'Cohort', type:'singleLineText'},     // funding month YYYY-MM
+    {name:'FrozenForMonth', type:'singleLineText'}, // the accounting month it's frozen as-of (the month that just ended)
+    {name:'FrozenPnl', type:'number', options:{precision:2}},
+    {name:'FrozenAt', type:'singleLineText'}]);
 }
 
+let pnlFreeze = {};   // 'cohortYM|frozenForYM' -> {_id, pnl}
 async function loadPnlState(){
-  pnlLedger = {}; pnlSnapshots = [];
+  pnlLedger = {}; pnlSnapshots = []; pnlFreeze = {};
   let offset=null;
   do{
     const data = await atFetchT('PnlLedger','GET', offset?`?offset=${offset}`:'');
@@ -1865,6 +1880,37 @@ async function loadPnlState(){
     offset = data.offset;
   } while(offset);
   pnlSnapshots.sort((a,b)=>b.month.localeCompare(a.month));
+  offset=null;
+  do{
+    const data = await atFetchT('PnlFreeze','GET', offset?`?offset=${offset}`:'');
+    data.records.forEach(r=>{ const f=r.fields; if(f.Cohort&&f.FrozenForMonth) pnlFreeze[f.Cohort+'|'+f.FrozenForMonth]={_id:r.id, pnl:f.FrozenPnl||0}; });
+    offset = data.offset;
+  } while(offset);
+}
+
+// Freeze the prior accounting month if we've rolled into a new month and it isn't closed yet.
+// Idempotent: only writes a cohort's freeze once per frozen-month.
+async function maybeFreezePriorMonth(){
+  await loadPnlState();
+  const curYM = new Date().toISOString().slice(0,7);
+  const priorYM = addMonthsYM(curYM, -1);
+  // already closed? then no freeze needed — close-out already locked it.
+  if (pnlSnapshots.some(s=>s.month===priorYM)) return;
+  // group deals by cohort, compute current book-PNL, freeze any cohort not already frozen for priorYM
+  const groups={};
+  deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
+  const toWrite=[];
+  for(const ym of Object.keys(groups)){
+    const key=ym+'|'+priorYM;
+    if(pnlFreeze[key]) continue;  // already frozen for this month-end
+    const pnl=Math.round(groups[ym].reduce((s,d)=>s+(d.pnl||0),0)*100)/100;
+    toWrite.push({fields:{Cohort:ym, FrozenForMonth:priorYM, FrozenPnl:pnl, FrozenAt:new Date().toISOString()}});
+  }
+  for(let i=0;i<toWrite.length;i+=10){
+    const out=await atFetchT('PnlFreeze','POST','',{records:toWrite.slice(i,i+10)});
+    out.records.forEach(r=>{ pnlFreeze[r.fields.Cohort+'|'+r.fields.FrozenForMonth]={_id:r.id, pnl:r.fields.FrozenPnl}; });
+  }
+  if(toWrite.length) showNotice('Froze '+monthLabelFull(priorYM)+' month-end PNL ('+toWrite.length+' cohorts) — new-month payments won\'t affect it until you close out.','info',9000);
 }
 
 async function computePnl(){
@@ -1875,14 +1921,20 @@ async function computePnl(){
   // 5-month HHC grace: a funding month enters the payout 5 months after funding.
   // After grace, the month SETTLES in full each close-out: losses deduct, recoveries credit back.
   // pnlLedger.paid = net settled to date (can be negative).
+  // If we've rolled into a new month but haven't closed the prior one, the prior month's
+  // cohorts read their FROZEN month-end PNL (not live balances contaminated by new-month payments).
+  const priorYM = addMonthsYM(curYM, -1);
+  const priorClosed = pnlSnapshots.some(s=>s.month===priorYM);
+  const useFreeze = !priorClosed;  // freeze applies until the prior month is formally closed
   const cohorts = Object.keys(groups).sort().map(ym=>{
-    const pnl = groups[ym].reduce((s,d)=>s+(d.pnl||0),0);
+    const frozen = useFreeze ? pnlFreeze[ym+'|'+priorYM] : null;
+    const pnl = frozen ? frozen.pnl : groups[ym].reduce((s,d)=>s+(d.pnl||0),0);
     const ourEnd = pnl*HOUSE_SPLIT;
     const paid = pnlLedger[ym]?pnlLedger[ym].paid:0;
     const avail = ourEnd - paid;
     const grace = addMonthsYM(ym,5) > curYM;
     const payable = grace ? 0 : avail;
-    return {ym, label: monthLabel(ym), pnl, ourEnd, paid, avail, grace, graceUntil: addMonthsYM(ym,5), payable};
+    return {ym, label: monthLabel(ym), pnl, ourEnd, paid, avail, grace, graceUntil: addMonthsYM(ym,5), payable, frozen: !!frozen};
   });
   const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid)
     .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback}));
@@ -1897,8 +1949,8 @@ async function computePnl(){
 
 function pnlRowsHtml(p){
   const sec=(label,cls)=>`<tr><td colspan="7" class="pnl-sec ${cls}">${label}</td></tr>`;
-  const money=(v,red)=>`<td class="${red||v<0?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
-  const moneyDiv=(v,red)=>`<td class="pnl-div ${red||v<0?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
+  const money=(v,red)=>`<td class="${red||(v<-0.005)?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
+  const moneyDiv=(v,red)=>`<td class="pnl-div ${red||(v<-0.005)?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
   // tolerate legacy (build 12) snapshots
   const legalOurEnd = p.legalOurEnd!=null ? p.legalOurEnd : (p.legal||0);
   const legalTotal  = p.legalTotal!=null ? p.legalTotal : (p.legal||0);
@@ -1910,7 +1962,8 @@ function pnlRowsHtml(p){
       h+=`<tr class="pnl-grace"><td>${c.label} <span style="font-size:10.5px">· grace until ${monthLabelFull(c.graceUntil)}</span></td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}${money(c.avail)}<td class="pnl-div">—</td><td>—</td></tr>`;
     } else {
       const half=c.payable/2;
-      h+=`<tr><td style="font-weight:600">${c.label}</td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}<td class="${c.avail<0?'pnl-neg':'pnl-pos'}" style="font-weight:700">${fmt$(c.avail)}</td>${moneyDiv(half)}${money(half)}</tr>`;
+      const frz = c.frozen ? ' <span title="Frozen at prior month-end — new-month payments excluded until close-out" style="font-size:9.5px;font-weight:700;color:#6fb0ff;background:rgba(83,155,245,.16);padding:1px 6px;border-radius:8px;margin-left:6px">❄ FROZEN</span>' : '';
+      h+=`<tr><td style="font-weight:600">${c.label}${frz}</td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}<td class="${(c.avail<-0.005)?'pnl-neg':'pnl-pos'}" style="font-weight:700">${fmt$(c.avail)}</td>${moneyDiv(half)}${money(half)}</tr>`;
     }
   });
   h+=sec('KICKBACKS — UPFRONT BANK (100% OURS)','pnl-sec-green');
@@ -1935,7 +1988,7 @@ async function renderPnl(historyMonth){
     const snap=pnlSnapshots.find(s=>s.month===keep);
     if(snap){
       title.textContent='PNL — '+monthLabelFull(snap.month)+' (closed '+(snap.closedAt?snap.closedAt.slice(0,10):'')+')';
-      btn.style.display='none';
+      btn.style.display='none';  // viewing a past closed month from history — no action here
       try{ body.innerHTML=pnlRowsHtml(JSON.parse(snap.data)); }
       catch(e){ body.innerHTML='<tr><td colspan="7" class="pnl-neg">Snapshot data unreadable.</td></tr>'; }
       return;
@@ -1944,7 +1997,8 @@ async function renderPnl(historyMonth){
   const p=await computePnl();
   const closed=pnlSnapshots.some(s=>s.month===p.month);
   title.textContent='PNL — '+monthLabelFull(p.month)+(closed?' (already closed)':' (in progress)');
-  btn.style.display=closed?'none':'';
+  if(closed){ btn.style.display=''; btn.disabled=true; btn.textContent='✓ '+monthLabelFull(p.month)+' closed'; btn.classList.add('btn-dim'); }
+  else { btn.style.display=''; btn.disabled=false; btn.textContent='🔒 Close out month'; btn.classList.remove('btn-dim'); }
   body.innerHTML=pnlRowsHtml(p);
 }
 
