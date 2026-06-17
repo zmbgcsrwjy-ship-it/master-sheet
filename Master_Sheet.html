@@ -277,7 +277,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 39 — lead-identity guard: deals keyed by Lead ID + date, refi links date-checked</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 40 — Lead ID column added to All Deals (after Payment)</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -361,7 +361,7 @@ select.badge:hover{filter:brightness(1.2)}
                 <th onclick="sortBy('term')">Length ↕</th>
                 <th onclick="sortBy('pct_paid')">% Paid ↕</th>
                 <th>Status</th><th>Funder</th><th>Kickback</th>
-                <th>ISO</th><th>Payment</th><th></th>
+                <th>ISO</th><th>Payment</th><th onclick="sortBy('lead_id')">Lead ID ↕</th><th></th>
               </tr></thead>
               <tbody id="tbody"></tbody>
             </table>
@@ -1558,6 +1558,7 @@ function renderTable(){
       <td style="white-space:nowrap"><input class="kb-edit" type="number" step="0.01" value="${d.kickback||''}" placeholder="—" onchange="saveKickbackInline('${d._id}',this.value)" title="${d.kickback_paid?'Already distributed in a closed PNL month — changes will NOT flow to a new payout':'Kickback (upfront bank) — saves on enter/blur'}">${d.kickback_paid?'<span style="font-size:10px;color:var(--green)" title="Distributed">✓</span>':''}</td>
       <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
       <td style="color:var(--text2)">${d.frequency==='Weekly'?'<span class="wk-name">'+fmt$(d.daily_payment)+'/wk</span>':fmt$(d.daily_payment)}</td>
+      <td style="color:var(--text2)">${d.lead_id||'—'}</td>
       <td style="white-space:nowrap">
         <button class="btn btn-sm" onclick='openModal(deals.find(x=>x._id==="${esc(d._id)}"))'>✏️</button>
         <button class="btn btn-sm btn-red" onclick='deleteDeal("${esc(d._id)}","${esc(d.merchant)}")'>🗑️</button>
