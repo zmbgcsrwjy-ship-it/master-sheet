@@ -226,7 +226,9 @@ select.badge:hover{filter:brightness(1.2)}
 #panel-book thead th:nth-child(2),#panel-book tbody td:nth-child(2){position:sticky;left:106px;z-index:2;background:var(--bg2);box-shadow:6px 0 8px -4px rgba(0,0,0,.55)}
 #panel-book thead th:nth-child(1),#panel-book thead th:nth-child(2){z-index:5;background:var(--bg3)}
 /* build 31: tighten REFI rows + center the Start Date column */
-#panel-renewal tbody td{padding:6px 14px}
+#panel-renewal table,#panel-defaults table{font-size:12px}
+#panel-renewal tbody td,#panel-defaults tbody td{padding:5px 12px}
+#panel-renewal thead th,#panel-defaults thead th{padding:7px 12px;font-size:11px;font-weight:600;text-transform:none;letter-spacing:normal;background:var(--bg2)}
 #panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
 #panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
@@ -275,7 +277,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 35 — scroll restored · card pinned-left · sort coherence · pif rep/iso</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 36 — pif rep/iso split · defaults iso column · refi+defaults sizing matches pif</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -423,6 +425,7 @@ select.badge:hover{filter:brightness(1.2)}
             <th onclick="sortDefaults('date_funded')">Date Funded ↕</th>
             <th onclick="sortDefaults('merchant')">Merchant ↕</th>
             <th onclick="sortDefaults('rep')">Rep ↕</th>
+            <th onclick="sortDefaults('iso')">ISO ↕</th>
             <th onclick="sortDefaults('funded')">Funded ↕</th>
             <th onclick="sortDefaults('rtr')">RTR ↕</th>
             <th onclick="sortDefaults('balance')">Balance ↕</th>
@@ -1573,7 +1576,7 @@ function renderRenewal(){
 
 let defaultsSort={key:'date_funded',dir:-1};
 function sortDefaults(key){
-  if(defaultsSort.key===key) defaultsSort.dir*=-1; else defaultsSort={key,dir: (key==='merchant'||key==='rep')?1:-1};
+  if(defaultsSort.key===key) defaultsSort.dir*=-1; else defaultsSort={key,dir: (key==='merchant'||key==='rep'||key==='iso')?1:-1};
   renderDefaults();
 }
 function renderDefaults(){
@@ -1593,9 +1596,10 @@ function renderDefaults(){
   // header arrows
   document.querySelectorAll('#panel-defaults .sort-ind').forEach(s=>{ s.textContent=' ↕'; });
   tbody.innerHTML=defs.map(d=>{const pnl=d.pnl||0;return`<tr>
-    <td style="font-size:11px;color:var(--text3)">${fmtDate(d.date_funded)}</td>
+    <td style="color:var(--text3)">${fmtDate(d.date_funded)}</td>
     <td style="font-weight:600">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}</td>
-    <td style="font-size:11px;color:var(--text2)">${d.rep||'—'}</td>
+    <td style="color:var(--text2)">${d.rep||'—'}</td>
+    <td style="color:var(--text2)">${d.iso||'—'}</td>
     <td>${fmt$(d.funded)}</td><td>${fmt$(d.rtr)}</td><td>${fmt$(d.balance)}</td>
     <td>${(d.pct_paid*100).toFixed(1)}%</td><td style="white-space:nowrap">${d.term?(d.frequency==='Weekly'?'<span class="wk-name">'+d.term+' weeks</span>':d.term+' days'):'—'}</td>
     <td style="color:var(--red)">${fmt$(d.max_loss||0)}</td>
@@ -1606,7 +1610,7 @@ function renderDefaults(){
 
 let pifSort={key:'date_funded',dir:-1};
 function sortPif(key){
-  if(pifSort.key===key) pifSort.dir*=-1; else pifSort={key,dir:(key==='merchant')?1:-1};
+  if(pifSort.key===key) pifSort.dir*=-1; else pifSort={key,dir:(key==='merchant'||key==='rep'||key==='iso')?1:-1};
   renderPif();
 }
 function renderPif(){
@@ -1629,7 +1633,7 @@ function renderPif(){
     if(k==='date_funded'){ va=new Date(a.date_funded||0); vb=new Date(b.date_funded||0); }
     else if(k==='term'){ va=a.frequency==='Weekly'?(a.term||0)*5:(a.term||0); vb=b.frequency==='Weekly'?(b.term||0)*5:(b.term||0); }
     else if(k==='feepct'){ va=a.funded?(a.bank_fees/a.funded):0; vb=b.funded?(b.bank_fees/b.funded):0; }
-    else if(k==='merchant'||k==='lead_id'){ va=String(a[k]||'').toLowerCase(); vb=String(b[k]||'').toLowerCase(); return va<vb?-1*dir:va>vb?dir:0; }
+    else if(k==='merchant'||k==='lead_id'||k==='rep'||k==='iso'){ va=String(a[k]||'').toLowerCase(); vb=String(b[k]||'').toLowerCase(); return va<vb?-1*dir:va>vb?dir:0; }
     else { va=a[k]; vb=b[k]; }
     return ((va||0)-(vb||0))*dir;
   });
@@ -1639,6 +1643,8 @@ function renderPif(){
   const head=`<tr>
     <th class="pif-c" onclick="sortPif('date_funded')">Date Funded ↕</th>
     <th onclick="sortPif('merchant')">Merchant ↕</th>
+    <th onclick="sortPif('rep')">Rep ↕</th>
+    <th onclick="sortPif('iso')">ISO ↕</th>
     <th class="pif-c" onclick="sortPif('funded')">Funded ↕</th>
     <th class="pif-c" onclick="sortPif('factor')">Factor ↕</th>
     <th class="pif-c" onclick="sortPif('term')">Term ↕</th>
@@ -1653,7 +1659,9 @@ function renderPif(){
     const nm=d.frequency==='Weekly'?`<span class="wk-name">${d.merchant}</span>`:d.merchant;
     return `<tr>
       <td class="pif-c pif-dim">${fmtDate(d.date_funded)}</td>
-      <td class="pif-name" onclick="toggleContact(this,event)" data-contact="${cdata(d)}" style="cursor:${hasContact(d)?'pointer':'default'}">${nm}${hasContact(d)?'<span class="pif-card-icn">📇</span>':''}${bounceBadges(d)}<span style="font-weight:400;color:var(--text3);font-size:11px;margin-left:8px">${d.rep||'—'} · ${d.iso||'—'}</span></td>
+      <td class="pif-name" onclick="toggleContact(this,event)" data-contact="${cdata(d)}" style="cursor:${hasContact(d)?'pointer':'default'}">${nm}${hasContact(d)?'<span class="pif-card-icn">📇</span>':''}${bounceBadges(d)}</td>
+      <td class="pif-dim">${d.rep||'—'}</td>
+      <td class="pif-dim">${d.iso||'—'}</td>
       <td class="pif-c">${fmt$(d.funded)}</td>
       <td class="pif-c pif-dim">${d.factor||'—'}</td>
       <td class="pif-c pif-dim">${d.frequency==='Weekly'?'<span class="wk-name">'+termStr+'</span>':termStr}</td>
@@ -1663,7 +1671,7 @@ function renderPif(){
     </tr>`;
   }).join('');
   body.innerHTML=`<table class="pif-table"><colgroup>
-    <col style="width:11%"><col style="width:22%"><col style="width:11%"><col style="width:8%"><col style="width:12%"><col style="width:10%"><col style="width:10%"><col style="width:16%">
+    <col style="width:8%"><col style="width:15%"><col style="width:11%"><col style="width:14%"><col style="width:9%"><col style="width:6%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:12%">
   </colgroup><thead>${head}</thead><tbody>${bodyRows}</tbody></table>`;
   document.querySelectorAll('#panel-pif .sort-ind').forEach(s=>{ s.textContent=' ↕'; });
 }
