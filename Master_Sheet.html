@@ -279,7 +279,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 43 — daily-sync parity with Beacon (balance $-strip · %paid fallback · name squish)</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 44 — term = CRM payment count (was months×21.67 estimate, e.g. 55 BD not 60)</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -991,7 +991,15 @@ async function importCrmExport(file){
           var cnt=C.pay>=0?money(r[C.pay]):0;
           return (cnt>0 && rtr>0) ? Math.round(rtr/cnt*100)/100 : 0;
         })(),
-        Term:(function(){var mm=C.length>=0?String(r[C.length]||'').match(/([\d.]+)\s*month/i):null; if(!mm) return 0; var bd=parseFloat(mm[1])*21.67; var wk=((C.freq>=0&&String(r[C.freq]||'').trim())||'Daily')==='Weekly'; return Math.round(wk?bd/5:bd);})(),
+        Term:(function(){
+          // Term = number of payments (CRM 'Estimated Payments' column is the exact count).
+          // Daily deal -> business days; weekly deal -> weeks. Both equal the payment count.
+          var cnt=C.pay>=0?parseFloat(String(r[C.pay]||'').replace(/[^0-9.]/g,'')):0;
+          if(cnt>0) return Math.round(cnt);
+          // fallback only if count missing: months×21.67 (rough), kept so term is never blank.
+          var mm=C.length>=0?String(r[C.length]||'').match(/([\d.]+)\s*month/i):null; if(!mm) return 0;
+          var bd=parseFloat(mm[1])*21.67; var wk=((C.freq>=0&&String(r[C.freq]||'').trim())||'Daily')==='Weekly'; return Math.round(wk?bd/5:bd);
+        })(),
         Rep:C.rep>=0?String(r[C.rep]||'').trim():'', ISO:C.iso>=0?String(r[C.iso]||'').trim():'',
         Funder:(C.funder>=0?String(r[C.funder]||'').trim():'')||'HBP', FinanceFeePct:0.5,
         Industry:C.industry>=0?String(r[C.industry]||'').trim():'',
