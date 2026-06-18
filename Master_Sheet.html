@@ -279,7 +279,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 42 — close-out targets prior completed month (close Oct while in Nov)</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 43 — daily-sync parity with Beacon (balance $-strip · %paid fallback · name squish)</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1435,12 +1435,15 @@ async function handleDailyReport(input) {
       // composite when the same merchant has multiple deals under one LeadID
       // (Pinnacle reuses LeadIDs — e.g. one merchant, two deals, same ID);
       // merchant-name as the fallback for deals saved before LeadID existed.
+      const squish=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');  // build 43: parity with Beacon bSquish — uppercase + strip non-alphanumerics, both sides
       dataRows.forEach(row=>{
         if(!row||!row[custI]) return;
-        const name=String(row[custI]).trim().toUpperCase().replace(/\s+/g,'');
+        const name=squish(row[custI]);
         const lead=leadI>=0&&row[leadI]!=null?String(row[leadI]).trim():'';
         const purch=purchI>=0?parseFloat(row[purchI])||0:0;
-        const bal=parseFloat(row[balI])||0,pct=parseFloat(row[pctI])||0;
+        const bal=parseFloat(String(row[balI]).replace(/[$,]/g,''))||0;  // build 43: strip $ , like Beacon (a currency-string balance must not read as 0 and false-PIF the deal)
+        let pct=parseFloat(row[pctI])||0;
+        if(!pct&&purch>0) pct=Math.max(0,1-bal/purch);  // build 43: blank/uncached '% paid' -> compute from balance, like Beacon
         const stat=row[statI]?String(row[statI]).trim().toUpperCase():null;
         let m=null;
         if(lead){
@@ -1449,7 +1452,7 @@ async function handleDailyReport(input) {
           if(cands.length===1) m=cands[0];
           else if(cands.length>1){ ambiguous++; return; }
         }
-        if(!m) m=deals.find(d=>d.merchant.replace(/\s+/g,'')==name&&['NEW','ACTIVE'].includes(d.status));
+        if(!m) m=deals.find(d=>squish(d.merchant)==name&&['NEW','ACTIVE'].includes(d.status));
         if(m){
           if(claimed.has(m._id)){ ambiguous++; return; }  // two report rows -> one deal record: never double-write
           claimed.add(m._id);
