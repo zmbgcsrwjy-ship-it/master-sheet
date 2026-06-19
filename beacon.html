@@ -83,7 +83,13 @@
   body.compact table.matrix { font-size: 11px; }
   body.compact table.matrix td, body.compact table.matrix th { padding-top: 4px; padding-bottom: 4px; }
   body.compact .metrics, body.compact .sev-tiles { gap: 8px; margin-bottom: 12px; }
-  body.compact .metric-val { font-size: 20px; }
+  body.compact .metric { padding: 10px 14px; }
+  body.compact .metric .value { font-size: 18px; }
+  body.compact .metric .label { font-size: 12px; margin-bottom: 3px; }
+  body.compact .metric .sub { font-size: 11px; margin-top: 2px; }
+  body.compact .sev-tile { padding: 9px 14px; }
+  body.compact .sev-tile .count { font-size: 18px; }
+  body.compact .tab-bar { margin-bottom: 12px; }
   .bx-density { display:inline-flex; border:1px solid #2c3a57; border-radius:7px; overflow:hidden; margin-left:10px; vertical-align:middle; }
   .bx-density button { background:#16203a; color:#7c89a5; border:none; padding:5px 10px; font-size:11px; cursor:pointer; font-weight:600; }
   .bx-density button.on { background:#539bf5; color:#fff; }
@@ -94,6 +100,8 @@
   .layout.collapsed .sidebar > *:not(.sidebar-toggle) { display: none; }
   .sidebar-toggle { position: absolute; top: 14px; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; color: var(--text-2); z-index: 2; }
   .layout.collapsed .sidebar-toggle { right: 8px; }
+  .layout.collapsed #bx-refresh-btn { padding: 9px 0; margin-bottom: 12px; }
+  .layout.collapsed #bx-refresh-btn .rfr-label { display: none; }
   .sidebar-toggle:hover { background: var(--surface); color: var(--text); }
   .sidebar h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin: 20px 0 10px; color: var(--text-2); }
   .sidebar h2:first-of-type { margin-top: 4px; }
@@ -1170,7 +1178,7 @@
 <aside class="sidebar">
   <button class="sidebar-toggle" onclick="toggleSidebar()" title="Collapse sidebar">‹</button>
   
-  <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻ Refresh</button>
+  <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
   <div class="watch-list">
     <div class="watch-list-header">
       <span class="watch-list-title">Watch List</span>
@@ -1222,7 +1230,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v83 · live</span>
+      <span class="build-tag">v84 · live</span>
     </p>
   </div>
   <div class="brief-date">
