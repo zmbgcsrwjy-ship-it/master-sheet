@@ -90,6 +90,8 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 /* TABLE */
 .table-wrap{overflow:auto;max-height:calc(100vh - 235px)} /* build 35: proven scroll mechanic — list scrolls, header pins */
 #pif-body{overflow:auto;max-height:calc(100vh - 235px)}
+#alloc-body{overflow:auto;max-height:calc(100vh - 235px)}
+#alloc-body thead th{position:sticky;top:0;z-index:3}
 #pif-body thead th{position:sticky;top:0;z-index:3}
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;min-width:1100px}
@@ -279,11 +281,12 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 44 — term = CRM payment count (was months×21.67 estimate, e.g. 55 BD not 60)</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 45 — allocator tab: your (MSC) deals, ISO commissions to send + 3% kickbacks, Paid records kickback to next close-out</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
         <div class="nav-item active" id="nav-book" onclick="setView('book')">📊 All deals</div>
+        <div class="nav-item" id="nav-allocator" onclick="setView('allocator')">💸 Allocator</div>
         <div class="nav-item" id="nav-renewal" onclick="setView('renewal')">🔁 REFI eligible <span class="nav-badge" id="renewal-badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">0</span></div>
         <div class="nav-item" id="nav-pif" onclick="setView('pif')">💰 PIF <span class="nav-badge" id="pif-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)">0</span></div>
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
@@ -419,6 +422,12 @@ select.badge:hover{filter:brightness(1.2)}
           <div class="panel-header"><h3>Paid in Full — renewal pipeline</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap"><select id="pif-rep-filter" onchange="renderPif()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All reps</option></select><select id="pif-iso-filter" onchange="renderPif()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select><span>Zero balance, no refi taken · prime renewal targets</span></span></div>
           <div id="pif-body"></div>
           <div id="pif-empty" class="empty-state" style="display:none"><div class="icon">💰</div><h3>No PIF deals</h3><p>Deals land here when they pay to zero without a refi.</p></div>
+        </div>
+
+        <div class="panel" id="panel-allocator" style="display:none">
+          <div class="panel-header"><h3>Allocator</h3><span style="font-size:12px;color:var(--text3)">Your deals (rep = MSC) — ISO commissions to send & 3% kickbacks to record. Hit Paid once you've allocated in Pinnacle.</span></div>
+          <div id="alloc-body"></div>
+          <div id="alloc-empty" class="empty-state" style="display:none"><div class="icon">💸</div><h3>Nothing to allocate</h3><p>Your funded deals show here until you mark them paid. Once allocated, the 3% kickback flows into your next close-out.</p></div>
         </div>
 
         <div class="panel" id="panel-defaults" style="display:none">
@@ -1498,9 +1507,9 @@ async function handleDailyReport(input) {
 // ─── VIEWS ───────────────────────────────────────────────
 function setView(v){
   currentView=v;
-  ['book','renewal','pif','defaults','monthly','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
+  ['book','allocator','renewal','pif','defaults','monthly','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
   document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',monthly:'Monthly totals',pnl:'PNL'}[v];
-  if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='monthly') renderMonthly(); if(v==='pnl') renderPnl();
+  if(v==='allocator') renderAllocator(); if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='monthly') renderMonthly(); if(v==='pnl') renderPnl();
 }
 
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
@@ -1731,6 +1740,95 @@ async function saveNote(id, val){
   }catch(err){ showNotice('Note save failed: '+err.message,'error'); }
 }
 
+// ─── ALLOCATOR (build 45): ISO payouts + 3% kickbacks for your (MSC) deals ───
+// One lever. 3% of gross funded is held back as kickback (100% ours for now;
+// future split = 1.5% house / 1.5% us → change ALLOC_SPREAD or split here).
+const ALLOC_SPREAD = 0.03;
+let allocGroupKeys = [];
+const allocIsoKey = d => { const s=String(d.iso||'').trim(); return (s && s!=='—' && s.toUpperCase()!=='UNASSIGNED') ? s : '__NOISO__'; };
+const allocKb = d => Math.round((d.funded||0)*ALLOC_SPREAD*100)/100;
+
+function renderAllocator(){
+  const body=document.getElementById('alloc-body'), empty=document.getElementById('alloc-empty');
+  if(!body) return;
+  // your funded deals that haven't been allocated yet (no kickback set)
+  const all=deals.filter(d=>d.rep==='MSC' && !(d.kickback>0));
+  if(!all.length){ body.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+  const rows=all.map(d=>{
+    const kb=allocKb(d);
+    const hasIso=allocIsoKey(d)!=='__NOISO__';
+    const isoComm=hasIso?Math.max(0,(d.comm_amount||0)-kb):0;
+    const commPct=d.funded?((d.comm_amount||0)/d.funded*100):0;
+    return {d,kb,hasIso,isoComm,commPct,key:allocIsoKey(d)};
+  });
+  const groups={};
+  rows.forEach(r=>{ (groups[r.key]=groups[r.key]||[]).push(r); });
+  allocGroupKeys=Object.keys(groups).filter(k=>k!=='__NOISO__').sort((a,b)=>a.toLowerCase()<b.toLowerCase()?-1:1);
+  if(groups.__NOISO__) allocGroupKeys.push('__NOISO__');
+  const totalSend=rows.reduce((s,r)=>s+r.isoComm,0), totalKb=rows.reduce((s,r)=>s+r.kb,0);
+  const dim='color:var(--text3)';
+  let h=`<div style="display:flex;gap:20px;flex-wrap:wrap;padding:11px 14px;font-size:12.5px;border-bottom:1px solid var(--border)">
+    <span>To send to ISOs: <b style="color:var(--text)">${fmt$(totalSend)}</b></span>
+    <span>Kickbacks to record: <b style="color:var(--green)">${fmt$(totalKb)}</b></span>
+    <span style="${dim}">${rows.length} deal${rows.length===1?'':'s'} waiting</span></div>`;
+  h+=`<table class="pif-table"><colgroup>
+    <col style="width:9%"><col style="width:18%"><col style="width:6%"><col style="width:15%"><col style="width:11%"><col style="width:7%"><col style="width:13%"><col style="width:10%"><col style="width:11%">
+  </colgroup><thead><tr>
+    <th class="pif-c">Date Funded</th><th>Deal</th><th>Rep</th><th>ISO</th>
+    <th class="pif-c">Commission</th><th class="pif-c">Comm %</th><th class="pif-c">ISO Commission</th><th class="pif-c">Kickback (3%)</th><th class="pif-c">Action</th>
+  </tr></thead><tbody>`;
+  allocGroupKeys.forEach((key,gi)=>{
+    const grp=groups[key], isNo=key==='__NOISO__';
+    const gSend=grp.reduce((s,r)=>s+r.isoComm,0), gKb=grp.reduce((s,r)=>s+r.kb,0);
+    const label=isNo?'No ISO — your commission, nothing to send out':key;
+    const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+fmt$(gSend)} · kickback ${fmt$(gKb)}`;
+    h+=`<tr style="background:var(--bg3)"><td colspan="9" style="padding:7px 12px;font-weight:600">${label} <span style="font-weight:400;${dim}">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
+    grp.forEach(r=>{
+      h+=`<tr>
+        <td class="pif-c pif-dim">${fmtDate(r.d.date_funded)}</td>
+        <td>${r.d.merchant}</td>
+        <td class="pif-dim">${r.d.rep||'—'}</td>
+        <td class="pif-dim">${r.hasIso?r.d.iso:'<span style="'+dim+'">—</span>'}</td>
+        <td class="pif-c">${fmt$(r.d.comm_amount)}</td>
+        <td class="pif-c pif-dim">${r.commPct?r.commPct.toFixed(1)+'%':'—'}</td>
+        <td class="pif-c">${r.hasIso?fmt$(r.isoComm):'<span style="'+dim+'">no ISO — yours</span>'}</td>
+        <td class="pif-c" style="color:var(--green)">${fmt$(r.kb)}</td>
+        <td class="pif-c"><button onclick="markAllocPaid('${r.d._id}')" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 12px;font-size:11px;cursor:pointer">Paid</button></td>
+      </tr>`;
+    });
+  });
+  h+=`</tbody></table>`;
+  body.innerHTML=h;
+}
+
+async function markAllocPaid(id){
+  const d=deals.find(x=>x._id===id); if(!d) return;
+  const kb=allocKb(d);
+  if(kb<=0){ showNotice("Can't allocate "+d.merchant+" — it has no funded amount.","error"); return; }
+  try{
+    await atFetch('PATCH','',{records:[{id, fields:{Kickback:kb}}]});
+    d.kickback=kb;
+    showNotice(d.merchant+' allocated — '+fmt$(kb)+' kickback recorded (flows into your next close-out).','success',3500);
+    renderAllocator(); renderTable();
+  }catch(err){ showNotice('Allocate failed: '+err.message,'error'); }
+}
+
+async function markAllocPaidGroup(gi){
+  const key=allocGroupKeys[gi]; if(key==null) return;
+  const isNo=key==='__NOISO__';
+  const grp=deals.filter(d=>d.rep==='MSC' && !(d.kickback>0) && allocIsoKey(d)===key);
+  if(!grp.length) return;
+  if(!confirm('Mark all '+grp.length+' deal'+(grp.length===1?'':'s')+(isNo?' (no ISO)':' for '+key)+' as paid?\n\nThis records each 3% kickback and clears them from the allocator. It does not move money — you still allocate in Pinnacle.')) return;
+  const recs=grp.map(d=>({id:d._id, fields:{Kickback:allocKb(d)}}));
+  try{
+    for(let i=0;i<recs.length;i+=10) await atFetch('PATCH','',{records:recs.slice(i,i+10)});
+    grp.forEach(d=>{ d.kickback=allocKb(d); });
+    showNotice(grp.length+' deal'+(grp.length===1?'':'s')+' allocated'+(isNo?'':' for '+key)+'.','success',3500);
+    renderAllocator(); renderTable();
+  }catch(err){ showNotice('Allocate failed: '+err.message,'error'); }
+}
+
 function renderMetrics(){
   const active=deals.filter(d=>['NEW','ACTIVE'].includes(d.status)),defs=deals.filter(d=>d.status==='DEFAULT');
   const pifs=deals.filter(d=>d.status==='PIF');
@@ -1762,7 +1860,7 @@ function populateIsoFilter(){
   sel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option value="${i.replace(/"/g,'&quot;')}">${i}</option>`).join('');
   sel.value=cur;
 }
-function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='renewal')renderRenewal(); if(currentView==='pif')renderPif(); if(currentView==='defaults')renderDefaults(); if(currentView==='pnl')renderPnl(); }
+function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='allocator')renderAllocator(); if(currentView==='renewal')renderRenewal(); if(currentView==='pif')renderPif(); if(currentView==='defaults')renderDefaults(); if(currentView==='pnl')renderPnl(); }
 
 function showModalNotice(msg,type='warn'){
   const el=document.getElementById('modal-notice');
