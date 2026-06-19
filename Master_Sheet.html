@@ -92,6 +92,13 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 #pif-body{overflow:auto;max-height:calc(100vh - 235px)}
 #alloc-body{overflow:auto;max-height:calc(100vh - 235px)}
 #alloc-body thead th{position:sticky;top:0;z-index:3}
+/* build 48: subtle on-theme scrollbars (replaces the bright browser default) */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:3px solid transparent;background-clip:padding-box}
+::-webkit-scrollbar-thumb:hover{background:var(--border2)}
+::-webkit-scrollbar-corner{background:transparent}
+*{scrollbar-width:thin;scrollbar-color:var(--border) transparent}
 #pif-body thead th{position:sticky;top:0;z-index:3}
 .table-wrap thead th{position:sticky;top:0;z-index:3}
 table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px;min-width:1100px}
@@ -281,7 +288,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 47 — CRM import: robust funding-date parse (SheetJS was reformatting dates to 2-digit-year → blank); backfills existing blank dates + warns on unreadable</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 48 — subtle on-theme scrollbars (thin, low-contrast, transparent track)</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
