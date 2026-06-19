@@ -281,7 +281,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)">build 46 — allocator: ISO filter + ISO % column (their cut of funded = comm % − 3%)</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)">build 47 — CRM import: robust funding-date parse (SheetJS was reformatting dates to 2-digit-year → blank); backfills existing blank dates + warns on unreadable</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -942,6 +942,7 @@ async function importCrmExport(file){
     const text = await file.text();
     const wb = XLSX.read(text, {type:'string'});
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false});
+    const rowsRaw = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:true});
     const h = rows[0].map(x=>String(x||'').trim().toLowerCase());
     const ci = n=>h.findIndex(x=>x===n);
     const C = {lead:ci('lead id'), merch:ci('merchant'), start:ci('start date'), funder:ci('funder'),
@@ -954,20 +955,44 @@ async function importCrmExport(file){
     if(C.lead<0||C.merch<0||C.funded<0){ showNotice('That does not look like the CRM deals export — headers not recognized.','error'); return; }
     const money=s=>parseFloat(String(s==null?'':s).replace(/[$,]/g,''))||0;
     const squish=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-    const mdy=s=>{ const m=String(s||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m? m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0') : ''; };
-    const existingLeads=new Set(deals.map(d=>String(d.lead_id||'').trim()).filter(Boolean));
-    const newRows=[];
+    // Robust funding-date read (build 47). SheetJS reformats date-detected cells when raw:false
+    // (06/18/2026 -> 6/18/26), which the old M/D/YYYY-only parser rejected -> blank dates.
+    // Read the underlying RAW value and accept serial / Date / ISO / M-D-YYYY / M-D-YY.
+    const XL_EPOCH=Date.UTC(1899,11,30), XL_DAY=86400000;
+    const serialISO=n=>{ const d=new Date(XL_EPOCH+Math.round(n)*XL_DAY); return isNaN(d)?'':d.toISOString().slice(0,10); };
+    const mdy=v=>{
+      if(v==null||v==='') return '';
+      if(v instanceof Date) return isNaN(v)?'':new Date(v.getTime()-v.getTimezoneOffset()*60000).toISOString().slice(0,10);
+      if(typeof v==='number') return (v>20000&&v<80000)?serialISO(v):'';
+      const s=String(v).trim();
+      let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if(m) return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+      m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}|\d{2})/); if(m){ const y=m[3].length===2?'20'+m[3]:m[3]; return y+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0'); }
+      if(/^\d+(\.\d+)?$/.test(s)){ const n=parseFloat(s); if(n>20000&&n<80000) return serialISO(n); }
+      return '';
+    };
+    const dfRow=i=>mdy(rowsRaw[i]?rowsRaw[i][C.start]:null) || mdy(rows[i]?rows[i][C.start]:null);
+    const existingByLead=new Map();
+    deals.forEach(d=>{ const L=String(d.lead_id||'').trim(); if(L&&!existingByLead.has(L)) existingByLead.set(L,d); });
+    const newRows=[], backfills=[];
     for(let i=1;i<rows.length;i++){
       const r=rows[i]; if(!r||!r[C.merch]) continue;
+      r._df=dfRow(i);
       const lead=String(r[C.lead]||'').trim();
-      if(lead && existingLeads.has(lead)) continue;
+      if(lead && existingByLead.has(lead)){
+        const ex=existingByLead.get(lead);
+        if(ex && r._df && !String(ex.date_funded||'').trim() && ex._id && !/^pending-/.test(String(ex._id))) backfills.push({id:ex._id, df:r._df, deal:ex});
+        continue;
+      }
       newRows.push(r);
     }
-    if(!newRows.length){ showNotice('Book is current — every deal in this export is already on the sheet.','success',7000); return; }
-    const names=newRows.map(r=>'\u2022 '+String(r[C.merch]).trim()+'  ('+mdy(r[C.start])+' \u00b7 $'+money(r[C.funded]).toLocaleString()+')');
-    const preview=names.slice(0,15).join('\n')+(names.length>15?'\n\u2026 and '+(names.length-15)+' more':'');
-    if(!confirm('CRM export: '+newRows.length+' deal'+(newRows.length!==1?'s':'')+' not on the book yet:\n\n'+preview+'\n\nAdd '+(newRows.length!==1?'them':'it')+' now?')) return;
-    showLoading('Importing '+newRows.length+' deal'+(newRows.length!==1?'s':'')+' from CRM...');
+    if(!newRows.length && !backfills.length){ showNotice('Book is current — every deal in this export is already on the sheet.','success',7000); return; }
+    if(newRows.length){
+      const names=newRows.map(r=>'\u2022 '+String(r[C.merch]).trim()+'  ('+(r._df||'NO DATE')+' \u00b7 $'+money(r[C.funded]).toLocaleString()+')');
+      const preview=names.slice(0,15).join('\n')+(names.length>15?'\n\u2026 and '+(names.length-15)+' more':'');
+      const bfNote=backfills.length?('\n\nAlso filling missing funding dates on '+backfills.length+' existing deal'+(backfills.length!==1?'s':'')+'.'):'';
+      if(!confirm('CRM export: '+newRows.length+' deal'+(newRows.length!==1?'s':'')+' not on the book yet:\n\n'+preview+bfNote+'\n\nAdd '+(newRows.length!==1?'them':'it')+' now?')) return;
+    }
+    showLoading((newRows.length?('Importing '+newRows.length+' deal'+(newRows.length!==1?'s':'')+' from CRM'):'Updating funding dates')+'...');
     let added=0, refis=0;
     for(const r of newRows){
       const merchant=String(r[C.merch]).trim().toUpperCase();
@@ -979,7 +1004,7 @@ async function importCrmExport(file){
       const ml=calcML(funded,bookpct,fees,comm);
       // Refi detection with date cross-check (build 39): bind to the most-recent prior that
       // PRE-DATES this deal, by date funded — never just newest-by-name, which can cross a chain.
-      const incDate=new Date(mdy(r[C.start])||Date.now());
+      const incDate=new Date(r._df||Date.now());
       let priors=deals.filter(x=>squish(x.merchant)===squish(merchant)&&['NEW','ACTIVE','PIF'].includes(x.status));
       priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
       const validPriors=priors.filter(p=>new Date(p.date_funded||0)<=incDate);
@@ -987,7 +1012,7 @@ async function importCrmExport(file){
       if(validPriors.length){
         prior=validPriors[0]; status='ACTIVE'; dealtype='REFI'; prev=prior.lead_id||'';
       }
-      const fields={Merchant:merchant, LeadID:String(r[C.lead]||'').trim(), DateFunded:mdy(r[C.start]),
+      const fields={Merchant:merchant, LeadID:String(r[C.lead]||'').trim(), DateFunded:r._df,
         Funded:funded, RTR:rtr, Factor:funded? Math.round(rtr/funded*1000)/1000 : 0,
         DDFee:ffee, OrigFee:ofee, BankFees:fees, BookPct:bookpct, BookFunded:funded*bookpct/100,
         CommPct:funded? Math.round(comm/funded*10000)/100 : 0, CommAmount:comm, Kickback:0,
@@ -1023,10 +1048,20 @@ async function importCrmExport(file){
         await atFetch('PATCH','',{records:[{id:prior._id, fields:{Status:'COMPLETED'}}]});
         const pl=deals.find(x=>x._id===prior._id); if(pl) pl.status='COMPLETED';
       }
-      deals.push({_id:'pending-'+added, merchant:merchant, status:status, lead_id:String(r[C.lead]||'').trim(), date_funded:mdy(r[C.start])});
+      deals.push({_id:'pending-'+added, merchant:merchant, status:status, lead_id:String(r[C.lead]||'').trim(), date_funded:r._df});
+    }
+    let filled=0;
+    if(backfills.length){
+      for(let i=0;i<backfills.length;i+=10) await atFetch('PATCH','',{records:backfills.slice(i,i+10).map(b=>({id:b.id, fields:{DateFunded:b.df}}))});
+      backfills.forEach(b=>{ b.deal.date_funded=b.df; }); filled=backfills.length;
     }
     await loadDeals();
-    showNotice('CRM import: '+added+' deal'+(added!==1?'s':'')+' added'+(refis?(' \u00b7 '+refis+' refi'+(refis!==1?'s':'')+' detected, priors auto-COMPLETED'):'')+'.','success',10000);
+    const datelessNew=newRows.filter(r=>!r._df).length;
+    let msg='CRM import: '+added+' deal'+(added!==1?'s':'')+' added';
+    if(refis) msg+=' \u00b7 '+refis+' refi'+(refis!==1?'s':'')+' detected, priors auto-COMPLETED';
+    if(filled) msg+=' \u00b7 '+filled+' funding date'+(filled!==1?'s':'')+' backfilled';
+    showNotice(msg+'.','success',10000);
+    if(datelessNew) showNotice(datelessNew+' imported deal'+(datelessNew!==1?'s':'')+' had no readable funding date in the export — check the Start Date column.','warn',12000);
   } catch(err){ showNotice('CRM import failed: '+err.message,'error'); }
   finally{ hideLoading(); const fi=document.getElementById('crm-file'); if(fi) fi.value=''; }
 }
