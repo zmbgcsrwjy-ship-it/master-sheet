@@ -293,7 +293,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="compact view tightened · sidebar trimmed to Refresh · build badge condensed">build 49</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="legal red across all tabs (matches FF), Monthly kickbacks green; Monthly columns reordered — Total PNL before Kickbacks, Legal before Clawback">build 51</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -388,8 +388,8 @@ select.badge:hover{filter:brightness(1.2)}
               <thead><tr>
                 <th>Month</th><th>TDF</th><th>New</th><th>REFI</th>
                 <th>Total Funding</th><th>Avg Deal Size</th><th>Avg Deal Length</th>
-                <th>Average Fee</th><th>Banks</th><th>Kickbacks</th>
-                <th>Total PNL</th><th>Finance Fees</th><th>Clawback</th><th>Legal</th>
+                <th>Average Fee</th><th>Banks</th><th>Total PNL</th>
+                <th>Kickbacks</th><th>Finance Fees</th><th>Legal</th><th>Clawback</th>
               </tr></thead>
               <tbody id="monthly-body"></tbody>
             </table>
@@ -408,7 +408,7 @@ select.badge:hover{filter:brightness(1.2)}
               <tbody id="pnl-body"></tbody>
             </table>
           </div>
-          <div style="font-size:11px;color:var(--text3);padding:8px 4px">House split: Highland Hill Capital 50% of book PNL and 50% of legal (global). Kickbacks 100% ours, distributed once after funding. FF is full book-level cost on a 4-month lag. Legal total is entered on the Monthly tab. Each funding month enters the payout 5 months after funding (HHC grace period); after that, losses deduct and recoveries credit back — the Settled column is a running account.</div>
+          <div style="font-size:11px;color:var(--text3);padding:8px 4px">House split: Highland Hill Capital 50% of book PNL and 50% of legal (global). Kickbacks 100% ours, distributed once after funding. FF is full book-level cost on a 4-month lag. Legal total is entered on the Monthly tab. A funding month pays out as soon as it's positive; a negative month is held — no payout, no deduction — until the whole cohort goes dark (every open deal DEFAULT or 30+ days with no payment), then its loss deducts. After a loss is settled, later collections surface as ↩ RECOVERY income to pay back out. The Settled column is a running account.</div>
         </div>
         <div class="panel" id="panel-renewal" style="display:none">
           <div class="panel-header"><h3>REFI eligible</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -864,6 +864,7 @@ function fieldsToDeal(id, f) {
     finance_fee_pct: f.FinanceFeePct!=null?f.FinanceFeePct:0.5,
     paid_today:   f.PaidToday    || 0,
     paid_mtd:     f.PaidMTD      || 0,
+    last_cleared: f.LastCleared  || '',
     industry:     f.Industry     || '',
     state:        f.State        || '',
     owner_name:   f.OwnerName    || '',
@@ -957,7 +958,7 @@ async function importCrmExport(file){
       comm:ci('commission'), funded:ci('funded'), purch:ci('purchased'),
       freq:h.findIndex(x=>x.includes('payments freq')), pay:ci('estimated payments'),
       industry:ci('industry'), state:ci('state'), oname:ci('owner name'), oemail:ci('owner email'),
-      ocell:ci('owner cell'), ophone:ci('owner phone'),
+      ocell:ci('owner cell'), ophone:ci('owner phone'), lastcleared:ci('last cleared payment date'),
       length:h.findIndex(x=>x.includes('original estimated contract length'))};
     if(C.lead<0||C.merch<0||C.funded<0){ showNotice('That does not look like the CRM deals export — headers not recognized.','error'); return; }
     const money=s=>parseFloat(String(s==null?'':s).replace(/[$,]/g,''))||0;
@@ -978,16 +979,21 @@ async function importCrmExport(file){
       return '';
     };
     const dfRow=i=>mdy(rowsRaw[i]?rowsRaw[i][C.start]:null) || mdy(rows[i]?rows[i][C.start]:null);
+    const lcRow=i=>C.lastcleared<0?'':(mdy(rowsRaw[i]?rowsRaw[i][C.lastcleared]:null) || mdy(rows[i]?rows[i][C.lastcleared]:null));
     const existingByLead=new Map();
     deals.forEach(d=>{ const L=String(d.lead_id||'').trim(); if(L&&!existingByLead.has(L)) existingByLead.set(L,d); });
     const newRows=[], backfills=[];
     for(let i=1;i<rows.length;i++){
       const r=rows[i]; if(!r||!r[C.merch]) continue;
-      r._df=dfRow(i);
+      r._df=dfRow(i); r._lc=lcRow(i);
       const lead=String(r[C.lead]||'').trim();
       if(lead && existingByLead.has(lead)){
         const ex=existingByLead.get(lead);
-        if(ex && r._df && !String(ex.date_funded||'').trim() && ex._id && !/^pending-/.test(String(ex._id))) backfills.push({id:ex._id, df:r._df, deal:ex});
+        if(ex && ex._id && !/^pending-/.test(String(ex._id))){
+          const df=(r._df && !String(ex.date_funded||'').trim()) ? r._df : null;            // fill missing funding date
+          const lc=(lcFieldOk && r._lc && r._lc!==String(ex.last_cleared||'')) ? r._lc : null; // refresh last-paid date
+          if(df||lc) backfills.push({id:ex._id, df, lc, deal:ex});
+        }
         continue;
       }
       newRows.push(r);
@@ -1019,7 +1025,7 @@ async function importCrmExport(file){
       if(validPriors.length){
         prior=validPriors[0]; status='ACTIVE'; dealtype='REFI'; prev=prior.lead_id||'';
       }
-      const fields={Merchant:merchant, LeadID:String(r[C.lead]||'').trim(), DateFunded:r._df,
+      const fields={Merchant:merchant, LeadID:String(r[C.lead]||'').trim(), DateFunded:r._df, ...(lcFieldOk&&r._lc?{LastCleared:r._lc}:{}),
         Funded:funded, RTR:rtr, Factor:funded? Math.round(rtr/funded*1000)/1000 : 0,
         DDFee:ffee, OrigFee:ofee, BankFees:fees, BookPct:bookpct, BookFunded:funded*bookpct/100,
         CommPct:funded? Math.round(comm/funded*10000)/100 : 0, CommAmount:comm, Kickback:0,
@@ -1059,8 +1065,9 @@ async function importCrmExport(file){
     }
     let filled=0;
     if(backfills.length){
-      for(let i=0;i<backfills.length;i+=10) await atFetch('PATCH','',{records:backfills.slice(i,i+10).map(b=>({id:b.id, fields:{DateFunded:b.df}}))});
-      backfills.forEach(b=>{ b.deal.date_funded=b.df; }); filled=backfills.length;
+      for(let i=0;i<backfills.length;i+=10) await atFetch('PATCH','',{records:backfills.slice(i,i+10).map(b=>({id:b.id, fields:{...(b.df?{DateFunded:b.df}:{}), ...(b.lc?{LastCleared:b.lc}:{})}}))});
+      backfills.forEach(b=>{ if(b.df) b.deal.date_funded=b.df; if(b.lc) b.deal.last_cleared=b.lc; });
+      filled=backfills.filter(b=>b.df).length;
     }
     await loadDeals();
     const datelessNew=newRows.filter(r=>!r._df).length;
@@ -1997,6 +2004,7 @@ function monthLabelFull(ym){ const [y,m]=ym.split('-'); return ['January','Febru
 // Close-out snapshots the month to PnlSnapshots and rolls Available into the ledger.
 let pnlLedger = {};      // cohort 'YYYY-MM' -> {_id, paid}
 let pnlSnapshots = [];   // [{_id, month, closedAt, sal, matt, data}]
+let lcFieldOk = false;   // build 50: Deals.LastCleared exists & writable (for 30-day no-pay signal)
 
 async function ensurePnlTables(){
   const key = getAirtableKey();
@@ -2004,6 +2012,21 @@ async function ensurePnlTables(){
   if (!res.ok) return;
   const data = await res.json();
   const have = new Set((data.tables||[]).map(t=>t.name));
+  // build 50: ensure Deals has a LastCleared date field (drives the 30-day no-pay PNL signal).
+  // Graceful — if meta access or the add fails, lcFieldOk stays false and the import simply
+  // won't write/refresh it (darkness then falls back to DEFAULT + never-paid-matured).
+  try{
+    const dealsT = (data.tables||[]).find(t=>t.name===AIRTABLE_TABLE);
+    if(dealsT){
+      if((dealsT.fields||[]).some(f=>f.name==='LastCleared')) lcFieldOk=true;
+      else {
+        const r = await fetch(`${AT_META_URL}/${dealsT.id}/fields`, { method:'POST',
+          headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
+          body: JSON.stringify({name:'LastCleared', type:'date', options:{dateFormat:{name:'iso'}}}) });
+        lcFieldOk = r.ok;
+      }
+    }
+  }catch(e){ lcFieldOk=false; }
   const mk = async (name, fields) => {
     await fetch(AT_META_URL, { method:'POST',
       headers:{'Authorization':`Bearer ${key}`,'Content-Type':'application/json'},
@@ -2085,12 +2108,25 @@ async function computePnl(){
   const curYM = addMonthsYM(liveYM, -1);
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
-  // 5-month HHC grace: a funding month enters the payout 5 months after funding.
-  // After grace, the month SETTLES in full each close-out: losses deduct, recoveries credit back.
-  // pnlLedger.paid = net settled to date (can be negative).
-  // The accounting month (curYM) is the one being closed. Its cohorts read their FROZEN
-  // month-end PNL so payments arriving in the live month can't contaminate it while we wait
-  // on legal fees. Freeze is keyed by the accounting month itself (frozen at its month-end).
+  // build 50: realization rule (replaces the 5-month HHC grace).
+  //   • Positive available ALWAYS pays out — fresh profit, or a recovery on a loss already settled.
+  //   • Negative available only DEDUCTS once the whole cohort is dark: every open deal is DEFAULT,
+  //     or 30+ days since its last cleared payment with $0 this month. Still-collecting / too-new
+  //     cohorts are HELD (no payout, no deduction) until they flip positive or go dark.
+  // pnlLedger.paid = net settled to date (can be negative once a loss is settled).
+  // The accounting month (curYM) reads its FROZEN month-end PNL so live-month payments can't
+  // contaminate it while we wait on legal fees. Freeze is keyed by the accounting month itself.
+  const now = Date.now();
+  const dealDark = d => {
+    if(d.status==='PIF'||d.status==='COMPLETED') return null;     // done — not part of "is it still paying"
+    if(d.status==='DEFAULT') return true;                         // Pinnacle flag — primary signal
+    if((d.paid_mtd||0) > 0) return false;                         // paid this month → alive
+    const lc = d.last_cleared ? new Date(d.last_cleared) : null;
+    if(lc && !isNaN(lc)) return (now - lc)/86400000 >= 30;        // 30+ days since last cleared payment
+    const fd = d.date_funded ? new Date(d.date_funded) : null;    // never recorded a payment:
+    return !!(fd && !isNaN(fd) && (now-fd)/86400000 >= 30 && (d.pct_paid||0) <= 0); // dark only once matured
+  };
+  const cohortDark = grp => { const open=grp.filter(d=>dealDark(d)!==null); return open.length>0 && open.every(d=>dealDark(d)===true); };
   const acctClosed = pnlSnapshots.some(s=>s.month===curYM);
   const useFreeze = !acctClosed;
   const cohorts = Object.keys(groups).sort().map(ym=>{
@@ -2099,9 +2135,11 @@ async function computePnl(){
     const ourEnd = pnl*HOUSE_SPLIT;
     const paid = pnlLedger[ym]?pnlLedger[ym].paid:0;
     const avail = ourEnd - paid;
-    const grace = addMonthsYM(ym,5) > curYM;
-    const payable = grace ? 0 : avail;
-    return {ym, label: monthLabel(ym), pnl, ourEnd, paid, avail, grace, graceUntil: addMonthsYM(ym,5), payable, frozen: !!frozen};
+    const dark = cohortDark(groups[ym]);
+    const held = avail < -0.005 && !dark;            // negative & still collecting → hold (no payout, no deduction)
+    const payable = held ? 0 : avail;                // positive pays out; negative deducts only when dark
+    const recovery = paid < -0.005 && avail > 0.005; // collecting back on a loss already settled → income to pay out
+    return {ym, label: monthLabel(ym), pnl, ourEnd, paid, avail, dark, held, recovery, payable, frozen: !!frozen};
   });
   const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid)
     .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback}));
@@ -2125,12 +2163,13 @@ function pnlRowsHtml(p){
   h+=sec('MONTHLY PNL','pnl-sec-blue');
   if(!p.cohorts.length) h+='<tr><td colspan="7" style="color:var(--text3)">No funded deals yet.</td></tr>';
   p.cohorts.forEach(c=>{
-    if(c.grace){
-      h+=`<tr class="pnl-grace"><td>${c.label} <span style="font-size:10.5px">· grace until ${monthLabelFull(c.graceUntil)}</span></td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}${money(c.avail)}<td class="pnl-div">—</td><td>—</td></tr>`;
+    const frz = c.frozen ? ' <span title="Frozen at prior month-end — new-month payments excluded until close-out" style="font-size:9.5px;font-weight:700;color:#6fb0ff;background:rgba(83,155,245,.16);padding:1px 6px;border-radius:8px;margin-left:6px">❄ FROZEN</span>' : '';
+    if(c.held){
+      h+=`<tr class="pnl-grace"><td>${c.label}${frz} <span style="font-size:10.5px">· held — still collecting</span></td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}${money(c.avail)}<td class="pnl-div">—</td><td>—</td></tr>`;
     } else {
       const half=c.payable/2;
-      const frz = c.frozen ? ' <span title="Frozen at prior month-end — new-month payments excluded until close-out" style="font-size:9.5px;font-weight:700;color:#6fb0ff;background:rgba(83,155,245,.16);padding:1px 6px;border-radius:8px;margin-left:6px">❄ FROZEN</span>' : '';
-      h+=`<tr><td style="font-weight:600">${c.label}${frz}</td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}<td class="${(c.avail<-0.005)?'pnl-neg':'pnl-pos'}" style="font-weight:700">${fmt$(c.avail)}</td>${moneyDiv(half)}${money(half)}</tr>`;
+      const tag = c.recovery ? ' <span title="Loss already settled with HHC — later collections are income to pay back out" style="font-size:9.5px;font-weight:700;color:#6fd396;background:rgba(55,198,111,.16);padding:1px 6px;border-radius:8px;margin-left:6px">↩ RECOVERY</span>' : '';
+      h+=`<tr><td style="font-weight:600">${c.label}${frz}${tag}</td>${money(c.pnl)}${money(c.ourEnd)}${money(c.paid)}<td class="${(c.avail<-0.005)?'pnl-neg':'pnl-pos'}" style="font-weight:700">${fmt$(c.avail)}</td>${moneyDiv(half)}${money(half)}</tr>`;
     }
   });
   h+=sec('KICKBACKS — UPFRONT BANK (100% OURS)','pnl-sec-green');
@@ -2138,7 +2177,7 @@ function pnlRowsHtml(p){
   p.kicks.forEach(k=>{ h+=`<tr><td style="font-weight:600">${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${moneyDiv(k.amount/2)}${money(k.amount/2)}</tr>`; });
   h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-red');
   h+=`<tr><td style="font-weight:600">FF due (${monthLabel(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${moneyDiv(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
-  h+=sec('LEGAL FEES — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-yellow');
+  h+=sec('LEGAL FEES — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-red');
   h+=`<tr><td style="font-weight:600">Legal (${monthLabel(p.month)})</td>${money(-legalTotal,legalTotal>0)}${money(-legalOurEnd,legalOurEnd>0)}<td>—</td>${money(-legalOurEnd,legalOurEnd>0)}${moneyDiv(-legalOurEnd/2,legalOurEnd>0)}${money(-legalOurEnd/2,legalOurEnd>0)}</tr>`;
   h+=`<tr><td style="font-weight:800;background:var(--bg3)">PAYOUT</td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td class="pnl-div ${p.each>=0?'pnl-pos':'pnl-neg'}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td><td class="${p.each>=0?'pnl-pos':'pnl-neg'}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td></tr>`;
   return h;
@@ -2174,13 +2213,13 @@ async function closeOutMonth(){
     await loadPnlState();
     const p=await computePnl();
     if(pnlSnapshots.some(s=>s.month===p.month)){ showNotice(monthLabelFull(p.month)+' is already closed — see history.','warn'); renderPnl(); return; }
-    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nMature month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+'\nFF deducted: '+fmt$(p.ffDue)+'\nLegal deducted (our end): '+fmt$(p.legalOurEnd)+'\n\nThis locks the snapshot and settles every mature month into the ledger (losses deduct, recoveries credit). It cannot be re-run for this month.');
+    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nEligible month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+'\nFF deducted: '+fmt$(p.ffDue)+'\nLegal deducted (our end): '+fmt$(p.legalOurEnd)+'\n\nThis locks the snapshot and settles each eligible month into the ledger — positive months pay, dark (30-day no-pay) losses deduct, recoveries credit back. It cannot be re-run for this month.');
     if(!ok) return;
     showLoading('Closing out '+monthLabelFull(p.month)+'...');
     await atFetchT('PnlSnapshots','POST','',{records:[{fields:{Month:p.month, ClosedAt:new Date().toISOString(), SalPayout:Math.round(p.each*100)/100, MattPayout:Math.round(p.each*100)/100, DataJSON:JSON.stringify(p)}}]});
     // settle every mature month in full — positive or negative — so Available zeroes out
     for(const c of p.cohorts){
-      if(c.grace || c.payable===0) continue;
+      if(c.held || c.payable===0) continue;
       const newPaid=Math.round((c.paid+c.payable)*100)/100;
       if(pnlLedger[c.ym]&&pnlLedger[c.ym]._id) await atFetchT('PnlLedger','PATCH','',{records:[{id:pnlLedger[c.ym]._id, fields:{PaidToDate:newPaid}}]});
       else await atFetchT('PnlLedger','POST','',{records:[{fields:{Cohort:c.ym, PaidToDate:newPaid}}]});
@@ -2248,9 +2287,9 @@ async function renderMonthly(){
   body.innerHTML=rows.map(r=>{
     const style=r.isTotal?'font-weight:700;background:var(--bg3)':'';
     const manualCells=r.isTotal
-      ? `<td style="${style}">${fmt$(r.clawback)}</td><td style="${style}">${fmt$(r.legal)}</td>`
-      : `<td><input class="m-edit" type="number" step="0.01" value="${r.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Clawback',this.value)"></td>`+
-        `<td><input class="m-edit" type="number" step="0.01" value="${r.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Legal',this.value)"></td>`;
+      ? `<td style="${style};color:var(--red)">${fmt$(r.legal)}</td><td style="${style}">${fmt$(r.clawback)}</td>`
+      : `<td><input class="m-edit" type="number" step="0.01" value="${r.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--red);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Legal',this.value)"></td>`+
+        `<td><input class="m-edit" type="number" step="0.01" value="${r.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Clawback',this.value)"></td>`;
     return `<tr>
       <td style="${style};white-space:nowrap">${r.label}</td>
       <td style="${style}">${r.tdf}</td><td style="${style}">${r.nw}</td><td style="${style}">${r.rf}</td>
@@ -2259,9 +2298,9 @@ async function renderMonthly(){
       <td style="${style}">${r.avgLen!=null?r.avgLen.toFixed(1)+' BD':'—'}</td>
       <td style="${style}">${r.avgFee!=null?r.avgFee.toFixed(2)+'%':'—'}</td>
       <td style="${style}">${fmt$(r.banks)}</td>
-      <td style="${style}">${fmt$(r.bonus)}</td>
       <td class="${r.pnl>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(r.pnl)}</td>
-      <td style="${style};color:var(--amber)">(${fmt$(r.ffees)})</td>
+      <td style="${style};color:var(--green)">${fmt$(r.bonus)}</td>
+      <td style="${style};color:var(--red)">(${fmt$(r.ffees)})</td>
       ${manualCells}
     </tr>`;
   }).join('');
@@ -2309,16 +2348,16 @@ async function exportExcel(){
   // ── Sheet 5: Monthly (same math as the Monthly view — one source of truth) ──
   const mrows=await computeMonthlyRows();
   addSheet('Monthly',
-    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Kickbacks','Total PNL','Finance Fees','Clawback','Legal'],
-    mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.funding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.bonus),n(r.pnl),n(r.ffees),n(r.clawback),n(r.legal)]),
-    [11,5,5,5,13,13,17,12,10,11,11,12,10,9]);
+    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Total PNL','Kickbacks','Finance Fees','Legal','Clawback'],
+    mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.funding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.pnl),n(r.bonus),n(r.ffees),n(r.legal),n(r.clawback)]),
+    [11,5,5,5,13,13,17,12,10,11,11,12,9,10]);
 
   // ── Sheet 6: PNL (current in-progress month, same engine as the PNL tab) ──
   try{
     await loadPnlState();
     const p=await computePnl();
     const prows=[];
-    p.cohorts.forEach(c=>prows.push([c.label+(c.grace?' (grace until '+monthLabelFull(c.graceUntil)+')':''),n(c.pnl),n(c.ourEnd),n(c.paid),n(c.avail),c.grace?null:n(c.payable/2),c.grace?null:n(c.payable/2)]));
+    p.cohorts.forEach(c=>prows.push([c.label+(c.held?' (held — collecting)':(c.recovery?' (recovery)':'')),n(c.pnl),n(c.ourEnd),n(c.paid),n(c.avail),c.held?null:n(c.payable/2),c.held?null:n(c.payable/2)]));
     p.kicks.forEach(k=>prows.push(['Kickback — '+k.label,n(k.amount),n(k.amount),null,n(k.amount),n(k.amount/2),n(k.amount/2)]));
     prows.push(['FF due (4-mo lag)',n(-p.ffDue),n(-p.ffDue),null,n(-p.ffDue),n(-p.ffDue/2),n(-p.ffDue/2)]);
     prows.push(['Legal (50% house split)',n(-p.legalTotal),n(-p.legalOurEnd),null,n(-p.legalOurEnd),n(-p.legalOurEnd/2),n(-p.legalOurEnd/2)]);
