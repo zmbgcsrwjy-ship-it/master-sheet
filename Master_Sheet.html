@@ -248,7 +248,7 @@ select.badge:hover{filter:brightness(1.2)}
 #panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
 #panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
-.kb-edit{width:74px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px}
+.kb-edit{width:92px;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px}
 .kb-edit:focus{border-color:var(--blue);outline:none}
 </style>
 </head>
@@ -293,7 +293,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="daily report now stamps LastCleared on any payment seen (owns the 30-day clock, no mydeals dependency); FF back to amber, legal red only when non-zero ($0 shows white)">build 52</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="All Deals kickback column centered & shown as dollar values">build 53</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1404,7 +1404,7 @@ async function deleteDeal(airtableId, merchant) {
 // Inline kickback editing (build 29): type in the cell, saves on enter/blur.
 async function saveKickbackInline(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
-  const v=parseFloat(val)||0;
+  const v=parseFloat(String(val).replace(/[$,]/g,''))||0;
   if(v===(d.kickback||0)) return;
   try{
     await atFetch('PATCH','',{records:[{id, fields:{Kickback:v}}]});
@@ -1636,7 +1636,7 @@ function renderTable(){
       <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
       <td style="white-space:nowrap"><select class="badge ${badgeCls}" onchange="setDealStatus('${d._id}',this.value)" title="${d.status_override?'Manually pinned — sync will not change this status':'Status (auto) — pick one to pin it manually'}">${['NEW','ACTIVE','PIF','COMPLETED','DEFAULT'].map(s=>`<option value="${s}"${s===d.status?' selected':''}>${s}</option>`).join('')}${d.status_override?'<option value="__AUTO__">↺ release to auto</option>':''}</select>${d.status_override?'<span class="ovr-dot" title="Manually pinned — sync will not change this status">📌</span>':''}${csChip(d)}</td>
       <td style="font-size:11px;color:var(--text2)">${d.funder||'—'}</td>
-      <td style="white-space:nowrap"><input class="kb-edit" type="number" step="0.01" value="${d.kickback||''}" placeholder="—" onchange="saveKickbackInline('${d._id}',this.value)" title="${d.kickback_paid?'Already distributed in a closed PNL month — changes will NOT flow to a new payout':'Kickback (upfront bank) — saves on enter/blur'}">${d.kickback_paid?'<span style="font-size:10px;color:var(--green)" title="Distributed">✓</span>':''}</td>
+      <td style="white-space:nowrap;text-align:center"><input class="kb-edit" type="text" value="${d.kickback?fmt$(d.kickback):''}" placeholder="—" onchange="saveKickbackInline('${d._id}',this.value)" title="${d.kickback_paid?'Already distributed in a closed PNL month — changes will NOT flow to a new payout':'Kickback (upfront bank) — saves on enter/blur'}">${d.kickback_paid?'<span style="font-size:10px;color:var(--green)" title="Distributed">✓</span>':''}</td>
       <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
       <td style="color:var(--text2)">${d.frequency==='Weekly'?'<span class="wk-name">'+fmt$(d.daily_payment)+'/wk</span>':fmt$(d.daily_payment)}</td>
       <td style="color:var(--text2)">${d.lead_id||'—'}</td>
