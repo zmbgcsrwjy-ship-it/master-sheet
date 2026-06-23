@@ -277,8 +277,6 @@ select.badge:hover{filter:brightness(1.2)}
   <div class="setup-card">
     <h1>📋 Master Sheet</h1>
     <p>Enter your credentials to connect to Airtable. Your data will sync in real time — you and Sal will always see the same book. Enter once, works forever.</p>
-    <label>Anthropic API Key <small style="color:var(--text3)">(for screenshot auto-fill)</small></label>
-    <input type="password" id="setup-anthropic" placeholder="paste your Anthropic key here" autocomplete="off" spellcheck="false">
     <label>Airtable API Token</label>
     <input type="password" id="setup-airtable" placeholder="pat..." autocomplete="off" spellcheck="false">
     <div class="setup-hint">Base ID is pre-configured. Your credentials are saved locally and baked into your copy of this file.</div>
@@ -293,12 +291,12 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="kickback header centered; kickback input font matches table cells in compact + normal view">build 54</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="removed Add-from-screenshot intake (CRM import is the path now); Add manually is blue; Anthropic key dropped from setup/credentials; Allocator sidebar bubble = all unallocated MSC deals (incl. no-ISO)">build 56</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
         <div class="nav-item active" id="nav-book" onclick="setView('book')">📊 All deals</div>
-        <div class="nav-item" id="nav-allocator" onclick="setView('allocator')">💸 Allocator</div>
+        <div class="nav-item" id="nav-allocator" onclick="setView('allocator')">💸 Allocator <span class="nav-badge" id="alloc-badge" title="Your (MSC) deals not allocated yet — pending deals waiting to be allocated / sent" style="background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-border)">0</span></div>
         <div class="nav-item" id="nav-renewal" onclick="setView('renewal')">🔁 REFI eligible <span class="nav-badge" id="renewal-badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">0</span></div>
         <div class="nav-item" id="nav-pif" onclick="setView('pif')">💰 PIF <span class="nav-badge" id="pif-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)">0</span></div>
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
@@ -320,8 +318,8 @@ select.badge:hover{filter:brightness(1.2)}
           <p>Live sync with Airtable — you and Sal always see the same book</p>
         </div>
         <div class="btn-row">
-          <input type="file" id="crm-file" accept=".csv" style="display:none" onchange="closeCrmModal();importCrmExport(this.files[0])"><button class="btn btn-green" style="box-shadow:0 0 0 1.5px rgba(80,200,120,.55)" onclick="openCrmModal()" title="The preferred way to add deals — the end-of-day CRM deals export. Cleaner data, industry + owner contact included.">⭐ Import CRM export</button><button class="btn btn-blue" onclick="openScreenshotModal()">📸 Add from screenshot</button>
-          <button class="btn btn-green" onclick="openModal()">➕ Add manually</button>
+          <input type="file" id="crm-file" accept=".csv" style="display:none" onchange="closeCrmModal();importCrmExport(this.files[0])"><button class="btn btn-green" style="box-shadow:0 0 0 1.5px rgba(80,200,120,.55)" onclick="openCrmModal()" title="The preferred way to add deals — the end-of-day CRM deals export. Cleaner data, industry + owner contact included.">⭐ Import CRM export</button>
+          <button class="btn btn-blue" onclick="openModal()">➕ Add manually</button>
           <button class="btn" onclick="openDailyModal()">🔄 Sync daily report</button>
           <button class="btn" onclick="exportExcel()">⬇️ Export Excel</button>
         </div>
@@ -379,7 +377,7 @@ select.badge:hover{filter:brightness(1.2)}
             </table>
           </div>
           <div id="empty-filter" class="empty-state" style="display:none"><div class="icon">🔍</div><h3>No deals match</h3><p>Try adjusting your filters.</p></div>
-          <div id="empty-deals" class="empty-state"><div class="icon">📋</div><h3>No deals yet</h3><p>Click <strong>📸 Add from screenshot</strong> and upload a Pinnacle<br>funding email screenshot. Claude reads it automatically.</p></div>
+          <div id="empty-deals" class="empty-state"><div class="icon">📋</div><h3>No deals yet</h3><p>Click <strong>⭐ Import CRM export</strong> to load your end-of-day<br>deals export, or <strong>➕ Add manually</strong> to enter one by hand.</p></div>
         </div>
 
         <div class="panel" id="panel-monthly" style="display:none">
@@ -497,31 +495,6 @@ select.badge:hover{filter:brightness(1.2)}
   </div>
 </div>
 
-<!-- SCREENSHOT MODAL -->
-<div id="ss-modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeSSModal()">
-  <div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
-    <div class="modal-title">📸 Add deal from screenshot</div>
-    <div class="modal-sub">Upload a Pinnacle funding email screenshot. Claude reads every field automatically.</div>
-    <div class="upload-zone" id="upload-zone"
-      onclick="document.getElementById('img-input').click()"
-      ondragover="event.preventDefault();this.classList.add('drag')"
-      ondragleave="this.classList.remove('drag')"
-      ondrop="handleDrop(event)">
-      <div class="uz-icon">📁</div>
-      <p>Click to upload or drag & drop</p>
-      <span>PNG, JPG, WEBP supported</span>
-    </div>
-    <input type="file" id="img-input" accept="image/*" style="display:none" onchange="handleImageUpload(this)">
-    <div id="extract-status" style="display:none;font-size:13px;padding:12px 0;text-align:center;color:var(--text2)"></div>
-    <div id="img-preview" style="display:none;margin-bottom:12px;text-align:center">
-      <img id="preview-img" style="max-width:100%;max-height:180px;border-radius:var(--radius-sm);border:1px solid var(--border)">
-    </div>
-    <div class="modal-footer" style="margin-top:0;padding-top:1rem">
-      <button class="btn" onclick="closeSSModal()">Cancel</button>
-    </div>
-  </div>
-</div>
-
 <!-- DEAL FORM MODAL -->
 <div id="modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal" onclick="event.stopPropagation()">
@@ -571,7 +544,6 @@ select.badge:hover{filter:brightness(1.2)}
 // ─── CONFIG ──────────────────────────────────────────────
 const AIRTABLE_BASE_ID = 'apphzzf9owsOTICpp';
 const AIRTABLE_TABLE = 'Deals';
-const BAKED_ANTHROPIC = '__BAKED_ANTHROPIC__';
 const BAKED_AIRTABLE  = '__BAKED_AIRTABLE__';
 
 // ─── STATE ───────────────────────────────────────────────
@@ -619,7 +591,6 @@ function toggleSidebar(){
   sb.classList.toggle('collapsed');
   t.textContent = sb.classList.contains('collapsed') ? '\u25B6' : '\u25C0';
 }
-const getAnthropicKey = () => BAKED_ANTHROPIC.startsWith('sk-ant') ? BAKED_ANTHROPIC : localStorage.getItem('ms_anthropic')||'';
 const getAirtableKey  = () => BAKED_AIRTABLE.startsWith('pat')    ? BAKED_AIRTABLE  : localStorage.getItem('ms_airtable')||'';
 
 // ─── STARTUP ─────────────────────────────────────────────
@@ -629,7 +600,6 @@ window.addEventListener('load', () => {
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app').style.display = 'none';
   document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
-  document.getElementById('setup-anthropic').addEventListener('keydown', e => { if(e.key==='Enter') setupAndBake(); });
   document.getElementById('setup-airtable').addEventListener('keydown',  e => { if(e.key==='Enter') setupAndBake(); });
 });
 
@@ -662,7 +632,6 @@ function unlockApp() {
 
 // ─── SETUP & BAKE ────────────────────────────────────────
 function setupAndBake() {
-  const anthropic = document.getElementById('setup-anthropic').value.trim();
   const airtable  = document.getElementById('setup-airtable').value.trim();
   const errEl = document.getElementById('setup-error');
 
@@ -670,15 +639,10 @@ function setupAndBake() {
     errEl.textContent = 'Airtable token should start with pat... — check and try again.';
     errEl.style.display = 'block'; return;
   }
-  if (anthropic && !anthropic.startsWith('sk-ant')) {
-    errEl.textContent = 'Anthropic key should start with sk-ant... — check and try again.';
-    errEl.style.display = 'block'; return;
-  }
 
   localStorage.setItem('ms_airtable', airtable);
-  if (anthropic) localStorage.setItem('ms_anthropic', anthropic);
 
-  bakeIntoFile(anthropic, airtable);
+  bakeIntoFile(airtable);
 
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
@@ -686,7 +650,7 @@ function setupAndBake() {
 }
 
 
-function bakeIntoFile(anthropic, airtable) {
+function bakeIntoFile(airtable) {
   // SECURITY (June 10, 2026): this used to download a copy of the app with
   // credentials stamped into the source. That stamped copy ended up on public
   // GitHub and exposed the live Airtable token. Credentials now live ONLY in
@@ -696,10 +660,8 @@ function bakeIntoFile(anthropic, airtable) {
 }
 
 function updateCredentials() {
-  const anthropic = prompt('Anthropic API key (leave blank to keep current):');
   const airtable  = prompt('Airtable token (leave blank to keep current):');
   if (airtable && airtable.startsWith('pat')) { localStorage.setItem('ms_airtable', airtable); showNotice('Airtable token updated in this browser.', 'success'); loadDeals(); }
-  if (anthropic && anthropic.startsWith('sk-ant')) { localStorage.setItem('ms_anthropic', anthropic); showNotice('Anthropic key updated in this browser.', 'success'); }
 }
 
 // ─── AIRTABLE API ─────────────────────────────────────────
@@ -1103,89 +1065,13 @@ function showLoading(msg='Loading...') {
 }
 function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
 
-// ─── SCREENSHOT ──────────────────────────────────────────
-function openScreenshotModal() {
-  document.getElementById('extract-status').style.display = 'none';
-  document.getElementById('img-preview').style.display = 'none';
-  document.getElementById('img-input').value = '';
-  document.getElementById('upload-zone').classList.remove('drag');
-  document.getElementById('ss-modal-bg').style.display = 'flex';
-}
-function closeSSModal() { document.getElementById('ss-modal-bg').style.display = 'none'; }
-function handleDrop(e) { e.preventDefault(); document.getElementById('upload-zone').classList.remove('drag'); const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) processImage(f); }
-function handleImageUpload(input) { if(input.files[0]) processImage(input.files[0]); }
-
-// build 29: CRM import + daily sync use a drop-zone modal, mirroring the screenshot flow
+// build 29: CRM import + daily sync use a drop-zone modal
 function openCrmModal(){ var i=document.getElementById('crm-file'); if(i)i.value=''; var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); document.getElementById('crm-modal-bg').style.display='flex'; }
 function closeCrmModal(){ var m=document.getElementById('crm-modal-bg'); if(m)m.style.display='none'; }
 function handleCrmDrop(e){ e.preventDefault(); var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return; if(!(f.name||'').toLowerCase().endsWith('.csv')){ showNotice('CRM import expects a .csv file.','error'); return; } closeCrmModal(); importCrmExport(f); }
 function openDailyModal(){ var i=document.getElementById('daily-input'); if(i)i.value=''; var z=document.getElementById('daily-zone'); if(z)z.classList.remove('drag'); document.getElementById('daily-modal-bg').style.display='flex'; }
 function closeDailyModal(){ var m=document.getElementById('daily-modal-bg'); if(m)m.style.display='none'; }
 function handleDailyDrop(e){ e.preventDefault(); var z=document.getElementById('daily-zone'); if(z)z.classList.remove('drag'); var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return; if(!(f.name||'').toLowerCase().endsWith('.xlsx')){ showNotice('Daily report expects an .xlsx file.','error'); return; } closeDailyModal(); handleDailyReport(f); }
-
-async function processImage(file) {
-  const apiKey = getAnthropicKey();
-  if (!apiKey) { showNotice('No Anthropic API key. Update credentials via the sidebar.', 'error'); return; }
-  document.getElementById('preview-img').src = URL.createObjectURL(file);
-  document.getElementById('img-preview').style.display = 'block';
-  const statusEl = document.getElementById('extract-status');
-  statusEl.style.display = 'block'; statusEl.style.color = 'var(--text2)';
-  statusEl.innerHTML = '<span class="spinner"></span> Reading screenshot with Claude...';
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    const b64 = e.target.result.split(',')[1];
-    const mediaType = file.type || 'image/png';
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514', max_tokens: 1000,
-          messages: [{ role:'user', content: [
-            { type:'image', source:{ type:'base64', media_type:mediaType, data:b64 } },
-            { type:'text', text:`Extract deal fields from this Pinnacle MCA funding confirmation screenshot. Return ONLY valid JSON, no markdown, no explanation.
-{
-  "merchant": "the QB Name. On NEW deals the line is labeled NEW QB Name; on REFI deals it is labeled Existing QB Name — take whichever appears. NEVER use Legal Name on Statement, never use DBA",
-  "lead_id": "value from Lead ID field as a string",
-  "frequency": "Daily or Weekly, from Method of Collection",
-  "deal_type": "NEW or REFI, from the Deal Type line",
-  "funder": "short funder name from the Funder line in Verify Info (e.g. HBP)",
-  "date_funded": "YYYY-MM-DD from the Last Updated date (when the funding request went to accounting) — NOT Created, NOT Start Debits On. The year MUST be between 2020 and 2030 — read it carefully from the image, never invent digits",
-  "funded": number from Purchase Price,
-  "rtr": number from Purchase Amount,
-  "factor": number from Factor Rate,
-  "term": number from Estimated Payments (business days),
-  "daily_payment": number from the Remittance Amount line,
-  "dd_fee": number from Due Diligence Fee,
-  "orig_fee": number from Origination Fee,
-  "book_pct": number from Book percentage in Participation Info — must be between 0 and 100, never above 100,
-  "rep": "Rep from Verify Info",
-  "iso": "ISO from Verify Info",
-  "comm_pct": number from Commission % (no % sign),
-  "comm_amount": number from Commission Amount
-}
-Use null for missing fields.` }
-          ]}]
-        })
-      });
-      if (!res.ok) { const e=await res.json().catch(()=>({error:{message:'HTTP '+res.status}})); throw new Error(e.error?.message); }
-      const data = await res.json();
-      const text = data.content.filter(b=>b.type==='text').map(b=>b.text).join('');
-      const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
-      statusEl.style.color = 'var(--green)';
-      statusEl.innerHTML = '✅ All fields extracted — review below.';
-      setTimeout(() => {
-        closeSSModal(); editingId = null;
-        document.getElementById('modal-title').textContent = '📸 Review extracted deal';
-        document.getElementById('modal-sub').textContent = 'Fields extracted from your screenshot. Review and confirm.';
-        fillForm(parsed);
-        document.getElementById('modal-bg').style.display = 'flex';
-        setTimeout(runWatchdog, 100);
-      }, 700);
-    } catch(err) { statusEl.style.color='var(--red)'; statusEl.innerHTML='❌ '+err.message; }
-  };
-  reader.readAsDataURL(file);
-}
 
 // ─── FORM ────────────────────────────────────────────────
 function autoCalc() {
@@ -1803,10 +1689,18 @@ let allocGroupKeys = [];
 const allocIsoKey = d => { const s=String(d.iso||'').trim(); return (s && s!=='—' && s.toUpperCase()!=='UNASSIGNED') ? s : '__NOISO__'; };
 const allocKb = d => Math.round((d.funded||0)*ALLOC_SPREAD*100)/100;
 
+// build 56: sidebar bubble — every MSC deal not allocated yet (no kickback set),
+// matching the allocator tab's "waiting" count. Includes no-ISO deals.
+function allocBadge(){
+  const n = deals.filter(d => d.rep==='MSC' && !(d.kickback>0)).length;
+  const el = document.getElementById('alloc-badge'); if(el) el.textContent = n;
+}
+
 function renderAllocator(){
   const body=document.getElementById('alloc-body'), empty=document.getElementById('alloc-empty');
   const isoSel=document.getElementById('alloc-iso-filter');
   if(!body) return;
+  allocBadge();
   // your funded deals that haven't been allocated yet (no kickback set)
   const all=deals.filter(d=>d.rep==='MSC' && !(d.kickback>0));
   if(!all.length){ body.innerHTML=''; empty.style.display=''; if(isoSel) isoSel.innerHTML='<option value="">All ISOs</option>'; return; }
@@ -1910,6 +1804,7 @@ function renderMetrics(){
   document.getElementById('renewal-badge').textContent=rc;
   document.getElementById('pif-badge').textContent=pifs.length;
   document.getElementById('default-badge').textContent=defs.length;
+  allocBadge();
   const pnlEl=document.getElementById('m-pnl');
   pnlEl.textContent=fmtK(totalPNL);
   pnlEl.className='val '+(totalPNL>=0?'val-green':'val-red');
