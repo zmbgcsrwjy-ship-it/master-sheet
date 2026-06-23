@@ -1230,7 +1230,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v84 · live</span>
+      <span class="build-tag">v85 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1594,6 +1594,15 @@ async function atPatch(table, recs){
 // ---------- PREFLIGHT (contract §5.3/5.4: field-ID manifest, loud stop on drift) ----------
 async function beaconPreflight(){
   const meta = await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables');
+  // v85: ensure Deals.LastCleared exists so the daily sync can stamp the 30-day no-pay clock.
+  // Non-fatal and outside the strict manifest — if it can't be added, bLcOk stays false and we just don't stamp.
+  try{
+    const dt = meta.tables.find(x=>x.name==='Deals');
+    if(dt){
+      if((dt.fields||[]).some(f=>f.name==='LastCleared')) bLcOk=true;
+      else { await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables/'+dt.id+'/fields', {method:'POST', body:{name:'LastCleared', type:'date', options:{dateFormat:{name:'iso'}}}}); bLcOk=true; }
+    }
+  }catch(e){ bLcOk=false; }
   const onPhoenix = BEACON_CFG.baseId === PHOENIX_BASE_ID;
   const problems = [];
   for (const tName of Object.keys(BEACON_MANIFEST)){
@@ -1944,6 +1953,7 @@ let TODAY_ISO = bLocalToday();
 let state = [];
 let history = {};
 let beaconRawCache = {deals:[], bounces:[], actions:[]};
+let bLcOk = false;   // v85: Deals.LastCleared exists & writable (daily sync stamps the 30-day clock)
 const beaconNoteRidMap = {};
 
 function beaconWriteErr(e){ console.error('[beacon write]', e); showToast("\u26a0 Airtable write FAILED \u2014 change not saved"); }
@@ -1996,6 +2006,7 @@ function beaconBuildDailyUpdates(wb, rawDeals){
   if(custI<0||balI<0) throw new Error('Daily report headers not recognized — is this the right file?');
   let updates=[],ambiguous=0,matched=0;
   const claimed=new Set();
+  const B_TODAY=bLocalToday();  // v85: stamp date for payments seen today
   dataRows.forEach(row=>{
     if(!row||!row[custI]) return;
     const nameKey=bSquish(row[custI]);
@@ -2029,6 +2040,10 @@ function beaconBuildDailyUpdates(wb, rawDeals){
       const flds={Balance:bal, PctPaid:pct, PNL:bCalcPNL(f.RTR||0, bal, (f.BookPct!=null?f.BookPct:100), f.MaxLoss||0)};
       if(paidI>=0) flds.PaidToday=parseFloat(row[paidI])||0;
       if(pmtdI>=0) flds.PaidMTD=parseFloat(row[pmtdI])||0;
+      // v85 (parity with Master Sheet build 52): if this row shows a payment — Paid Today > 0,
+      // Paid This Month ticked up, or balance dropped — stamp LastCleared = today (owns the 30-day clock).
+      const paymentSeen = bLcOk && ((flds.PaidToday>0) || ((flds.PaidMTD||0)>(Number(f.PaidMTD)||0)) || (f.Balance!=null && bal < Number(f.Balance)));
+      if(paymentSeen) flds.LastCleared=B_TODAY;
       if(newStatus) flds.Status=newStatus;
       if(lead&&!f.LeadID) flds.LeadID=lead;
       updates.push({id:m.id, fields:flds});
