@@ -248,7 +248,7 @@ select.badge:hover{filter:brightness(1.2)}
 #panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
 #panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
-.kb-edit{width:92px;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px}
+.kb-edit{width:92px;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:inherit}
 .kb-edit:focus{border-color:var(--blue);outline:none}
 </style>
 </head>
@@ -293,7 +293,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="All Deals kickback column centered & shown as dollar values">build 53</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="kickback header centered; kickback input font matches table cells in compact + normal view">build 54</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -372,7 +372,7 @@ select.badge:hover{filter:brightness(1.2)}
                 <th onclick="sortBy('pnl')">PNL ↕</th>
                 <th onclick="sortBy('term')">Length ↕</th>
                 <th onclick="sortBy('pct_paid')">% Paid ↕</th>
-                <th>Status</th><th>Funder</th><th>Kickback</th>
+                <th>Status</th><th>Funder</th><th style="text-align:center">Kickback</th>
                 <th>ISO</th><th>Payment</th><th onclick="sortBy('lead_id')">Lead ID ↕</th><th></th>
               </tr></thead>
               <tbody id="tbody"></tbody>
