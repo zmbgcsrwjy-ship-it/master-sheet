@@ -293,7 +293,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="legal red across all tabs (matches FF), Monthly kickbacks green; Monthly columns reordered — Total PNL before Kickbacks, Legal before Clawback">build 51</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="daily report now stamps LastCleared on any payment seen (owns the 30-day clock, no mydeals dependency); FF back to amber, legal red only when non-zero ($0 shows white)">build 52</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1496,6 +1496,7 @@ async function handleDailyReport(input) {
       const ci=n=>headers.findIndex(h=>h.includes(n));
       const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status'),leadI=ci('lead'),purchI=ci('purchased'),paidI=ci('paid today'),pmtdI=ci('paid this month');
       let updates=[],ambiguous=0;
+      const DAILY_TODAY=new Date().toISOString().slice(0,10);  // build 52: stamp date for payments seen today
       const claimed=new Set();
       // Match precedence (June 10, 2026): LeadID alone when unique; LeadID+RTR
       // composite when the same merchant has multiple deals under one LeadID
@@ -1530,7 +1531,12 @@ async function handleDailyReport(input) {
             if(stat==='DEFAULT'&&m.status!=='DEFAULT') newStatus='DEFAULT';
             else if(bal<=0&&['NEW','ACTIVE'].includes(m.status)) newStatus='PIF';
           }
-          updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(paidI>=0?{PaidToday:parseFloat(row[paidI])||0}:{}), ...(pmtdI>=0?{PaidMTD:parseFloat(row[pmtdI])||0}:{}), ...(newStatus?{Status:newStatus}:{}), ...(lead&&!m.lead_id?{LeadID:lead}:{}) }});
+          // build 52 (option 2): the daily report owns the 30-day clock. If this row shows a payment —
+          // Paid Today > 0, Paid This Month ticked up, or the balance dropped — stamp LastCleared = today.
+          const paidToday = paidI>=0 ? (parseFloat(row[paidI])||0) : 0;
+          const paidMtd   = pmtdI>=0 ? (parseFloat(row[pmtdI])||0) : 0;
+          const paymentSeen = lcFieldOk && (paidToday>0 || paidMtd>(m.paid_mtd||0) || (m.balance!=null && bal < m.balance));
+          updates.push({ id:m._id, fields:{ Balance:bal, PctPaid:pct, PNL:calcPNL(m.rtr,bal,m.book_pct,m.max_loss), ...(paidI>=0?{PaidToday:paidToday}:{}), ...(pmtdI>=0?{PaidMTD:paidMtd}:{}), ...(paymentSeen?{LastCleared:DAILY_TODAY}:{}), ...(newStatus?{Status:newStatus}:{}), ...(lead&&!m.lead_id?{LeadID:lead}:{}) }});
         }
       });
       if(ambiguous>0) showNotice(ambiguous+' row'+(ambiguous!==1?'s':'')+' skipped — same LeadID on multiple deals and amounts did not disambiguate. Update those balances manually.','warn',9000);
@@ -2175,7 +2181,7 @@ function pnlRowsHtml(p){
   h+=sec('KICKBACKS — UPFRONT BANK (100% OURS)','pnl-sec-green');
   if(!p.kicks.length) h+='<tr><td colspan="7" style="color:var(--text3)">No undistributed kickbacks.</td></tr>';
   p.kicks.forEach(k=>{ h+=`<tr><td style="font-weight:600">${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${moneyDiv(k.amount/2)}${money(k.amount/2)}</tr>`; });
-  h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-red');
+  h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-yellow');
   h+=`<tr><td style="font-weight:600">FF due (${monthLabel(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${moneyDiv(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
   h+=sec('LEGAL FEES — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-red');
   h+=`<tr><td style="font-weight:600">Legal (${monthLabel(p.month)})</td>${money(-legalTotal,legalTotal>0)}${money(-legalOurEnd,legalOurEnd>0)}<td>—</td>${money(-legalOurEnd,legalOurEnd>0)}${moneyDiv(-legalOurEnd/2,legalOurEnd>0)}${money(-legalOurEnd/2,legalOurEnd>0)}</tr>`;
@@ -2287,8 +2293,8 @@ async function renderMonthly(){
   body.innerHTML=rows.map(r=>{
     const style=r.isTotal?'font-weight:700;background:var(--bg3)':'';
     const manualCells=r.isTotal
-      ? `<td style="${style};color:var(--red)">${fmt$(r.legal)}</td><td style="${style}">${fmt$(r.clawback)}</td>`
-      : `<td><input class="m-edit" type="number" step="0.01" value="${r.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--red);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Legal',this.value)"></td>`+
+      ? `<td style="${style}${r.legal?';color:var(--red)':''}">${fmt$(r.legal)}</td><td style="${style}">${fmt$(r.clawback)}</td>`
+      : `<td><input class="m-edit" type="number" step="0.01" value="${r.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${r.legal?'var(--red)':'var(--text)'};padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Legal',this.value)"></td>`+
         `<td><input class="m-edit" type="number" step="0.01" value="${r.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Clawback',this.value)"></td>`;
     return `<tr>
       <td style="${style};white-space:nowrap">${r.label}</td>
@@ -2300,7 +2306,7 @@ async function renderMonthly(){
       <td style="${style}">${fmt$(r.banks)}</td>
       <td class="${r.pnl>=0?'pnl-pos':'pnl-neg'}" style="${style}">${fmt$(r.pnl)}</td>
       <td style="${style};color:var(--green)">${fmt$(r.bonus)}</td>
-      <td style="${style};color:var(--red)">(${fmt$(r.ffees)})</td>
+      <td style="${style}${r.ffees?';color:var(--amber)':''}">(${fmt$(r.ffees)})</td>
       ${manualCells}
     </tr>`;
   }).join('');
