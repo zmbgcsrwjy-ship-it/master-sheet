@@ -92,6 +92,14 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 #pif-body{overflow:auto;max-height:calc(100vh - 235px)}
 #alloc-body{overflow:auto;max-height:calc(100vh - 235px)}
 #alloc-body thead th{position:sticky;top:0;z-index:3}
+/* build 58: allocator readability — slightly larger, consistent type, more breathing room */
+#alloc-body .pif-table{font-size:13px}
+#alloc-body .pif-table td{padding:8px 12px}
+#alloc-body .pif-table th{font-size:11.5px;padding:8px 12px}
+#alloc-body .alloc-grouprow td{padding:9px 12px}
+#alloc-body .alloc-iso-name{font-size:14px;font-weight:700}
+#alloc-body .alloc-grp-sub{font-size:12.5px;font-weight:400;color:var(--text3)}
+#alloc-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text3)}
 /* build 48: subtle on-theme scrollbars (replaces the bright browser default) */
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -291,7 +299,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Allocator now includes Matthew Jara's deals alongside MSC (rep list = ALLOC_REPS, case-insensitive); tab + bubble updated">build 57</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Allocator cleanup: summary moved up next to title, helper text → tooltip; table font 12→13px with more row padding; ISO group name enlarged; type sizes harmonized">build 58</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -430,7 +438,13 @@ select.badge:hover{filter:brightness(1.2)}
         </div>
 
         <div class="panel" id="panel-allocator" style="display:none">
-          <div class="panel-header"><h3>Allocator</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap"><select id="alloc-iso-filter" onchange="renderAllocator()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select><span>Your deals (MSC + Matthew Jara) — ISO commissions to send & 3% kickbacks to record. Hit Paid once you've allocated in Pinnacle.</span></span></div>
+          <div class="panel-header">
+            <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;min-width:0">
+              <h3 title="Your deals (MSC + Matthew Jara) — ISO commissions to send & 3% kickbacks to record. Hit Paid once you've allocated in Pinnacle.">Allocator</h3>
+              <span id="alloc-head"></span>
+            </div>
+            <select id="alloc-iso-filter" onchange="renderAllocator()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select>
+          </div>
           <div id="alloc-body"></div>
           <div id="alloc-empty" class="empty-state" style="display:none"><div class="icon">💸</div><h3>Nothing to allocate</h3><p>Your funded deals show here until you mark them paid. Once allocated, the 3% kickback flows into your next close-out.</p></div>
         </div>
@@ -1707,9 +1721,10 @@ function renderAllocator(){
   const isoSel=document.getElementById('alloc-iso-filter');
   if(!body) return;
   allocBadge();
+  const headEl=document.getElementById('alloc-head');
   // your funded deals that haven't been allocated yet (no kickback set)
   const all=deals.filter(d=>isAllocRep(d) && !(d.kickback>0));
-  if(!all.length){ body.innerHTML=''; empty.style.display=''; if(isoSel) isoSel.innerHTML='<option value="">All ISOs</option>'; return; }
+  if(!all.length){ body.innerHTML=''; empty.style.display=''; if(headEl) headEl.innerHTML=''; if(isoSel) isoSel.innerHTML='<option value="">All ISOs</option>'; return; }
   empty.style.display='none';
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
   // ISO filter — built from full pool, selection preserved (No ISO last)
@@ -1729,17 +1744,16 @@ function renderAllocator(){
     return {d,kb,hasIso,isoComm,commPct,isoPct,key:allocIsoKey(d)};
   });
   const dim='color:var(--text3)';
-  if(!rows.length){ body.innerHTML='<div style="color:var(--text3);text-align:center;padding:24px">No deals match this ISO filter.</div>'; return; }
+  if(!rows.length){ if(headEl) headEl.innerHTML='<span>0 deals (filtered)</span>'; body.innerHTML='<div style="color:var(--text3);text-align:center;padding:24px">No deals match this ISO filter.</div>'; return; }
   const groups={};
   rows.forEach(r=>{ (groups[r.key]=groups[r.key]||[]).push(r); });
   allocGroupKeys=Object.keys(groups).filter(k=>k!=='__NOISO__').sort((a,b)=>a.toLowerCase()<b.toLowerCase()?-1:1);
   if(groups.__NOISO__) allocGroupKeys.push('__NOISO__');
   const totalSend=rows.reduce((s,r)=>s+r.isoComm,0), totalKb=rows.reduce((s,r)=>s+r.kb,0);
-  let h=`<div style="display:flex;gap:20px;flex-wrap:wrap;padding:11px 14px;font-size:12.5px;border-bottom:1px solid var(--border)">
-    <span>To send to ISOs: <b style="color:var(--text)">${fmt$(totalSend)}</b></span>
+  if(headEl) headEl.innerHTML=`<span>To send to ISOs: <b style="color:var(--text)">${fmt$(totalSend)}</b></span>
     <span>Kickbacks to record: <b style="color:var(--green)">${fmt$(totalKb)}</b></span>
-    <span style="${dim}">${rows.length} deal${rows.length===1?'':'s'}${fIso?' (filtered)':' waiting'}</span></div>`;
-  h+=`<table class="pif-table"><colgroup>
+    <span style="${dim}">${rows.length} deal${rows.length===1?'':'s'}${fIso?' (filtered)':' waiting'}</span>`;
+  let h=`<table class="pif-table"><colgroup>
     <col style="width:8%"><col style="width:16%"><col style="width:6%"><col style="width:13%"><col style="width:10%"><col style="width:7%"><col style="width:12%"><col style="width:7%"><col style="width:10%"><col style="width:11%">
   </colgroup><thead><tr>
     <th class="pif-c">Date Funded</th><th>Deal</th><th>Rep</th><th>ISO</th>
@@ -1750,7 +1764,7 @@ function renderAllocator(){
     const gSend=grp.reduce((s,r)=>s+r.isoComm,0), gKb=grp.reduce((s,r)=>s+r.kb,0);
     const label=isNo?'No ISO — your commission, nothing to send out':key;
     const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+fmt$(gSend)} · kickback ${fmt$(gKb)}`;
-    h+=`<tr style="background:var(--bg3)"><td colspan="10" style="padding:7px 12px;font-weight:600">${label} <span style="font-weight:400;${dim}">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
+    h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="10"><span class="alloc-iso-name">${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
     grp.forEach(r=>{
       h+=`<tr>
         <td class="pif-c pif-dim">${fmtDate(r.d.date_funded)}</td>
