@@ -300,7 +300,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="allocator fonts nudged down 0.5px; PNL kickbacks now show date funded (gray, left of name) sorted oldest→newest">build 59</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL close-out now tracks the LIVE calendar month (June), finishing any unclosed earlier active month first; blank months skipped; freeze keys line up at rollover. Also: allocator -0.5px font, kickback dates">build 60</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2025,11 +2025,16 @@ async function maybeFreezePriorMonth(){
 async function computePnl(){
   try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
   const liveYM = new Date().toISOString().slice(0,7);
-  // The accounting month we work/close is the prior COMPLETED month — you close out October
-  // during November, after legal fees arrive. The current in-progress month is never closed.
-  const curYM = addMonthsYM(liveYM, -1);
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
+  // build 60: the accounting month is the LIVE calendar month — you close June during June /
+  // at month-end, not a month behind. If an earlier month still has fundings and hasn't been
+  // closed (e.g. we just rolled into July and June isn't closed yet), finish closing that one
+  // first; months with no fundings are skipped entirely. A deal belongs to the month its
+  // funding date falls in, so July 1+ fundings — and the collections that follow them — land
+  // in July automatically; June stays frozen at June month-end once we roll over.
+  const activeMonths = Object.keys(groups).filter(ym => ym <= liveYM).sort();
+  const curYM = activeMonths.find(ym => !pnlSnapshots.some(s=>s.month===ym)) || liveYM;
   // build 50: realization rule (replaces the 5-month HHC grace).
   //   • Positive available ALWAYS pays out — fresh profit, or a recovery on a loss already settled.
   //   • Negative available only DEDUCTS once the whole cohort is dark: every open deal is DEFAULT,
