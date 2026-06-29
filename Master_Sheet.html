@@ -93,13 +93,14 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 #alloc-body{overflow:auto;max-height:calc(100vh - 235px)}
 #alloc-body thead th{position:sticky;top:0;z-index:3}
 /* build 58: allocator readability — slightly larger, consistent type, more breathing room */
-#alloc-body .pif-table{font-size:13px}
+/* build 59: nudged fonts back down 0.5px per Matt */
+#alloc-body .pif-table{font-size:12.5px}
 #alloc-body .pif-table td{padding:8px 12px}
-#alloc-body .pif-table th{font-size:11.5px;padding:8px 12px}
+#alloc-body .pif-table th{font-size:11px;padding:8px 12px}
 #alloc-body .alloc-grouprow td{padding:9px 12px}
-#alloc-body .alloc-iso-name{font-size:14px;font-weight:700}
-#alloc-body .alloc-grp-sub{font-size:12.5px;font-weight:400;color:var(--text3)}
-#alloc-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text3)}
+#alloc-body .alloc-iso-name{font-size:13.5px;font-weight:700}
+#alloc-body .alloc-grp-sub{font-size:12px;font-weight:400;color:var(--text3)}
+#alloc-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text3)}
 /* build 48: subtle on-theme scrollbars (replaces the bright browser default) */
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -299,7 +300,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Allocator cleanup: summary moved up next to title, helper text → tooltip; table font 12→13px with more row padding; ISO group name enlarged; type sizes harmonized">build 58</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="allocator fonts nudged down 0.5px; PNL kickbacks now show date funded (gray, left of name) sorted oldest→newest">build 59</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2063,7 +2064,8 @@ async function computePnl(){
     return {ym, label: monthLabel(ym), pnl, ourEnd, paid, avail, dark, held, recovery, payable, frozen: !!frozen};
   });
   const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid)
-    .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback}));
+    .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback, date:d.date_funded||''}))
+    .sort((a,b)=>{ const x=a.date||'9999-99', y=b.date||'9999-99'; return x<y?-1:x>y?1:0; }); // oldest → newest, dateless last
   const ffDue = ffByMonthFrom(deals)[addMonthsYM(curYM,-4)]||0;
   const legalTotal = (monthlyManual[curYM]&&monthlyManual[curYM].legal)||0;
   const legalOurEnd = legalTotal*HOUSE_SPLIT; // legal is 50% house split too (June 11, 2026)
@@ -2095,7 +2097,7 @@ function pnlRowsHtml(p){
   });
   h+=sec('KICKBACKS — UPFRONT BANK (100% OURS)','pnl-sec-green');
   if(!p.kicks.length) h+='<tr><td colspan="7" style="color:var(--text3)">No undistributed kickbacks.</td></tr>';
-  p.kicks.forEach(k=>{ h+=`<tr><td style="font-weight:600">${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${moneyDiv(k.amount/2)}${money(k.amount/2)}</tr>`; });
+  p.kicks.forEach(k=>{ const dt=k.date?`<span style="color:var(--text3);font-weight:400">${fmtDate(k.date)}</span>&nbsp;&nbsp;`:''; h+=`<tr><td style="font-weight:600">${dt}${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${moneyDiv(k.amount/2)}${money(k.amount/2)}</tr>`; });
   h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-yellow');
   h+=`<tr><td style="font-weight:600">FF due (${monthLabel(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${moneyDiv(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
   h+=sec('LEGAL FEES — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-red');
