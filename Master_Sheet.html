@@ -304,7 +304,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly tab: new Balance column (total outstanding balance per cohort month) between Banks and Total PNL; included in the Monthly Excel export too.">build 64</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly Balance column now shows BOOK balance — our share of outstanding balance (Σ deal balance × book_pct/100) — not the merchant total; relabeled 'Book Balance', between Banks and Total PNL, in tab + Excel export.">build 65</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -400,7 +400,7 @@ select.badge:hover{filter:brightness(1.2)}
               <thead><tr>
                 <th>Month</th><th>TDF</th><th>New</th><th>REFI</th>
                 <th>Total Funding</th><th>Avg Deal Size</th><th>Avg Deal Length</th>
-                <th>Average Fee</th><th>Banks</th><th>Balance</th><th>Total PNL</th>
+                <th>Average Fee</th><th>Banks</th><th>Book Balance</th><th>Total PNL</th>
                 <th>Kickbacks</th><th>Finance Fees</th><th>Legal</th><th>Clawback</th>
               </tr></thead>
               <tbody id="monthly-body"></tbody>
@@ -2297,7 +2297,7 @@ async function computeMonthlyRows(){
     const tdf=ds.length, nw=ds.filter(d=>d.deal_type!=='REFI').length, rf=ds.filter(d=>d.deal_type==='REFI').length;
     const funding=ds.reduce((s,d)=>s+(d.funded||0),0);
     const banks=ds.reduce((s,d)=>s+(d.bank_fees||0),0);
-    const balance=ds.reduce((s,d)=>s+(d.balance||0),0);
+    const balance=ds.reduce((s,d)=>s+(d.balance||0)*(d.book_pct||100)/100,0); // OUR book share of outstanding balance
     const bonus=ds.reduce((s,d)=>s+(d.kickback||0),0);
     const pnl=ds.reduce((s,d)=>s+(d.pnl||0),0);
     const ffees=ds.reduce((s,d)=>s+(d.finance_fee||0),0);
@@ -2399,7 +2399,7 @@ async function exportExcel(){
   // ── Sheet 5: Monthly (same math as the Monthly view — one source of truth) ──
   const mrows=await computeMonthlyRows();
   addSheet('Monthly',
-    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Balance','Total PNL','Kickbacks','Finance Fees','Legal','Clawback'],
+    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Book Balance','Total PNL','Kickbacks','Finance Fees','Legal','Clawback'],
     mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.funding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.balance),n(r.pnl),n(r.bonus),n(r.ffees),n(r.legal),n(r.clawback)]),
     [11,5,5,5,13,13,17,12,10,13,11,11,12,9,10]);
 
