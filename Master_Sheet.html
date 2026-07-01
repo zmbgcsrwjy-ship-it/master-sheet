@@ -304,7 +304,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly Balance column now shows BOOK balance — our share of outstanding balance (Σ deal balance × book_pct/100) — not the merchant total; relabeled 'Book Balance', between Banks and Total PNL, in tab + Excel export.">build 65</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL kickbacks now attributed to the deal's FUNDING month, not the open close-out month: a kickback only enters a month's close-out once that month reaches the deal's funding month (gate funding-month ≤ curYM). A July-funded kickback no longer lands in an unclosed June; undistributed earlier kickbacks still carry forward.">build 66</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2183,7 +2183,11 @@ async function computePnl(){
     const recovery = paid < -0.005 && avail > 0.005; // collecting back on a loss already settled → income to pay out
     return {ym, label: monthLabelFull(ym), pnl, ourEnd, paid, avail, dark, held, recovery, payable, frozen: !!frozen};
   });
-  const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid)
+  // A kickback is realized in the close-out of the month the deal FUNDED in — not swept into
+  // whatever month happens to be open. Gate on funding month <= curYM: a July-funded kickback is
+  // skipped while June is the open close-out month and is picked up automatically once July is open.
+  // Undistributed kickbacks from earlier months still carry forward (their month <= curYM).
+  const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid && (d.date_funded||'').slice(0,7) <= curYM)
     .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback, date:d.date_funded||''}))
     .sort((a,b)=>{ const x=a.date||'9999-99', y=b.date||'9999-99'; return x<y?-1:x>y?1:0; }); // oldest → newest, dateless last
   const ffDue = ffByMonthFrom(deals)[addMonthsYM(curYM,-4)]||0;
