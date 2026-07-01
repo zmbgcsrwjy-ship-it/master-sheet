@@ -153,6 +153,9 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .fill-red{background:var(--red)}.fill-amber{background:var(--amber)}.fill-green{background:var(--green)}
 .pct-text{font-size:11px;color:var(--text3);min-width:34px;text-align:right}
 .renew-tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:3px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);margin-left:6px;vertical-align:middle;font-weight:600}
+/* build 62: clawback identity = teal, everywhere. Solid = eligible, hollow/dashed = window closing */
+.claw-tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(45,212,191,.16);color:#5eead4;border:1px solid rgba(45,212,191,.55);margin-left:6px;vertical-align:middle;font-weight:600}
+.claw-tag-warn{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:3px;background:transparent;color:#7fded0;border:1px dashed rgba(45,212,191,.55);margin-left:6px;vertical-align:middle;font-weight:600}
 .pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
 .wk-name{color:var(--wk-purple);font-weight:700}
 
@@ -301,7 +304,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Months spelled out in full (Monthly tab + PNL cohort/FF/Legal rows); new Clawbacks section on PNL under Legal — recovered commission as income, 50% house split, teal, added to payout">build 61</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback system: Beacon/Master flag deals whose commission is clawback-eligible (4th bounce within 30 days of funding) + window-closing warning; new Clawback view + teal tags + notification circle; Mark clawed books CommAmount into this month's Monthly Clawback → flows to PNL 50/50. Teal identity color across tags, view, Monthly, PNL.">build 62</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -310,6 +313,7 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="nav-item" id="nav-renewal" onclick="setView('renewal')">🔁 REFI eligible <span class="nav-badge" id="renewal-badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">0</span></div>
         <div class="nav-item" id="nav-pif" onclick="setView('pif')">💰 PIF <span class="nav-badge" id="pif-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)">0</span></div>
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
+        <div class="nav-item" id="nav-clawback" onclick="setView('clawback')">⏪ Clawback <span class="nav-badge" id="clawback-badge" title="Deals whose commission is clawback-eligible (4th bounce within 30 days of funding)" style="background:rgba(45,212,191,.15);color:#5eead4;border:1px solid rgba(45,212,191,.45)">0</span></div>
         <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
         <div class="nav-item" id="nav-pnl" onclick="setView('pnl')">🧮 PNL</div>
         <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
@@ -467,6 +471,14 @@ select.badge:hover{filter:brightness(1.2)}
             <th onclick="sortDefaults('pnl')">PNL ↕</th>
             <th></th></tr></thead><tbody id="tbody-defaults"></tbody></table></div>
           <div id="defaults-empty" class="empty-state" style="display:none"><div class="icon">🎯</div><h3>No defaults</h3><p>Keep it that way.</p></div>
+        </div>
+
+        <div class="panel" id="panel-clawback" style="display:none">
+          <div class="panel-header"><h3>Clawback eligible</h3><span style="font-size:12px;color:var(--text3)">Deals whose commission can be clawed back — 4th bounce within 30 days of funding. Mark <b style="color:#5eead4">Clawed</b> to book the commission into this month's Clawback (flows to PNL, 50/50).</span></div>
+          <div class="table-wrap"><table><thead><tr>
+            <th>Date Funded</th><th>Merchant</th><th>Rep</th><th>Commission at risk</th><th>Bounces</th><th>Status</th><th>Actions</th>
+          </tr></thead><tbody id="tbody-clawback"></tbody></table></div>
+          <div id="clawback-empty" class="empty-state" style="display:none"><div class="icon">⏪</div><h3>Nothing to claw back</h3><p>No deals have gone bad inside the 30-day window.</p></div>
         </div>
       </div>
     </div>
@@ -710,6 +722,7 @@ async function atFetch(method, path='', body=null) {
 // Required fields: name → type
 const REQUIRED_FIELDS = [
   {name:'Merchant',    type:'singleLineText'},
+  {name:'ClawbackState', type:'singleLineText'},
   {name:'DateFunded',  type:'date', options:{dateFormat:{name:'iso'}}},
   {name:'Funded',      type:'number', options:{precision:2}},
   {name:'RTR',         type:'number', options:{precision:2}},
@@ -849,7 +862,8 @@ function fieldsToDeal(id, f) {
     owner_email:  f.OwnerEmail   || '',
     owner_phone:  f.OwnerPhone   || '',
     notes:        f.Notes        || '',
-    collections_state: f.CollectionsState || ''   // Beacon-owned — Master Sheet only displays it
+    collections_state: f.CollectionsState || '',   // Beacon-owned — Master Sheet only displays it
+    clawback_state: f.ClawbackState || ''          // clawback lifecycle: '' | FORCED | CLAWED | DISMISSED
   };
 }
 
@@ -873,11 +887,13 @@ async function loadBounceSummary(){
     if(lead==null||lead==='') continue;
     const code=(f['Return Code']||'').toUpperCase().trim();
     const sev=(f.Severity||'').toUpperCase();
-    const e = bounceByLead[lead] = bounceByLead[lead] || {codes:new Set(), count:0, hasStop:false};
+    const e = bounceByLead[lead] = bounceByLead[lead] || {codes:new Set(), count:0, hasStop:false, dates:[]};
     e.count++;
+    const bdate=(f.Date||'').slice(0,10); if(bdate) e.dates.push(bdate);
     if(code) e.codes.add(code);
     if(sev==='STOP' || STOP_RCODES.includes(code)) e.hasStop=true;
   }
+  Object.values(bounceByLead).forEach(e=>e.dates.sort()); // ascending; dates[3] = 4th bounce
 }
 // Returns small HTML badges for a deal's bounce history (stop codes first, then BOUNCING state).
 function bounceBadges(d){
@@ -893,6 +909,39 @@ function bounceBadges(d){
   if(d.collections_state==='BOUNCING') out += `<span class="bbadge bbadge-now" title="Bouncing now (per Beacon)">BOUNCING</span>`;
   return out;
 }
+
+// ─── CLAWBACK (build 62) ─────────────────────────────────
+// A commission is clawback-eligible when a deal hits its 4th bounce WITHIN 30 days of funding
+// (3 bounces = still working it; the 4th = there's a problem). 2–3 bounces in the last 5 days of
+// that window get a softer "window closing" warning. Beacon and Master Sheet compute this the same
+// way; Master Sheet owns the resolution (CLAWED/DISMISSED/FORCED) written to the deal.
+const CLAW_WINDOW=30, CLAW_TRIGGER=4, CLAW_WARN_MIN=2, CLAW_WARN_DAYS=5;
+function msTodayYMD(){ return new Date().toISOString().slice(0,10); }
+function daysBetweenYMD(a,b){ if(!a||!b) return null; const d=(new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000; return Math.round(d); }
+// returns 'eligible' | 'warning' | null
+function clawbackTier(d){
+  const st=(d.clawback_state||'').toUpperCase();
+  if(st==='CLAWED'||st==='DISMISSED') return null;   // resolved — no tag
+  if(st==='FORCED') return 'eligible';               // manually promoted
+  const funded=d.date_funded; if(!funded) return null;
+  const e=bounceByLead[d.lead_id];
+  const dates=(e&&e.dates)?e.dates:[];
+  if(dates.length>=CLAW_TRIGGER){
+    const dd=daysBetweenYMD(funded, dates[CLAW_TRIGGER-1]);
+    if(dd!=null && dd<=CLAW_WINDOW) return 'eligible';
+  }
+  const age=daysBetweenYMD(funded, msTodayYMD());
+  if(dates.length>=CLAW_WARN_MIN && dates.length<CLAW_TRIGGER && age!=null && age>=(CLAW_WINDOW-CLAW_WARN_DAYS) && age<=CLAW_WINDOW) return 'warning';
+  return null;
+}
+function clawDaysLeft(d){ const age=daysBetweenYMD(d.date_funded, msTodayYMD()); return Math.max(0, CLAW_WINDOW-(age==null?CLAW_WINDOW:age)); }
+function clawbackTag(d){
+  const t=clawbackTier(d);
+  if(t==='eligible') return `<span class="claw-tag" title="Clawback eligible — 4th bounce within 30 days of funding. ${fmt$(d.comm_amount||0)} commission recoverable from ${esc0(d.rep)||'the rep'}.">⏪ Clawback</span>`;
+  if(t==='warning'){ const n=clawDaysLeft(d); return `<span class="claw-tag-warn" title="Window closing — ${n} day${n!==1?'s':''} left. 2–3 bounces so far; if it hits a 4th before the cutoff, the commission becomes clawback-eligible.">⏳ ${n}d to claw</span>`; }
+  return '';
+}
+function esc0(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 async function loadDeals() {
   showLoading('Loading deals from Airtable...');
   try {
@@ -1464,9 +1513,9 @@ async function handleDailyReport(input) {
 // ─── VIEWS ───────────────────────────────────────────────
 function setView(v){
   currentView=v;
-  ['book','allocator','renewal','pif','defaults','monthly','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
-  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',monthly:'Monthly totals',pnl:'PNL'}[v];
-  if(v==='allocator') renderAllocator(); if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='monthly') renderMonthly(); if(v==='pnl') renderPnl();
+  ['book','allocator','renewal','pif','defaults','clawback','monthly','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
+  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',clawback:'Clawback eligible',monthly:'Monthly totals',pnl:'PNL'}[v];
+  if(v==='allocator') renderAllocator(); if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='clawback') renderClawback(); if(v==='monthly') renderMonthly(); if(v==='pnl') renderPnl();
 }
 
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
@@ -1516,7 +1565,7 @@ function renderTable(){
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
-      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}</td>
+      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}${clawbackTag(d)}</td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
       <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
@@ -1616,6 +1665,69 @@ function renderDefaults(){
     <td class="${pnl>=0?'pnl-pos':'pnl-neg'}">${fmt$(pnl)}</td>
     <td><button class="btn btn-sm" onclick='openModal(deals.find(x=>x._id==="${esc(d._id)}"))'>✏️</button></td>
   </tr>`;}).join('');
+}
+
+// ─── CLAWBACK VIEW (build 62) ────────────────────────────
+function renderClawback(){
+  const rows=deals.filter(d=>clawbackTier(d));
+  const tbody=document.getElementById('tbody-clawback'), empty=document.getElementById('clawback-empty');
+  if(!tbody) return;
+  if(!rows.length){ tbody.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+  const order={eligible:0,warning:1};
+  rows.sort((a,b)=>{ const ta=order[clawbackTier(a)], tb=order[clawbackTier(b)]; if(ta!==tb) return ta-tb; return (a.date_funded||'')<(b.date_funded||'')?-1:1; });
+  const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  tbody.innerHTML=rows.map(d=>{
+    const tier=clawbackTier(d);
+    const n=(bounceByLead[d.lead_id]&&bounceByLead[d.lead_id].count)||0;
+    const status = tier==='eligible' ? `<span class="claw-tag">⏪ Eligible</span>` : `<span class="claw-tag-warn">⏳ ${clawDaysLeft(d)}d to claw</span>`;
+    const actions = tier==='eligible'
+      ? `<button class="btn btn-sm" style="background:rgba(45,212,191,.16);color:#5eead4;border:1px solid rgba(45,212,191,.5)" onclick="markClawed('${esc(d._id)}')">Mark clawed</button> <button class="btn btn-sm" onclick="dismissClawback('${esc(d._id)}')">Dismiss</button>`
+      : `<button class="btn btn-sm" style="border:1px dashed rgba(45,212,191,.5);color:#7fded0" onclick="forceClawback('${esc(d._id)}')" title="Promote to eligible now — for a deal you already know is dead, before a 4th bounce lands">Claw it now</button> <button class="btn btn-sm" onclick="dismissClawback('${esc(d._id)}')">Dismiss</button>`;
+    return `<tr>
+      <td style="color:var(--text3)">${fmtDate(d.date_funded)}</td>
+      <td style="font-weight:600">${d.merchant}</td>
+      <td style="color:var(--text2)">${d.rep||'—'}</td>
+      <td style="color:#5eead4;font-weight:600">${fmt$(d.comm_amount||0)}</td>
+      <td>${n}</td>
+      <td style="white-space:nowrap">${status}</td>
+      <td style="white-space:nowrap">${actions}</td>
+    </tr>`;
+  }).join('');
+}
+async function setClawbackState(dealId, state){
+  const d=deals.find(x=>x._id===dealId); if(!d) return;
+  d.clawback_state=state;
+  await atFetch('PATCH','',{records:[{id:dealId, fields:{ClawbackState:state}}]});
+}
+async function bookClawbackAmount(month, amount){
+  const m=monthlyManual[month];
+  const cur=(m&&m.clawback)||0, next=Math.round((cur+amount)*100)/100;
+  if(m&&m._id){ await atFetchT('Monthly','PATCH','',{records:[{id:m._id, fields:{Clawback:next}}]}); m.clawback=next; }
+  else{ const out=await atFetchT('Monthly','POST','',{records:[{fields:{Month:month, Clawback:next}}]}); monthlyManual[month]={_id:out.records[0].id, legal:0, clawback:next}; }
+}
+async function markClawed(dealId){
+  const d=deals.find(x=>x._id===dealId); if(!d) return;
+  const amt=d.comm_amount||0, month=new Date().toISOString().slice(0,7);
+  if(!confirm(`Mark ${d.merchant} as clawed back?\n\nThis books ${fmt$(amt)} (book commission) into ${month}'s Clawback on the Monthly tab, which flows to PNL as income (50/50).`)) return;
+  try{
+    await setClawbackState(dealId,'CLAWED');
+    if(amt>0) await bookClawbackAmount(month, amt);
+    showNotice(`${d.merchant} clawed — ${fmt$(amt)} booked to ${month} Clawback.`,'success',7000);
+    renderMetrics(); renderClawback(); renderTable();
+    if(currentView==='monthly') renderMonthly(); if(currentView==='pnl') renderPnl();
+  }catch(err){ showNotice('Clawback failed: '+err.message,'error',8000); }
+}
+async function dismissClawback(dealId){
+  const d=deals.find(x=>x._id===dealId); if(!d) return;
+  if(!confirm(`Dismiss the clawback flag on ${d.merchant}? No money is booked — the tag just clears.`)) return;
+  try{ await setClawbackState(dealId,'DISMISSED'); showNotice('Clawback flag dismissed.','success'); renderMetrics(); renderClawback(); renderTable(); }
+  catch(err){ showNotice('Update failed: '+err.message,'error'); }
+}
+async function forceClawback(dealId){
+  const d=deals.find(x=>x._id===dealId); if(!d) return;
+  try{ await setClawbackState(dealId,'FORCED'); showNotice(`${d.merchant} promoted to clawback-eligible.`,'success'); renderMetrics(); renderClawback(); renderTable(); }
+  catch(err){ showNotice('Update failed: '+err.message,'error'); }
 }
 
 let pifSort={key:'date_funded',dir:-1};
@@ -1826,6 +1938,7 @@ function renderMetrics(){
   document.getElementById('renewal-badge').textContent=rc;
   document.getElementById('pif-badge').textContent=pifs.length;
   document.getElementById('default-badge').textContent=defs.length;
+  document.getElementById('clawback-badge').textContent=deals.filter(d=>clawbackTier(d)==='eligible').length;
   allocBadge();
   const pnlEl=document.getElementById('m-pnl');
   pnlEl.textContent=fmtK(totalPNL);
@@ -1845,7 +1958,7 @@ function populateIsoFilter(){
   sel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option value="${i.replace(/"/g,'&quot;')}">${i}</option>`).join('');
   sel.value=cur;
 }
-function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='allocator')renderAllocator(); if(currentView==='renewal')renderRenewal(); if(currentView==='pif')renderPif(); if(currentView==='defaults')renderDefaults(); if(currentView==='pnl')renderPnl(); }
+function renderAll(){ populateRepFilter(); populateIsoFilter(); renderMetrics(); renderTable(); if(currentView==='allocator')renderAllocator(); if(currentView==='renewal')renderRenewal(); if(currentView==='pif')renderPif(); if(currentView==='defaults')renderDefaults(); if(currentView==='clawback')renderClawback(); if(currentView==='pnl')renderPnl(); }
 
 function showModalNotice(msg,type='warn'){
   const el=document.getElementById('modal-notice');
@@ -2222,7 +2335,7 @@ async function renderMonthly(){
   body.innerHTML=rows.map(r=>{
     const style=r.isTotal?'font-weight:700;background:var(--bg3)':'';
     const manualCells=r.isTotal
-      ? `<td style="${style}${r.legal?';color:var(--red)':''}">${fmt$(r.legal)}</td><td style="${style}">${fmt$(r.clawback)}</td>`
+      ? `<td style="${style}${r.legal?';color:var(--red)':''}">${fmt$(r.legal)}</td><td style="${style}${r.clawback?';color:#5eead4':''}">${fmt$(r.clawback)}</td>`
       : `<td><input class="m-edit" type="number" step="0.01" value="${r.legal||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${r.legal?'var(--red)':'var(--text)'};padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Legal',this.value)"></td>`+
         `<td><input class="m-edit" type="number" step="0.01" value="${r.clawback||''}" placeholder="0" style="width:90px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 6px;font-size:12px" onchange="saveMonthlyCell('${r.ym}','Clawback',this.value)"></td>`;
     return `<tr>

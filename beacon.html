@@ -771,6 +771,11 @@
   table.matrix .merchant-cell-inner { display: flex; align-items: center; gap: 0; min-width: 0; }
   table.matrix .merchant-cell-inner > * { flex-shrink: 0; }
   table.matrix .merchant-cell-inner .merchant-name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  /* v86: clawback chip — teal identity, matches Master Sheet. Solid = eligible, dashed = window closing */
+  .claw-chip { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:9px; margin-left:6px; white-space:nowrap; background:rgba(45,212,191,.18); color:#0c8f7e; border:1px solid rgba(45,212,191,.55); }
+  .claw-chip-warn { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:9px; margin-left:6px; white-space:nowrap; background:transparent; color:#0c8f7e; border:1px dashed rgba(45,212,191,.6); }
+  [data-theme="dark"] .claw-chip { color:#5eead4; background:rgba(45,212,191,.16); }
+  [data-theme="dark"] .claw-chip-warn { color:#7fded0; }
   
   /* Visual spacer between top operational sections and bottom review sections (broken / legal-still).
      A blank row with subtle separator that creates a clear mental break. */
@@ -1230,7 +1235,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v85 · live</span>
+      <span class="build-tag">v86 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -1632,6 +1637,27 @@ function bDisp(iso){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date
   return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).replace(',',''); }
 function bParseNotePayload(note){ try{ const j=JSON.parse(note); return (j&&j.v===1)?j:null; }catch(e){ return null; } }
 
+// ---------- CLAWBACK (v86) — display-only; Master Sheet owns the resolution ----------
+var BCLAW_WINDOW=30, BCLAW_TRIGGER=4, BCLAW_WARN_MIN=2, BCLAW_WARN_DAYS=5;
+function bDaysBetween(a,b){ if(!a||!b) return null; return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000); }
+function beaconClawTier(m){
+  const st=String(m.clawback_state||'').toUpperCase();
+  if(st==='CLAWED'||st==='DISMISSED') return null;
+  if(st==='FORCED') return 'eligible';
+  const funded=m.funded; if(!funded) return null;
+  const dates=m._bounceDates||[];
+  if(dates.length>=BCLAW_TRIGGER){ const dd=bDaysBetween(funded, dates[BCLAW_TRIGGER-1]); if(dd!=null&&dd<=BCLAW_WINDOW) return 'eligible'; }
+  const age=bDaysBetween(funded, bLocalToday());
+  if(dates.length>=BCLAW_WARN_MIN && dates.length<BCLAW_TRIGGER && age!=null && age>=(BCLAW_WINDOW-BCLAW_WARN_DAYS) && age<=BCLAW_WINDOW) return 'warning';
+  return null;
+}
+function beaconClawTag(m){
+  const t=beaconClawTier(m);
+  if(t==='eligible') return '<span class="claw-chip" title="Clawback eligible — 4th bounce within 30 days of funding. Recover the commission from '+(m.rep||'the rep')+', then mark it clawed on the Master Sheet.">\u23ea Clawback</span>';
+  if(t==='warning'){ const n=Math.max(0, BCLAW_WINDOW-(bDaysBetween(m.funded,bLocalToday())||BCLAW_WINDOW)); return '<span class="claw-chip-warn" title="Window closing — '+n+' day'+(n!==1?'s':'')+' left. If it hits a 4th bounce before the cutoff, the commission becomes clawback-eligible.">\u23f3 '+n+'d</span>'; }
+  return '';
+}
+
 // ---------- LOAD ----------
 async function beaconLoadAll(){
   const [deals,bounces,actions] = await Promise.all([
@@ -1660,7 +1686,8 @@ function beaconReconstruct(raw, todayISO){
       hit_date:'', return_date:'', contacted_today:false, contact_time:'',
       notes:'', notes_log:[], resolution_type:'', resolution_date:'', resume_date:'',
       lowered_amount:0, original_freq:'', original_bounce_amt:0, original_return_code:'',
-      manual_freq:'', rep:f.Rep||'', iso:f.ISO||'', _freqField:f.Frequency||'', _collectionsState:f.CollectionsState||''
+      manual_freq:'', rep:f.Rep||'', iso:f.ISO||'', _freqField:f.Frequency||'', _collectionsState:f.CollectionsState||'',
+      clawback_state:f.ClawbackState||'', _bounceDates:[]
     };
     dealsById[r.id]=m; merchants.push(m);
   }
@@ -1672,6 +1699,10 @@ function beaconReconstruct(raw, todayISO){
     (byDate[date]=byDate[date]||[]).push(r);
   }
   const dates = Object.keys(byDate).sort();
+
+  // v86: every bounce date per deal → clawback eligibility (4th bounce within 30 days of funding)
+  for (const r of raw.bounces){ const f=r.fields||{}; const dt=(f.Date||'').slice(0,10); const rid=(f.Deal&&f.Deal[0])||null; const m=rid&&dealsById[rid]; if(dt&&m) m._bounceDates.push(dt); }
+  merchants.forEach(m=>m._bounceDates.sort());
 
   // ---- today's bounce state onto merchants ----
   for (const r of (byDate[today]||[])){
@@ -4023,7 +4054,7 @@ function buildRow(m, editable) {
     chips += '<span class="resolved-chip">' + resTxt + '</span>';
   }
   
-  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="merchant-name">' + m.name + '</span>' + statusFlag + noteInd + '</div></td>';
+  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="merchant-name">' + m.name + '</span>' + statusFlag + noteInd + beaconClawTag(m) + '</div></td>';
   
   let actionsCell = '';
   if (editable) {
