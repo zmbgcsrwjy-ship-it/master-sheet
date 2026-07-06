@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="CRM import now reads 'deal %' — participation deals gross up to the full deal size (Funded/RTR/Commission) with our slice carried by book % (deal% × book%), so an $80k deal we're 18.75% into shows $80k funded / $15k book, not $15k total. Plus: external funders in the Funder field (not our house paper) flag PEACH on both the funder name and the merchant name.">build 67</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Allocator: the 3 points held back now split 50/50 — 1.5% recorded as your kickback (→ kickback section/PNL, you+Sal split, unchanged) and 1.5% shown as 'to send HHC' (display only, not in PNL). New To-HHC column + header total. Monthly 'Total Funding' → 'Total Book Funding' (your share; Avg Deal Size / Avg Fee % still on full deal). Import already sums Funding Fee + Origination into Bank Fee.">build 68</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -400,7 +400,7 @@ select.badge:hover{filter:brightness(1.2)}
             <table>
               <thead><tr>
                 <th>Month</th><th>TDF</th><th>New</th><th>REFI</th>
-                <th>Total Funding</th><th>Avg Deal Size</th><th>Avg Deal Length</th>
+                <th>Total Book Funding</th><th>Avg Deal Size</th><th>Avg Deal Length</th>
                 <th>Average Fee</th><th>Banks</th><th>Book Balance</th><th>Total PNL</th>
                 <th>Kickbacks</th><th>Finance Fees</th><th>Legal</th><th>Clawback</th>
               </tr></thead>
@@ -447,13 +447,13 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="panel" id="panel-allocator" style="display:none">
           <div class="panel-header">
             <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;min-width:0">
-              <h3 title="Your deals (MSC + Matthew Jara) — ISO commissions to send & 3% kickbacks to record. Hit Paid once you've allocated in Pinnacle.">Allocator</h3>
+              <h3 title="Your deals (MSC + Matthew Jara) — ISO commissions to send; 3 points split 1.5% your kickback / 1.5% to HHC. Hit Paid once you've allocated in Pinnacle.">Allocator</h3>
               <span id="alloc-head"></span>
             </div>
             <select id="alloc-iso-filter" onchange="renderAllocator()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select>
           </div>
           <div id="alloc-body"></div>
-          <div id="alloc-empty" class="empty-state" style="display:none"><div class="icon">💸</div><h3>Nothing to allocate</h3><p>Your funded deals show here until you mark them paid. Once allocated, the 3% kickback flows into your next close-out.</p></div>
+          <div id="alloc-empty" class="empty-state" style="display:none"><div class="icon">💸</div><h3>Nothing to allocate</h3><p>Your funded deals show here until you mark them paid. Once allocated, your 1.5% kickback flows into your next close-out; HHC's 1.5% shows as a send.</p></div>
         </div>
 
         <div class="panel" id="panel-defaults" style="display:none">
@@ -1820,13 +1820,17 @@ async function saveNote(id, val){
   }catch(err){ showNotice('Note save failed: '+err.message,'error'); }
 }
 
-// ─── ALLOCATOR (build 45): ISO payouts + 3% kickbacks for your (MSC) deals ───
-// One lever. 3% of gross funded is held back as kickback (100% ours for now;
-// future split = 1.5% house / 1.5% us → change ALLOC_SPREAD or split here).
-const ALLOC_SPREAD = 0.03;
+// ─── ALLOCATOR (build 45): ISO payouts + 3-point kickbacks for your (MSC) deals ───
+// 3 points of gross funded are held back out of the ISO commission. Build 68 splits them:
+// 1.5% is recorded as YOUR kickback (100% ours → kickback section → PNL, you+Sal split it),
+// and 1.5% is HHC's — shown as a "send to HHC" number (display only, does not touch the PNL).
+const ALLOC_SPREAD = 0.03;   // full 3 points held back
+const HHC_KB_SPLIT = 0.5;    // HHC's share of those 3 points (the other half is your kickback)
 let allocGroupKeys = [];
 const allocIsoKey = d => { const s=String(d.iso||'').trim(); return (s && s!=='—' && s.toUpperCase()!=='UNASSIGNED') ? s : '__NOISO__'; };
-const allocKb = d => Math.round((d.funded||0)*ALLOC_SPREAD*100)/100;
+const allocKbTotal = d => Math.round((d.funded||0)*ALLOC_SPREAD*100)/100;                 // full 3 points
+const allocKbOurs  = d => Math.round(allocKbTotal(d)*(1-HHC_KB_SPLIT)*100)/100;            // your 1.5% → recorded kickback
+const allocKbHhc   = d => Math.round((allocKbTotal(d)-allocKbOurs(d))*100)/100;            // HHC's 1.5% → send to them
 
 // build 57: which reps' deals you allocate yourself (kickbacks + ISO commissions).
 // Add a name to this list to surface that rep in the allocator + its sidebar bubble.
@@ -1861,12 +1865,12 @@ function renderAllocator(){
   const fIso=isoSel?isoSel.value:'';
   const pool=fIso?all.filter(d=>allocIsoKey(d)===fIso):all;
   const rows=pool.map(d=>{
-    const kb=allocKb(d);
+    const kbTotal=allocKbTotal(d), kbOurs=allocKbOurs(d), kbHhc=allocKbHhc(d);
     const hasIso=allocIsoKey(d)!=='__NOISO__';
-    const isoComm=hasIso?Math.max(0,(d.comm_amount||0)-kb):0;
+    const isoComm=hasIso?Math.max(0,(d.comm_amount||0)-kbTotal):0;
     const commPct=d.funded?((d.comm_amount||0)/d.funded*100):0;
     const isoPct=(hasIso&&d.funded)?(isoComm/d.funded*100):null;
-    return {d,kb,hasIso,isoComm,commPct,isoPct,key:allocIsoKey(d)};
+    return {d,kbOurs,kbHhc,hasIso,isoComm,commPct,isoPct,key:allocIsoKey(d)};
   });
   const dim='color:var(--text3)';
   if(!rows.length){ if(headEl) headEl.innerHTML='<span>0 deals (filtered)</span>'; body.innerHTML='<div style="color:var(--text3);text-align:center;padding:24px">No deals match this ISO filter.</div>'; return; }
@@ -1874,22 +1878,23 @@ function renderAllocator(){
   rows.forEach(r=>{ (groups[r.key]=groups[r.key]||[]).push(r); });
   allocGroupKeys=Object.keys(groups).filter(k=>k!=='__NOISO__').sort((a,b)=>a.toLowerCase()<b.toLowerCase()?-1:1);
   if(groups.__NOISO__) allocGroupKeys.push('__NOISO__');
-  const totalSend=rows.reduce((s,r)=>s+r.isoComm,0), totalKb=rows.reduce((s,r)=>s+r.kb,0);
+  const totalSend=rows.reduce((s,r)=>s+r.isoComm,0), totalKbOurs=rows.reduce((s,r)=>s+r.kbOurs,0), totalKbHhc=rows.reduce((s,r)=>s+r.kbHhc,0);
   if(headEl) headEl.innerHTML=`<span>To send to ISOs: <b style="color:var(--text)">${fmt$(totalSend)}</b></span>
-    <span>Kickbacks to record: <b style="color:var(--green)">${fmt$(totalKb)}</b></span>
+    <span>Your kickbacks (1.5%): <b style="color:var(--green)">${fmt$(totalKbOurs)}</b></span>
+    <span>To send HHC (1.5%): <b style="color:#c9a15a">${fmt$(totalKbHhc)}</b></span>
     <span style="${dim}">${rows.length} deal${rows.length===1?'':'s'}${fIso?' (filtered)':' waiting'}</span>`;
   let h=`<table class="pif-table"><colgroup>
-    <col style="width:8%"><col style="width:16%"><col style="width:6%"><col style="width:13%"><col style="width:10%"><col style="width:7%"><col style="width:12%"><col style="width:7%"><col style="width:10%"><col style="width:11%">
+    <col style="width:8%"><col style="width:15%"><col style="width:6%"><col style="width:12%"><col style="width:9%"><col style="width:6%"><col style="width:11%"><col style="width:6%"><col style="width:8%"><col style="width:8%"><col style="width:11%">
   </colgroup><thead><tr>
     <th class="pif-c">Date Funded</th><th>Deal</th><th>Rep</th><th>ISO</th>
-    <th class="pif-c">Commission</th><th class="pif-c">Comm %</th><th class="pif-c">ISO Commission</th><th class="pif-c">ISO %</th><th class="pif-c">Kickback (3%)</th><th class="pif-c">Action</th>
+    <th class="pif-c">Commission</th><th class="pif-c">Comm %</th><th class="pif-c">ISO Commission</th><th class="pif-c">ISO %</th><th class="pif-c">Your KB (1.5%)</th><th class="pif-c">To HHC (1.5%)</th><th class="pif-c">Action</th>
   </tr></thead><tbody>`;
   allocGroupKeys.forEach((key,gi)=>{
     const grp=groups[key], isNo=key==='__NOISO__';
-    const gSend=grp.reduce((s,r)=>s+r.isoComm,0), gKb=grp.reduce((s,r)=>s+r.kb,0);
+    const gSend=grp.reduce((s,r)=>s+r.isoComm,0), gKbOurs=grp.reduce((s,r)=>s+r.kbOurs,0), gKbHhc=grp.reduce((s,r)=>s+r.kbHhc,0);
     const label=isNo?'No ISO — your commission, nothing to send out':key;
-    const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+fmt$(gSend)} · kickback ${fmt$(gKb)}`;
-    h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="10"><span class="alloc-iso-name">${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
+    const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+fmt$(gSend)} · your KB ${fmt$(gKbOurs)} · HHC ${fmt$(gKbHhc)}`;
+    h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="11"><span class="alloc-iso-name">${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
     grp.forEach(r=>{
       h+=`<tr>
         <td class="pif-c pif-dim">${fmtDate(r.d.date_funded)}</td>
@@ -1900,7 +1905,8 @@ function renderAllocator(){
         <td class="pif-c pif-dim">${r.commPct?r.commPct.toFixed(1)+'%':'—'}</td>
         <td class="pif-c">${r.hasIso?fmt$(r.isoComm):'<span style="'+dim+'">no ISO — yours</span>'}</td>
         <td class="pif-c pif-dim">${r.isoPct!=null?r.isoPct.toFixed(1)+'%':'—'}</td>
-        <td class="pif-c" style="color:var(--green)">${fmt$(r.kb)}</td>
+        <td class="pif-c" style="color:var(--green)">${fmt$(r.kbOurs)}</td>
+        <td class="pif-c" style="color:#c9a15a">${fmt$(r.kbHhc)}</td>
         <td class="pif-c"><button onclick="markAllocPaid('${r.d._id}')" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 12px;font-size:11px;cursor:pointer">Paid</button></td>
       </tr>`;
     });
@@ -1911,12 +1917,12 @@ function renderAllocator(){
 
 async function markAllocPaid(id){
   const d=deals.find(x=>x._id===id); if(!d) return;
-  const kb=allocKb(d);
-  if(kb<=0){ showNotice("Can't allocate "+d.merchant+" — it has no funded amount.","error"); return; }
+  const kb=allocKbOurs(d), hhc=allocKbHhc(d);
+  if(allocKbTotal(d)<=0){ showNotice("Can't allocate "+d.merchant+" — it has no funded amount.","error"); return; }
   try{
     await atFetch('PATCH','',{records:[{id, fields:{Kickback:kb}}]});
     d.kickback=kb;
-    showNotice(d.merchant+' allocated — '+fmt$(kb)+' kickback recorded (flows into your next close-out).','success',3500);
+    showNotice(d.merchant+' allocated — your '+fmt$(kb)+' kickback recorded; send HHC '+fmt$(hhc)+'.','success',4500);
     renderAllocator(); renderTable();
   }catch(err){ showNotice('Allocate failed: '+err.message,'error'); }
 }
@@ -1926,11 +1932,12 @@ async function markAllocPaidGroup(gi){
   const isNo=key==='__NOISO__';
   const grp=deals.filter(d=>isAllocRep(d) && !(d.kickback>0) && allocIsoKey(d)===key);
   if(!grp.length) return;
-  if(!confirm('Mark all '+grp.length+' deal'+(grp.length===1?'':'s')+(isNo?' (no ISO)':' for '+key)+' as paid?\n\nThis records each 3% kickback and clears them from the allocator. It does not move money — you still allocate in Pinnacle.')) return;
-  const recs=grp.map(d=>({id:d._id, fields:{Kickback:allocKb(d)}}));
+  const grpHhc=grp.reduce((s,d)=>s+allocKbHhc(d),0);
+  if(!confirm('Mark all '+grp.length+' deal'+(grp.length===1?'':'s')+(isNo?' (no ISO)':' for '+key)+' as paid?\n\nThis records each deal\'s 1.5% kickback (your half → kickback section) and clears them from the allocator. Send HHC their half: '+fmt$(grpHhc)+' total. It does not move money — you still allocate in Pinnacle.')) return;
+  const recs=grp.map(d=>({id:d._id, fields:{Kickback:allocKbOurs(d)}}));
   try{
     for(let i=0;i<recs.length;i+=10) await atFetch('PATCH','',{records:recs.slice(i,i+10)});
-    grp.forEach(d=>{ d.kickback=allocKb(d); });
+    grp.forEach(d=>{ d.kickback=allocKbOurs(d); });
     showNotice(grp.length+' deal'+(grp.length===1?'':'s')+' allocated'+(isNo?'':' for '+key)+'.','success',3500);
     renderAllocator(); renderTable();
   }catch(err){ showNotice('Allocate failed: '+err.message,'error'); }
@@ -2310,13 +2317,14 @@ async function computeMonthlyRows(){
   const mkRow=(label, ds, manual, ym, isTotal)=>{
     const tdf=ds.length, nw=ds.filter(d=>d.deal_type!=='REFI').length, rf=ds.filter(d=>d.deal_type==='REFI').length;
     const funding=ds.reduce((s,d)=>s+(d.funded||0),0);
+    const bookFunding=ds.reduce((s,d)=>s+(d.funded||0)*(d.book_pct||100)/100,0); // OUR share of funding
     const banks=ds.reduce((s,d)=>s+(d.bank_fees||0),0);
     const balance=ds.reduce((s,d)=>s+(d.balance||0)*(d.book_pct||100)/100,0); // OUR book share of outstanding balance
     const bonus=ds.reduce((s,d)=>s+(d.kickback||0),0);
     const pnl=ds.reduce((s,d)=>s+(d.pnl||0),0);
     const ffees=ds.reduce((s,d)=>s+(d.finance_fee||0),0);
     const legal=manual.legal||0, clawback=manual.clawback||0;
-    return {label, ym, isTotal, tdf, nw, rf, funding,
+    return {label, ym, isTotal, tdf, nw, rf, funding, bookFunding,
       avgSize: tdf?funding/tdf:null,
       avgLen: tdf?ds.reduce((s,d)=>s+bdLen(d),0)/tdf:null,
       avgFee: funding?banks/funding*100:null,
@@ -2357,7 +2365,7 @@ async function renderMonthly(){
     return `<tr>
       <td style="${style};white-space:nowrap">${r.label}</td>
       <td style="${style}">${r.tdf}</td><td style="${style}">${r.nw}</td><td style="${style}">${r.rf}</td>
-      <td style="${style}">${fmt$(r.funding)}</td>
+      <td style="${style}">${fmt$(r.bookFunding)}</td>
       <td style="${style}">${r.avgSize!=null?fmt$(r.avgSize):'—'}</td>
       <td style="${style}">${r.avgLen!=null?r.avgLen.toFixed(1)+' BD':'—'}</td>
       <td style="${style}">${r.avgFee!=null?r.avgFee.toFixed(2)+'%':'—'}</td>
@@ -2413,8 +2421,8 @@ async function exportExcel(){
   // ── Sheet 5: Monthly (same math as the Monthly view — one source of truth) ──
   const mrows=await computeMonthlyRows();
   addSheet('Monthly',
-    ['Month','TDF','New','REFI','Total Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Book Balance','Total PNL','Kickbacks','Finance Fees','Legal','Clawback'],
-    mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.funding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.balance),n(r.pnl),n(r.bonus),n(r.ffees),n(r.legal),n(r.clawback)]),
+    ['Month','TDF','New','REFI','Total Book Funding','Avg Deal Size','Avg Deal Length (BD)','Average Fee %','Banks','Book Balance','Total PNL','Kickbacks','Finance Fees','Legal','Clawback'],
+    mrows.map(r=>[r.label,r.tdf,r.nw,r.rf,n(r.bookFunding),n(r.avgSize),r.avgLen!=null?Math.round(r.avgLen*10)/10:null,r.avgFee!=null?Math.round(r.avgFee*100)/100:null,n(r.banks),n(r.balance),n(r.pnl),n(r.bonus),n(r.ffees),n(r.legal),n(r.clawback)]),
     [11,5,5,5,13,13,17,12,10,13,11,11,12,9,10]);
 
   // ── Sheet 6: PNL (current in-progress month, same engine as the PNL tab) ──
