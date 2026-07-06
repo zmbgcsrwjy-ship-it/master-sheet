@@ -16,6 +16,7 @@
   --red:#f87171;--red-bg:#2b1010;--red-border:#4a1a1a;
   --amber:#f59e0b;--amber-bg:#2b1f08;--amber-border:#4a3210;
   --wk-purple:#C58AE0;
+  --peach:#f7a76c;
   --radius:8px;--radius-sm:5px;
   font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 }
@@ -304,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL kickbacks now attributed to the deal's FUNDING month, not the open close-out month: a kickback only enters a month's close-out once that month reaches the deal's funding month (gate funding-month ≤ curYM). A July-funded kickback no longer lands in an unclosed June; undistributed earlier kickbacks still carry forward.">build 66</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="CRM import now reads 'deal %' — participation deals gross up to the full deal size (Funded/RTR/Commission) with our slice carried by book % (deal% × book%), so an $80k deal we're 18.75% into shows $80k funded / $15k book, not $15k total. Plus: external funders in the Funder field (not our house paper) flag PEACH on both the funder name and the merchant name.">build 67</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -582,6 +583,10 @@ let sortCol = 'date_funded', sortDir = -1, currentView = 'book';
 const fmt$ = n => { let v=Number(n||0); if(Math.abs(v)<0.005) v=0; return '$'+v.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 const fmtK = n => { const v=Number(n||0), a=Math.abs(v), s=v<0?'-':''; return a>=1e6 ? s+'$'+(a/1e6).toFixed(3)+'M' : a>=1e3 ? s+'$'+(a/1e3).toFixed(0)+'K' : fmt$(v); };
 const nz = v => Math.abs(Number(v)||0) > 0.005; // meaningfully non-zero — money colors apply only when true; $0.00 stays plain white
+// Our own paper. Any OTHER funder in the Funder field (e.g. GIL) means we're participating in
+// someone else's deal — those get flagged peach. Edit this list if a house name is missing.
+const HOUSE_FUNDERS = ['HBP','HARBORPOINT','MSC','HHC','HIGHLAND HILL CAPITAL','HIGHLAND HILL','MWJ','MWJ HOLDINGS','MWJ HOLDINGS LLC','','N/A','—'];
+const isExternalFunder = f => { const v=String(f||'').trim().toUpperCase(); return v!=='' && !HOUSE_FUNDERS.includes(v); };
 const fmtDate = iso => { if(!iso) return '—'; const [y,m,d]=iso.split('-'); return `${parseInt(m)}/${parseInt(d)}/${y}`; };
 const calcML = (f,bp,fees,comm) => (f*bp/100)-fees+(comm*bp/100);
 const calcPNL = (rtr,bal,bp,ml) => ((rtr-bal)*bp/100)-ml;
@@ -982,7 +987,7 @@ async function importCrmExport(file){
     const h = rows[0].map(x=>String(x||'').trim().toLowerCase());
     const ci = n=>h.findIndex(x=>x===n);
     const C = {lead:ci('lead id'), merch:ci('merchant'), start:ci('start date'), funder:ci('funder'),
-      rep:ci('rep'), iso:ci('iso'), bookpct:ci('book %'), ffee:ci('funding fee'), ofee:ci('origination fee'),
+      rep:ci('rep'), iso:ci('iso'), bookpct:ci('book %'), dealpct:ci('deal %'), ffee:ci('funding fee'), ofee:ci('origination fee'),
       comm:ci('commission'), funded:ci('funded'), purch:ci('purchased'),
       freq:h.findIndex(x=>x.includes('payments freq')), pay:ci('estimated payments'),
       industry:ci('industry'), state:ci('state'), oname:ci('owner name'), oemail:ci('owner email'),
@@ -1037,11 +1042,16 @@ async function importCrmExport(file){
     let added=0, refis=0;
     for(const r of newRows){
       const merchant=String(r[C.merch]).trim().toUpperCase();
-      const funded=money(r[C.funded]), rtr=money(r[C.purch]);
-      let bookpct=money(r[C.bookpct])||100; if(bookpct<=1.5) bookpct*=100;
-      if(bookpct>100) bookpct=100;   // hard ceiling, same as the form
+      // deal % = our participation share of the WHOLE deal (e.g. 18.75% = our $15k of an $80k deal).
+      // The export reports our SLICE in Funded/Purchased/Commission, so gross them up to the full
+      // deal and let book % carry our share. deal % 100 (we're the whole deal) → no change.
+      let dealPct = C.dealpct>=0 ? money(r[C.dealpct]) : 100; if(!dealPct) dealPct=100; if(dealPct<=1.5) dealPct*=100; if(dealPct>100) dealPct=100;
+      let csvBook = money(r[C.bookpct])||100; if(csvBook<=1.5) csvBook*=100; if(csvBook>100) csvBook=100;
+      const scale = dealPct>0 ? 100/dealPct : 1;
+      const funded=money(r[C.funded])*scale, rtr=money(r[C.purch])*scale; // total deal
+      let bookpct = Math.round(dealPct*csvBook/100*100)/100; if(bookpct>100) bookpct=100; // our on-book share of the whole deal
       const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
-      const comm=money(r[C.comm]);
+      const comm=money(r[C.comm])*scale; // total-deal commission (book_comm re-derives our slice)
       const ml=calcML(funded,bookpct,fees,comm);
       // Refi detection with date cross-check (build 39): bind to the most-recent prior that
       // PRE-DATES this deal, by date funded — never just newest-by-name, which can cross a chain.
@@ -1566,7 +1576,7 @@ function renderTable(){
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
-      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}${clawbackTag(d)}</td>
+      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}${isExternalFunder(d.funder)?' — participation in '+esc(d.funder)+"'s deal":''}">${isExternalFunder(d.funder)?'<span style="color:var(--peach)">'+d.merchant+'</span>':(d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant)}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}${clawbackTag(d)}</td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
       <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
@@ -1587,7 +1597,7 @@ function renderTable(){
       <td style="color:var(--text2);white-space:nowrap">${d.frequency==='Weekly'?'<span class="wk-name">'+lenTxt+'</span>':lenTxt}</td>
       <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
       <td style="white-space:nowrap"><select class="badge ${badgeCls}" onchange="setDealStatus('${d._id}',this.value)" title="${d.status_override?'Manually pinned — sync will not change this status':'Status (auto) — pick one to pin it manually'}">${['NEW','ACTIVE','PIF','COMPLETED','DEFAULT'].map(s=>`<option value="${s}"${s===d.status?' selected':''}>${s}</option>`).join('')}${d.status_override?'<option value="__AUTO__">↺ release to auto</option>':''}</select>${d.status_override?'<span class="ovr-dot" title="Manually pinned — sync will not change this status">📌</span>':''}${csChip(d)}</td>
-      <td style="font-size:11px;color:var(--text2)">${d.funder||'—'}</td>
+      <td style="font-size:11px;color:${isExternalFunder(d.funder)?'var(--peach)':'var(--text2)'}${isExternalFunder(d.funder)?';font-weight:600':''}">${d.funder||'—'}</td>
       <td style="white-space:nowrap;text-align:center"><input class="kb-edit" type="text" value="${d.kickback?fmt$(d.kickback):''}" placeholder="—" onchange="saveKickbackInline('${d._id}',this.value)" title="${d.kickback_paid?'Already distributed in a closed PNL month — changes will NOT flow to a new payout':'Kickback (upfront bank) — saves on enter/blur'}">${d.kickback_paid?'<span style="font-size:10px;color:var(--green)" title="Distributed">✓</span>':''}</td>
       <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
       <td style="color:var(--text2)">${d.frequency==='Weekly'?'<span class="wk-name">'+fmt$(d.daily_payment)+'/wk</span>':fmt$(d.daily_payment)}</td>
