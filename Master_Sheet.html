@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Average Fee % now computed on Total Book Funding too (banks ÷ book funding). Monthly tab is fully book-basis: Total Book Funding, Avg Deal Size, Average Fee %.">build 70</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Dashboard Defaults card now shows the default rate — defaulted book funding ÷ total book funding (dollar-weighted, book basis) — under the count.">build 71</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -349,7 +349,7 @@ select.badge:hover{filter:brightness(1.2)}
           <div class="metric-card"><div class="lbl">Outstanding</div><div class="val" id="m-balance">$0</div><div class="sub">balance remaining</div></div>
           <div class="metric-card"><div class="lbl">Renewal eligible</div><div class="val val-amber" id="m-renewal">0</div><div class="sub">≥ 50% paid</div></div>
           <div class="metric-card"><div class="lbl">Portfolio PNL</div><div class="val" id="m-pnl">$0</div><div class="sub">all deals</div></div>
-          <div class="metric-card"><div class="lbl">Defaults</div><div class="val val-red" id="m-defaults">0</div><div class="sub">total</div></div>
+          <div class="metric-card"><div class="lbl">Defaults</div><div class="val val-red" id="m-defaults">0</div><div class="sub" id="m-default-sub">total</div></div>
         </div>
 
         <div class="panel" id="panel-book">
@@ -1953,6 +1953,13 @@ function renderMetrics(){
   document.getElementById('m-balance').textContent=fmtK(active.reduce((s,d)=>s+d.balance,0));
   document.getElementById('m-renewal').textContent=rc;
   document.getElementById('m-defaults').textContent=defs.length;
+  // Default rate = defaulted book funding ÷ total book funding (dollar-weighted, book basis)
+  const bookFundedOf=d=>(d.funded||0)*(d.book_pct||100)/100;
+  const totalBF=deals.reduce((s,d)=>s+bookFundedOf(d),0);
+  const defBF=defs.reduce((s,d)=>s+bookFundedOf(d),0);
+  const defPct=totalBF>0?defBF/totalBF*100:0;
+  const dsub=document.getElementById('m-default-sub');
+  if(dsub) dsub.textContent=(totalBF>0?defPct.toFixed(1):'0.0')+'% of book funded';
   document.getElementById('renewal-badge').textContent=rc;
   document.getElementById('pif-badge').textContent=pifs.length;
   document.getElementById('default-badge').textContent=defs.length;
