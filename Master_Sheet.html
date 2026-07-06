@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Dashboard Defaults card now shows the default rate — defaulted book funding ÷ total book funding (dollar-weighted, book basis) — under the count.">build 71</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Allocator: swapped the two split columns (To HHC now before MSC) and renamed 'Your KB' → 'MSC'. Header summary and group subtotals reordered/renamed to match.">build 72</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1880,20 +1880,20 @@ function renderAllocator(){
   if(groups.__NOISO__) allocGroupKeys.push('__NOISO__');
   const totalSend=rows.reduce((s,r)=>s+r.isoComm,0), totalKbOurs=rows.reduce((s,r)=>s+r.kbOurs,0), totalKbHhc=rows.reduce((s,r)=>s+r.kbHhc,0);
   if(headEl) headEl.innerHTML=`<span>To send to ISOs: <b style="color:var(--text)">${fmt$(totalSend)}</b></span>
-    <span>Your kickbacks (1.5%): <b style="color:var(--green)">${fmt$(totalKbOurs)}</b></span>
     <span>To send HHC (1.5%): <b style="color:#c9a15a">${fmt$(totalKbHhc)}</b></span>
+    <span>MSC (1.5%): <b style="color:var(--green)">${fmt$(totalKbOurs)}</b></span>
     <span style="${dim}">${rows.length} deal${rows.length===1?'':'s'}${fIso?' (filtered)':' waiting'}</span>`;
   let h=`<table class="pif-table"><colgroup>
     <col style="width:8%"><col style="width:15%"><col style="width:6%"><col style="width:12%"><col style="width:9%"><col style="width:6%"><col style="width:11%"><col style="width:6%"><col style="width:8%"><col style="width:8%"><col style="width:11%">
   </colgroup><thead><tr>
     <th class="pif-c">Date Funded</th><th>Deal</th><th>Rep</th><th>ISO</th>
-    <th class="pif-c">Commission</th><th class="pif-c">Comm %</th><th class="pif-c">ISO Commission</th><th class="pif-c">ISO %</th><th class="pif-c">Your KB (1.5%)</th><th class="pif-c">To HHC (1.5%)</th><th class="pif-c">Action</th>
+    <th class="pif-c">Commission</th><th class="pif-c">Comm %</th><th class="pif-c">ISO Commission</th><th class="pif-c">ISO %</th><th class="pif-c">To HHC (1.5%)</th><th class="pif-c">MSC (1.5%)</th><th class="pif-c">Action</th>
   </tr></thead><tbody>`;
   allocGroupKeys.forEach((key,gi)=>{
     const grp=groups[key], isNo=key==='__NOISO__';
     const gSend=grp.reduce((s,r)=>s+r.isoComm,0), gKbOurs=grp.reduce((s,r)=>s+r.kbOurs,0), gKbHhc=grp.reduce((s,r)=>s+r.kbHhc,0);
     const label=isNo?'No ISO — your commission, nothing to send out':key;
-    const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+fmt$(gSend)} · your KB ${fmt$(gKbOurs)} · HHC ${fmt$(gKbHhc)}`;
+    const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+fmt$(gSend)} · HHC ${fmt$(gKbHhc)} · MSC ${fmt$(gKbOurs)}`;
     h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="11"><span class="alloc-iso-name">${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
     grp.forEach(r=>{
       h+=`<tr>
@@ -1905,8 +1905,8 @@ function renderAllocator(){
         <td class="pif-c pif-dim">${r.commPct?r.commPct.toFixed(1)+'%':'—'}</td>
         <td class="pif-c">${r.hasIso?fmt$(r.isoComm):'<span style="'+dim+'">no ISO — yours</span>'}</td>
         <td class="pif-c pif-dim">${r.isoPct!=null?r.isoPct.toFixed(1)+'%':'—'}</td>
-        <td class="pif-c" style="color:var(--green)">${fmt$(r.kbOurs)}</td>
         <td class="pif-c" style="color:#c9a15a">${fmt$(r.kbHhc)}</td>
+        <td class="pif-c" style="color:var(--green)">${fmt$(r.kbOurs)}</td>
         <td class="pif-c"><button onclick="markAllocPaid('${r.d._id}')" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 12px;font-size:11px;cursor:pointer">Paid</button></td>
       </tr>`;
     });
