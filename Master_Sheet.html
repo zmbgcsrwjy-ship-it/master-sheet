@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Allocator: the 3 points held back now split 50/50 — 1.5% recorded as your kickback (→ kickback section/PNL, you+Sal split, unchanged) and 1.5% shown as 'to send HHC' (display only, not in PNL). New To-HHC column + header total. Monthly 'Total Funding' → 'Total Book Funding' (your share; Avg Deal Size / Avg Fee % still on full deal). Import already sums Funding Fee + Origination into Bank Fee.">build 68</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Average Fee % now computed on Total Book Funding too (banks ÷ book funding). Monthly tab is fully book-basis: Total Book Funding, Avg Deal Size, Average Fee %.">build 70</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2325,9 +2325,9 @@ async function computeMonthlyRows(){
     const ffees=ds.reduce((s,d)=>s+(d.finance_fee||0),0);
     const legal=manual.legal||0, clawback=manual.clawback||0;
     return {label, ym, isTotal, tdf, nw, rf, funding, bookFunding,
-      avgSize: tdf?funding/tdf:null,
+      avgSize: tdf?bookFunding/tdf:null,
       avgLen: tdf?ds.reduce((s,d)=>s+bdLen(d),0)/tdf:null,
-      avgFee: funding?banks/funding*100:null,
+      avgFee: bookFunding?banks/bookFunding*100:null,
       banks, balance, bonus, pnl, ffees, clawback, legal};
   };
   const rows=[]; let yearAcc={}, lastYear=null;
