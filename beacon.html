@@ -1235,7 +1235,7 @@
     <h1>Beacon Remittance Matrix</h1>
     <p>
       <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v86 · live</span>
+      <span class="build-tag">v87 · live</span>
     </p>
   </div>
   <div class="brief-date">
@@ -2325,9 +2325,19 @@ function resumesOn(iso) {
 function isInFlight(m) {
   if (!m.bounced_today) return false;
   if (!m.resolution_type) return false;
+  // v87: a suspension or lowering stays "in flight" (still recognized as resolved) for its WHOLE
+  // active window — from when it was set until the resume date. A pull that bounces during an active
+  // suspension is expected (we paused them; the ACH still fired), so it must keep showing as resolved
+  // instead of resurfacing as a fresh unresolved bounce. It only becomes broken once the resume date
+  // has passed and it bounces again (handled by isBroken). Driven purely by state — independent of
+  // which report was uploaded first, or whether the daily was synced here or in the Master Sheet.
+  if ((m.resolution_type === 'paused' || m.resolution_type === 'lowered') && m.resume_date) {
+    const hit = m.hit_date || TODAY_ISO;
+    return new Date(hit) < new Date(m.resume_date);
+  }
+  // Spoke, or a paused/lowered with no resume date: in-flight only if the pull already happened
+  // on or before we resolved. <= so same-day resolutions count — the pull couldn't be undone.
   if (!m.hit_date || !m.resolution_date) return false;
-  // <= so same-day resolutions count as in-flight: if you resolved on the same day
-  // the bounce was reported, the pull had already happened — you can't undo it.
   return new Date(m.hit_date) <= new Date(m.resolution_date);
 }
 function isBroken(m) {
