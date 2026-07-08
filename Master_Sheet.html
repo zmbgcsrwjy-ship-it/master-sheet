@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL page: new SETTLE-UP box under the table — shows Sal's page (PNL − FF − legal + clawback) vs your page (MSC kickbacks) and the net transfer to true both to 50/50. Display only; no PNL numbers change. Works on the live month and closed snapshots.">build 73</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Settle-up box moved to the right side; wording uses 'Matt' instead of 'you' (Sal sees it too) — 'Sal sends Matt' / 'Matt sends Sal', 'Matt's page'.">build 74</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2271,12 +2271,12 @@ function pnlSettleHtml(p){
   const transfer = each - mattPage; // >0 Sal→Matt ; <0 Matt→Sal
   let line;
   if(Math.abs(transfer)<=0.005) line=`<span style="color:var(--text2)">Even — no transfer needed</span><span style="color:var(--text2)">$0.00</span>`;
-  else if(transfer>0) line=`<span style="color:var(--green)">→ Sal sends you</span><span style="color:var(--green)">${fmt$(transfer)}</span>`;
-  else line=`<span style="color:#c9a15a">→ You send Sal</span><span style="color:#c9a15a">${fmt$(-transfer)}</span>`;
-  return `<div style="margin:10px 4px 4px; padding:12px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; max-width:540px">
+  else if(transfer>0) line=`<span style="color:var(--green)">→ Sal sends Matt</span><span style="color:var(--green)">${fmt$(transfer)}</span>`;
+  else line=`<span style="color:#c9a15a">→ Matt sends Sal</span><span style="color:#c9a15a">${fmt$(-transfer)}</span>`;
+  return `<div style="margin:10px 4px 4px auto; padding:12px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; max-width:540px">
     <div style="font-size:11px; font-weight:700; letter-spacing:.5px; color:var(--text3); margin-bottom:8px">SETTLE-UP — ${monthLabelFull(p.month)}</div>
     <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Sal's page — PNL − FF − legal + clawback</span><span style="color:var(--text)">${fmt$(salPage)}</span></div>
-    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Your page — MSC kickbacks</span><span style="color:var(--text)">${fmt$(mattPage)}</span></div>
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Matt's page — MSC kickbacks</span><span style="color:var(--text)">${fmt$(mattPage)}</span></div>
     <div style="border-top:1px solid var(--border); margin-top:6px; padding-top:8px; display:flex; justify-content:space-between; font-size:13px; font-weight:700">${line}</div>
     <div style="font-size:10px; color:var(--text3); margin-top:5px">Both partners net to ${fmt$(each)} for the month.</div>
   </div>`;
