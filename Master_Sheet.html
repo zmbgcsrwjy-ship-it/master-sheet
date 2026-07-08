@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Settle-up box slid in ~80px from the right edge so its numbers line up under the Sal/Matt columns instead of hugging the panel edge.">build 75</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback now also triggers on a STOP PAYMENT within 30 days of funding (any stop return code), not just a 4th bounce — a stop is the merchant blocking the ACH, a clear breach. Applies to the Clawback view, tags, and sidebar badge. Matches Beacon v88.">build 76</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -894,13 +894,13 @@ async function loadBounceSummary(){
     if(lead==null||lead==='') continue;
     const code=(f['Return Code']||'').toUpperCase().trim();
     const sev=(f.Severity||'').toUpperCase();
-    const e = bounceByLead[lead] = bounceByLead[lead] || {codes:new Set(), count:0, hasStop:false, dates:[]};
+    const e = bounceByLead[lead] = bounceByLead[lead] || {codes:new Set(), count:0, hasStop:false, dates:[], stopDates:[]};
     e.count++;
     const bdate=(f.Date||'').slice(0,10); if(bdate) e.dates.push(bdate);
     if(code) e.codes.add(code);
-    if(sev==='STOP' || STOP_RCODES.includes(code)) e.hasStop=true;
+    if(sev==='STOP' || STOP_RCODES.includes(code)){ e.hasStop=true; if(bdate) e.stopDates.push(bdate); }
   }
-  Object.values(bounceByLead).forEach(e=>e.dates.sort()); // ascending; dates[3] = 4th bounce
+  Object.values(bounceByLead).forEach(e=>{ e.dates.sort(); e.stopDates.sort(); }); // ascending; dates[3] = 4th bounce
 }
 // Returns small HTML badges for a deal's bounce history (stop codes first, then BOUNCING state).
 function bounceBadges(d){
@@ -933,6 +933,9 @@ function clawbackTier(d){
   const funded=d.date_funded; if(!funded) return null;
   const e=bounceByLead[d.lead_id];
   const dates=(e&&e.dates)?e.dates:[];
+  const stops=(e&&e.stopDates)?e.stopDates:[];
+  // v76: a STOP PAYMENT within 30 days of funding = eligible on its own (merchant blocked the ACH — clear breach).
+  if(stops.length){ const sd=daysBetweenYMD(funded, stops[0]); if(sd!=null && sd<=CLAW_WINDOW) return 'eligible'; }
   if(dates.length>=CLAW_TRIGGER){
     const dd=daysBetweenYMD(funded, dates[CLAW_TRIGGER-1]);
     if(dd!=null && dd<=CLAW_WINDOW) return 'eligible';
@@ -944,7 +947,7 @@ function clawbackTier(d){
 function clawDaysLeft(d){ const age=daysBetweenYMD(d.date_funded, msTodayYMD()); return Math.max(0, CLAW_WINDOW-(age==null?CLAW_WINDOW:age)); }
 function clawbackTag(d){
   const t=clawbackTier(d);
-  if(t==='eligible') return `<span class="claw-tag" title="Clawback eligible — 4th bounce within 30 days of funding. ${fmt$(d.comm_amount||0)} commission recoverable from ${esc0(d.rep)||'the rep'}.">⏪ Clawback</span>`;
+  if(t==='eligible') return `<span class="claw-tag" title="Clawback eligible — a 4th bounce OR a stop payment within 30 days of funding. ${fmt$(d.comm_amount||0)} commission recoverable from ${esc0(d.rep)||'the rep'}.">⏪ Clawback</span>`;
   if(t==='warning'){ const n=clawDaysLeft(d); return `<span class="claw-tag-warn" title="Window closing — ${n} day${n!==1?'s':''} left. 2–3 bounces so far; if it hits a 4th before the cutoff, the commission becomes clawback-eligible.">⏳ ${n}d to claw</span>`; }
   return '';
 }

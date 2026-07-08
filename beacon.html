@@ -338,7 +338,12 @@
   
   .main { padding: 32px 36px 120px; max-width: 1440px; margin-left: auto; margin-right: auto; }
   
-  header.brief-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 24px; }
+  .bx-side-logo { padding: 2px 6px 13px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .bx-side-logo h1 { font-size: 18px; font-weight: 800; margin: 0; letter-spacing: -0.3px; color: var(--text); }
+  .bx-side-logo .sub { font-size: 11px; color: var(--text-2); display: block; margin-top: 4px; line-height: 1.35; }
+  .bx-side-logo .build-tag { font-size: 10px; color: var(--text-3); display: block; margin-top: 4px; font-family: -apple-system, BlinkMacSystemFont, monospace; letter-spacing: 0.02em; }
+  .layout.collapsed .bx-side-logo { display: none; }
+  header.brief-header { display: flex; justify-content: flex-end; align-items: flex-end; gap: 24px; margin-bottom: 14px; }
   .brief-title h1 { 
     font-size: 34px; 
     font-weight: 700; 
@@ -1182,7 +1187,13 @@
 
 <aside class="sidebar">
   <button class="sidebar-toggle" onclick="toggleSidebar()" title="Collapse sidebar">‹</button>
-  
+
+  <div class="bx-side-logo">
+    <h1>Beacon</h1>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
+    <span class="build-tag">v88 · live</span>
+  </div>
+
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
   <div class="watch-list">
     <div class="watch-list-header">
@@ -1231,13 +1242,6 @@
 <main class="main">
 
 <header class="brief-header">
-  <div class="brief-title">
-    <h1>Beacon Remittance Matrix</h1>
-    <p>
-      <span><span id="total-tracked"></span> active + default deals tracked</span>
-      <span class="build-tag">v87 · live</span>
-    </p>
-  </div>
   <div class="brief-date">
     <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme">
       <span class="theme-icon" id="theme-icon">🌙</span>
@@ -1346,12 +1350,12 @@
 
 <div class="session-footer">
   <h3>End-of-session updates</h3>
-  <p>Counts auto-update as you resolve merchants and write notes. Click <strong>Save for tomorrow</strong> to export the JSON for tomorrow.</p>
+  <p>Counts auto-update as you resolve merchants and write notes.</p>
   <div class="summary-grid">
-    <div><div class="num" id="f-resolved">0</div><div class="lbl">Resolved today</div></div>
-    <div><div class="num" id="f-notes">0</div><div class="lbl">Notes written</div></div>
     <div><div class="num" id="f-action-total">0</div><div class="lbl">Total bounces</div></div>
+    <div><div class="num" id="f-resolved">0</div><div class="lbl">Resolved today</div></div>
     <div><div class="num" id="f-actions">0</div><div class="lbl">Unresolved</div></div>
+    <div><div class="num" id="f-notes">0</div><div class="lbl">Notes written</div></div>
   </div>
 </div>
 
@@ -1646,6 +1650,10 @@ function beaconClawTier(m){
   if(st==='FORCED') return 'eligible';
   const funded=m.funded; if(!funded) return null;
   const dates=m._bounceDates||[];
+  const stops=m._stopDates||[];
+  // v88: a STOP PAYMENT (merchant blocked the ACH — a clear breach) within 30 days of funding is
+  // clawback-eligible on its own, no 4-bounce threshold needed.
+  if(stops.length){ const sd=bDaysBetween(funded, stops[0]); if(sd!=null && sd<=BCLAW_WINDOW) return 'eligible'; }
   if(dates.length>=BCLAW_TRIGGER){ const dd=bDaysBetween(funded, dates[BCLAW_TRIGGER-1]); if(dd!=null&&dd<=BCLAW_WINDOW) return 'eligible'; }
   const age=bDaysBetween(funded, bLocalToday());
   if(dates.length>=BCLAW_WARN_MIN && dates.length<BCLAW_TRIGGER && age!=null && age>=(BCLAW_WINDOW-BCLAW_WARN_DAYS) && age<=BCLAW_WINDOW) return 'warning';
@@ -1653,7 +1661,7 @@ function beaconClawTier(m){
 }
 function beaconClawTag(m){
   const t=beaconClawTier(m);
-  if(t==='eligible') return '<span class="claw-chip" title="Clawback eligible — 4th bounce within 30 days of funding. Recover the commission from '+(m.rep||'the rep')+', then mark it clawed on the Master Sheet.">\u23ea Clawback</span>';
+  if(t==='eligible') return '<span class="claw-chip" title="Clawback eligible — a 4th bounce OR a stop payment within 30 days of funding. Recover the commission from '+(m.rep||'the rep')+', then mark it clawed on the Master Sheet.">\u23ea Clawback</span>';
   if(t==='warning'){ const n=Math.max(0, BCLAW_WINDOW-(bDaysBetween(m.funded,bLocalToday())||BCLAW_WINDOW)); return '<span class="claw-chip-warn" title="Window closing — '+n+' day'+(n!==1?'s':'')+' left. If it hits a 4th bounce before the cutoff, the commission becomes clawback-eligible.">\u23f3 '+n+'d</span>'; }
   return '';
 }
@@ -1687,7 +1695,7 @@ function beaconReconstruct(raw, todayISO){
       notes:'', notes_log:[], resolution_type:'', resolution_date:'', resume_date:'',
       lowered_amount:0, original_freq:'', original_bounce_amt:0, original_return_code:'',
       manual_freq:'', rep:f.Rep||'', iso:f.ISO||'', _freqField:f.Frequency||'', _collectionsState:f.CollectionsState||'',
-      clawback_state:f.ClawbackState||'', _bounceDates:[]
+      clawback_state:f.ClawbackState||'', _bounceDates:[], _stopDates:[]
     };
     dealsById[r.id]=m; merchants.push(m);
   }
@@ -1700,9 +1708,11 @@ function beaconReconstruct(raw, todayISO){
   }
   const dates = Object.keys(byDate).sort();
 
-  // v86: every bounce date per deal → clawback eligibility (4th bounce within 30 days of funding)
-  for (const r of raw.bounces){ const f=r.fields||{}; const dt=(f.Date||'').slice(0,10); const rid=(f.Deal&&f.Deal[0])||null; const m=rid&&dealsById[rid]; if(dt&&m) m._bounceDates.push(dt); }
-  merchants.forEach(m=>m._bounceDates.sort());
+  // v88: per-deal bounce dates (4th-bounce clawback) + stop-payment dates (stop = immediate clawback)
+  const _STOP_CODES=['R02','R05','R07','R08','R10','R16','R29'];
+  for (const r of raw.bounces){ const f=r.fields||{}; const dt=(f.Date||'').slice(0,10); const rid=(f.Deal&&f.Deal[0])||null; const m=rid&&dealsById[rid];
+    if(dt&&m){ m._bounceDates.push(dt); const rc=(f['Return Code']||'').toUpperCase().trim(); if(_STOP_CODES.indexOf(rc)>=0 || (f.Severity||'').toUpperCase()==='STOP') m._stopDates.push(dt); } }
+  merchants.forEach(m=>{ m._bounceDates.sort(); m._stopDates.sort(); });
 
   // ---- today's bounce state onto merchants ----
   for (const r of (byDate[today]||[])){
@@ -2217,6 +2227,7 @@ function loadState() {
 function persistState() { /* v72: state lives in Airtable */ }
 
 function fmt$(n) { if (n >= 1000) return "$" + Math.round(n).toLocaleString(); return "$" + Math.round(n); }
+function fmt$c(n) { return "$" + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); } // exact cents — for the bounce amount
 function fmt$k(n) { if (n >= 1e6) return "$" + (n/1e6).toFixed(3) + "M"; if (n >= 1000) return "$" + Math.round(n/1000) + "K"; return "$" + Math.round(n); }
 function fmtPct(n) { return Math.round(n * 100) + "%"; }
 function fmtDate(s) { if (!s) return "—"; const d = new Date(s + "T00:00:00"); if (isNaN(d)) return s; return (d.getMonth()+1) + "/" + d.getDate(); }
@@ -4116,7 +4127,7 @@ function buildRow(m, editable) {
   
   tr.innerHTML = merchantCell +
     '<td class="ctr secondary">' + fmtDate(m.hit_date) + lagBadge(m.hit_date, viewDate) + '</td>' +
-    '<td class="num">' + fmt$(m.bounce_amt || 0) + '</td>' +
+    '<td class="num">' + fmt$c(m.bounce_amt || 0) + '</td>' +
     '<td class="ctr">' + (editable ? freqPillEditable(m) : freqPill(m.freq)) + '</td>' +
     '<td class="num">' + fmtPct(m.pct_paid) + '</td>' +
     '<td class="num balance-cell">' + fmt$(m.balance) + '</td>' +
