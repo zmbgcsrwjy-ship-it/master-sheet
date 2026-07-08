@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Allocator: swapped the two split columns (To HHC now before MSC) and renamed 'Your KB' → 'MSC'. Header summary and group subtotals reordered/renamed to match.">build 72</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL page: new SETTLE-UP box under the table — shows Sal's page (PNL − FF − legal + clawback) vs your page (MSC kickbacks) and the net transfer to true both to 50/50. Display only; no PNL numbers change. Works on the live month and closed snapshots.">build 73</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -421,6 +421,7 @@ select.badge:hover{filter:brightness(1.2)}
               <tbody id="pnl-body"></tbody>
             </table>
           </div>
+          <div id="pnl-settle"></div>
           <div style="font-size:11px;color:var(--text3);padding:8px 4px">House split: Highland Hill Capital 50% of book PNL and 50% of legal (global). Kickbacks 100% ours, distributed once after funding. FF is full book-level cost on a 4-month lag. Legal total is entered on the Monthly tab. A funding month pays out as soon as it's positive; a negative month is held — no payout, no deduction — until the whole cohort goes dark (every open deal DEFAULT or 30+ days with no payment), then its loss deducts. After a loss is settled, later collections surface as ↩ RECOVERY income to pay back out. The Settled column is a running account.</div>
         </div>
         <div class="panel" id="panel-renewal" style="display:none">
@@ -2260,10 +2261,31 @@ function pnlRowsHtml(p){
   return h;
 }
 
+// Settle-up: PNL/FF/legal/clawback land on Sal's page; kickbacks on Matt's page. Each owns 50%
+// of the combined total, so one tops up the other. Display only — does not change any PNL number.
+function pnlSettleHtml(p){
+  const legalOurEnd = p.legalOurEnd!=null ? p.legalOurEnd : (p.legal||0);
+  const salPage = (p.payableTotal||0) - (p.ffDue||0) - legalOurEnd + (p.clawbackOurEnd||0);
+  const mattPage = (p.kickTotal||0);
+  const each = p.each!=null ? p.each : (salPage+mattPage)/2;
+  const transfer = each - mattPage; // >0 Sal→Matt ; <0 Matt→Sal
+  let line;
+  if(Math.abs(transfer)<=0.005) line=`<span style="color:var(--text2)">Even — no transfer needed</span><span style="color:var(--text2)">$0.00</span>`;
+  else if(transfer>0) line=`<span style="color:var(--green)">→ Sal sends you</span><span style="color:var(--green)">${fmt$(transfer)}</span>`;
+  else line=`<span style="color:#c9a15a">→ You send Sal</span><span style="color:#c9a15a">${fmt$(-transfer)}</span>`;
+  return `<div style="margin:10px 4px 4px; padding:12px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; max-width:540px">
+    <div style="font-size:11px; font-weight:700; letter-spacing:.5px; color:var(--text3); margin-bottom:8px">SETTLE-UP — ${monthLabelFull(p.month)}</div>
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Sal's page — PNL − FF − legal + clawback</span><span style="color:var(--text)">${fmt$(salPage)}</span></div>
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Your page — MSC kickbacks</span><span style="color:var(--text)">${fmt$(mattPage)}</span></div>
+    <div style="border-top:1px solid var(--border); margin-top:6px; padding-top:8px; display:flex; justify-content:space-between; font-size:13px; font-weight:700">${line}</div>
+    <div style="font-size:10px; color:var(--text3); margin-top:5px">Both partners net to ${fmt$(each)} for the month.</div>
+  </div>`;
+}
 async function renderPnl(historyMonth){
   const body=document.getElementById('pnl-body'), title=document.getElementById('pnl-title');
   const btn=document.getElementById('pnl-close-btn'), hist=document.getElementById('pnl-history');
   body.innerHTML='<tr><td colspan="7" style="color:var(--text3)">Loading PNL...</td></tr>';
+  { const se=document.getElementById('pnl-settle'); if(se) se.innerHTML=''; }
   try{ await loadPnlState(); }catch(e){ pnlLedger={}; pnlSnapshots=[]; }
   const keep = historyMonth!==undefined?historyMonth:hist.value;
   hist.innerHTML='<option value="">Current (in progress)</option>'+pnlSnapshots.map(s=>`<option value="${s.month}"${s.month===keep?' selected':''}>${monthLabelFull(s.month)} — closed</option>`).join('');
@@ -2272,7 +2294,7 @@ async function renderPnl(historyMonth){
     if(snap){
       title.textContent='PNL — '+monthLabelFull(snap.month)+' (closed '+(snap.closedAt?snap.closedAt.slice(0,10):'')+')';
       btn.style.display='none';  // viewing a past closed month from history — no action here
-      try{ body.innerHTML=pnlRowsHtml(JSON.parse(snap.data)); }
+      try{ const sp=JSON.parse(snap.data); body.innerHTML=pnlRowsHtml(sp); document.getElementById('pnl-settle').innerHTML=pnlSettleHtml(sp); }
       catch(e){ body.innerHTML='<tr><td colspan="7" class="pnl-neg">Snapshot data unreadable.</td></tr>'; }
       return;
     }
@@ -2283,6 +2305,7 @@ async function renderPnl(historyMonth){
   if(closed){ btn.style.display=''; btn.disabled=true; btn.textContent='✓ '+monthLabelFull(p.month)+' closed'; btn.classList.add('btn-dim'); }
   else { btn.style.display=''; btn.disabled=false; btn.textContent='🔒 Close out '+monthLabelFull(p.month); btn.classList.remove('btn-dim'); }
   body.innerHTML=pnlRowsHtml(p);
+  document.getElementById('pnl-settle').innerHTML=pnlSettleHtml(p);
 }
 
 async function closeOutMonth(){
