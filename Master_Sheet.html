@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Settle-up box moved to the right side; wording uses 'Matt' instead of 'you' (Sal sees it too) — 'Sal sends Matt' / 'Matt sends Sal', 'Matt's page'.">build 74</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Settle-up box slid in ~80px from the right edge so its numbers line up under the Sal/Matt columns instead of hugging the panel edge.">build 75</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2273,7 +2273,7 @@ function pnlSettleHtml(p){
   if(Math.abs(transfer)<=0.005) line=`<span style="color:var(--text2)">Even — no transfer needed</span><span style="color:var(--text2)">$0.00</span>`;
   else if(transfer>0) line=`<span style="color:var(--green)">→ Sal sends Matt</span><span style="color:var(--green)">${fmt$(transfer)}</span>`;
   else line=`<span style="color:#c9a15a">→ Matt sends Sal</span><span style="color:#c9a15a">${fmt$(-transfer)}</span>`;
-  return `<div style="margin:10px 4px 4px auto; padding:12px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; max-width:540px">
+  return `<div style="margin:12px 80px 6px auto; padding:12px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; max-width:520px">
     <div style="font-size:11px; font-weight:700; letter-spacing:.5px; color:var(--text3); margin-bottom:8px">SETTLE-UP — ${monthLabelFull(p.month)}</div>
     <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Sal's page — PNL − FF − legal + clawback</span><span style="color:var(--text)">${fmt$(salPage)}</span></div>
     <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Matt's page — MSC kickbacks</span><span style="color:var(--text)">${fmt$(mattPage)}</span></div>
