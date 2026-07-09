@@ -96,7 +96,7 @@
   .layout.collapsed { grid-template-columns: 44px 1fr; }
   
   .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 14px; overflow-y: auto; overflow-x: hidden; position: sticky; top: 0; height: 100vh; }
-  .layout.collapsed .sidebar { padding: 24px 6px; padding-top: 14px; }
+  .layout.collapsed .sidebar { padding: 24px 6px; padding-top: 50px; }
   .layout.collapsed .sidebar > *:not(.sidebar-toggle) { display: none; }
   .sidebar-toggle { position: absolute; top: 14px; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; color: var(--text-2); z-index: 2; }
   .layout.collapsed .sidebar-toggle { right: 8px; }
@@ -1199,7 +1199,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v93 · live</span>
+    <span class="build-tag">v94 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1260,7 +1260,7 @@
   <button class="tab-btn active" id="tab-daily-btn" onclick="showTab('daily')">Daily Collections<span class="badge" id="daily-count-badge">0</span></button>
   <button class="tab-btn" id="tab-legal-btn" onclick="showTab('legal')">Legal Cases</button>
   <div class="tab-bar-actions">
-    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">🔄 Sync daily report <span class="btn-sub">(xlsx)</span></button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">↩️ Sync bounce report <span class="btn-sub">(xlsx)</span></button><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme"><span class="theme-icon" id="theme-icon">🌙</span></button>
+    <input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">🔄 Sync daily report</button><input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">↩️ Sync bounce report</button><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme"><span class="theme-icon" id="theme-icon">🌙</span></button>
 <div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:9000;align-items:center;justify-content:center">
   <div style="background:#141b2d;border:1px solid #2a3550;border-radius:14px;padding:28px;width:min(640px,92vw);box-shadow:0 18px 60px rgba(0,0,0,.5)">
     <div id="sync-modal-title" style="font-size:19px;font-weight:700;color:#e6edf3;margin-bottom:4px"></div>
@@ -2249,6 +2249,7 @@ function persistState() { /* v72: state lives in Airtable */ }
 
 function fmt$(n) { if (n >= 1000) return "$" + Math.round(n).toLocaleString(); return "$" + Math.round(n); }
 function fmt$c(n) { return "$" + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); } // exact cents — for the bounce amount
+function bxFmtPhone(s){ var d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return d.length===10 ? '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6) : String(s||''); }
 function fmt$k(n) { if (n >= 1e6) return "$" + (n/1e6).toFixed(3) + "M"; if (n >= 1000) return "$" + Math.round(n/1000) + "K"; return "$" + Math.round(n); }
 function fmtPct(n) { return Math.round(n * 100) + "%"; }
 function fmtDate(s) { if (!s) return "—"; const d = new Date(s + "T00:00:00"); if (isNaN(d)) return s; return (d.getMonth()+1) + "/" + d.getDate(); }
@@ -4845,7 +4846,7 @@ function openLegalForm(leadId) {
   if (!m) return;
   document.getElementById("legal-form-merchant").textContent = m.name;
   document.getElementById("legal-form-owner").value = m.owner_name || "";
-  document.getElementById("legal-form-phone").value = m.owner_phone || "";
+  document.getElementById("legal-form-phone").value = bxFmtPhone(m.owner_phone || "");
   document.getElementById("legal-form-email").value = m.owner_email || "";
   document.getElementById("legal-form-company").value = "Top Line";
   document.getElementById("legal-form-targets").value = "";
@@ -5286,7 +5287,7 @@ function toggleCaseDetail(leadId) {
   detail.innerHTML = '<td colspan="9"><div class="case-detail-grid">' +
     '<div class="case-detail-fields">' +
       '<div class="case-detail-field"><label>Owner</label><input type="text" data-field="owner_name" data-lead="' + leadId + '" value="' + escapeHtml(c.owner_name || '') + '" /></div>' +
-      '<div class="case-detail-field"><label>Phone</label><input type="text" data-field="phone" data-lead="' + leadId + '" value="' + escapeHtml(c.phone || '') + '" /></div>' +
+      '<div class="case-detail-field"><label>Phone</label><input type="text" data-field="phone" data-lead="' + leadId + '" value="' + escapeHtml(bxFmtPhone(c.phone || '')) + '" /></div>' +
       '<div class="case-detail-field"><label>Email</label><input type="text" data-field="email" data-lead="' + leadId + '" value="' + escapeHtml(c.email || '') + '" /></div>' +
       '<div class="case-detail-field"><label>Legal company</label><input type="text" data-field="legal_company" data-lead="' + leadId + '" value="' + escapeHtml(c.legal_company || '') + '" /></div>' +
       '<div class="case-detail-field"><label>Status</label><select data-field="status" data-lead="' + leadId + '">' +
