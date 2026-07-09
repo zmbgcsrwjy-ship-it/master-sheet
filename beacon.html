@@ -75,9 +75,9 @@
     --inflight: var(--good); --inflight-bg: var(--good-bg);
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
-  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
   /* v83: density — Compact fits Beacon on a 1080p screen */
-  body.compact .layout { grid-template-columns: 320px 1fr; }
+  body.compact .layout { grid-template-columns: 300px 1fr; }
   /* v83: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
@@ -339,7 +339,10 @@
   .main { padding: 14px 36px 120px; max-width: 1600px; margin-left: auto; margin-right: auto; }
   
   .bx-side-logo { padding: 4px 40px 12px 4px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
-  .bx-side-logo h1 { font-size: 18px; font-weight: 800; margin: 0; letter-spacing: -0.3px; color: var(--text); }
+  .bx-side-logo h1 { font-size: 21px; font-weight: 800; margin: 0; letter-spacing: -0.4px; display: inline-flex; align-items: center; gap: 9px; }
+  .bx-logo-text { background: linear-gradient(120deg, #5eb3ff 0%, #5eead4 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: #5eead4; }
+  .bx-logo-dot { width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #7ff3df, #2dd4bf); box-shadow: 0 0 9px 1px rgba(94,234,212,0.75); flex-shrink: 0; animation: bxPulse 2.2s ease-in-out infinite; }
+  @keyframes bxPulse { 0%,100% { transform: scale(1); opacity: 1; box-shadow: 0 0 8px 1px rgba(94,234,212,0.55); } 50% { transform: scale(1.35); opacity: 0.55; box-shadow: 0 0 14px 3px rgba(94,234,212,0.85); } }
   .bx-side-logo .sub { font-size: 11px; color: var(--text-2); display: block; margin-top: 4px; line-height: 1.35; }
   .bx-side-logo .build-tag { font-size: 10px; color: var(--text-3); display: block; margin-top: 4px; font-family: -apple-system, BlinkMacSystemFont, monospace; letter-spacing: 0.02em; }
   .layout.collapsed .bx-side-logo { display: none; }
@@ -1194,9 +1197,9 @@
   <button class="sidebar-toggle" onclick="toggleSidebar()" title="Collapse sidebar">‹</button>
 
   <div class="bx-side-logo">
-    <h1>Beacon</h1>
+    <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v91 · live</span>
+    <span class="build-tag">v92 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -5478,14 +5481,15 @@ function showToast(msg) {
 async function beaconBoot(){
   await beaconGate();
   initTheme();
+  showSyncProgress('Loading Beacon\u2026','Pulling the latest deals, bounces, and actions from Airtable.');
   await beaconPreflight();
   await beaconReload();
-  console.log("%c BEACON v83 · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
+  checkAndShowPifBanner();
+  renderCollectionsPanel();
+  finishSyncProgress(true,'Ready', (STATS && STATS.total_tracked!=null) ? (STATS.total_tracked+' deals loaded.') : 'Loaded from the book.');
+  console.log("%c BEACON · LIVE · base " + BEACON_CFG.baseId + " · " + STATS.date_iso + " ", "background: #06c; color: #fff; font-weight: bold; padding: 2px 6px;");
 }
 beaconBoot().catch(showBootError);
-// Cross-reference legal cases with today's daily report and surface PIF banner if any hit $0
-checkAndShowPifBanner();
-renderCollectionsPanel();
 </script>
 </body>
 </html>
