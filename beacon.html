@@ -75,9 +75,9 @@
     --inflight: var(--good); --inflight-bg: var(--good-bg);
   }
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
-  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
+  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
   /* v83: density — Compact fits Beacon on a 1080p screen */
-  body.compact .layout { grid-template-columns: 260px 1fr; }
+  body.compact .layout { grid-template-columns: 320px 1fr; }
   /* v83: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
@@ -336,7 +336,7 @@
   .us-confirm { margin-top: 8px; width: 100%; background: var(--text); color: var(--surface); border: 0; padding: 7px; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
   .us-confirm:disabled { background: var(--text-3); cursor: default; }
   
-  .main { padding: 14px 36px 120px; max-width: 1440px; margin-left: auto; margin-right: auto; }
+  .main { padding: 14px 36px 120px; max-width: 1600px; margin-left: auto; margin-right: auto; }
   
   .bx-side-logo { padding: 4px 40px 12px 4px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
   .bx-side-logo h1 { font-size: 18px; font-weight: 800; margin: 0; letter-spacing: -0.3px; color: var(--text); }
@@ -1196,7 +1196,7 @@
   <div class="bx-side-logo">
     <h1>Beacon</h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v90 · live</span>
+    <span class="build-tag">v91 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1305,12 +1305,6 @@
     <button class="cal-today-btn" onclick="goToday()">Today</button>
   </div>
   <div class="cal-grid" id="cal-grid"></div>
-</div>
-
-<div class="toolbar">
-  <span class="counter"><strong id="resolved-count">0</strong> resolved today</span>
-  <span class="counter"><strong id="notes-written">0</strong> notes</span>
-  <span class="counter"><strong id="actions-remaining">0</strong> remaining</span>
 </div>
 
 <div class="resumes-panel" id="resumes-panel" style="display:none;">
@@ -4780,9 +4774,6 @@ function updateCounters() {
     !isInFlight(m) &&
     !wasNotifiedToday(m.lead_id)
   ).length;
-  document.getElementById("resolved-count").textContent = resolved;
-  document.getElementById("notes-written").textContent = notes;
-  document.getElementById("actions-remaining").textContent = unresolved;
   document.getElementById("f-resolved").textContent = resolved;
   document.getElementById("f-notes").textContent = notes;
   document.getElementById("f-actions").textContent = unresolved;
