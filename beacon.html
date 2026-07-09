@@ -999,7 +999,7 @@
   /* === Legal Cases tab === */
   .legal-filter-bar { display: flex; gap: 10px; align-items: center; padding: 12px 16px; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); margin-bottom: 16px; flex-wrap: wrap; }
   .legal-filter-bar input[type="search"] { font: inherit; font-size: 13px; padding: 7px 10px; border: 0.5px solid var(--border-strong); border-radius: 6px; min-width: 220px; flex: 1; }
-  .legal-filter-bar select { font: inherit; font-size: 13px; padding: 7px 10px; border: 0.5px solid var(--border-strong); border-radius: 6px; background: var(--surface); }
+  .legal-filter-bar select { font: inherit; font-size: 13px; padding: 7px 10px; border: 0.5px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); }
   .legal-filter-bar .filter-count { font-size: 12px; color: var(--text-2); }
   .legal-filter-bar .filter-count strong { color: var(--text); }
   
@@ -1009,7 +1009,12 @@
   .legal-layout { display: grid; grid-template-columns: 1fr 280px; gap: 16px; align-items: start; }
   @media (max-width: 1300px) { .legal-layout { grid-template-columns: 1fr; } }
   
-  .legal-collections-panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); padding: 16px 18px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .legal-collections-panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); padding: 16px 18px; }
+  .legal-right-col { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .lcp-header .lcp-month-select { font: inherit; font-size: 11px; padding: 3px 6px; border: 0.5px solid var(--border-strong); border-radius: 5px; background: var(--surface-2); color: var(--text); margin-top: 4px; }
+  .lcp-total.clickable { cursor: pointer; transition: background 0.15s; }
+  .lcp-total.clickable:hover { background: var(--surface-3); }
+  .lcp-month-caret { font-size: 10px; color: var(--text-3); margin-left: 6px; }
   .lcp-header { border-bottom: 0.5px solid var(--border); padding-bottom: 10px; margin-bottom: 12px; }
   .lcp-header h3 { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 2px; color: var(--text); }
   .lcp-header p { font-size: 11px; color: var(--text-2); margin: 0; }
@@ -1089,7 +1094,7 @@
   .case-timeline { display: flex; flex-direction: column; gap: 8px; }
   .case-timeline h4 { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 4px; font-weight: 700; }
   .timeline-add { display: flex; gap: 6px; align-items: stretch; }
-  .timeline-add textarea { flex: 1; font: inherit; font-size: 12px; padding: 6px 10px; border: 0.5px solid var(--border-strong); border-radius: 6px; resize: vertical; min-height: 50px; background: var(--surface); }
+  .timeline-add textarea { flex: 1; font: inherit; font-size: 12px; padding: 6px 10px; border: 0.5px solid var(--border-strong); border-radius: 6px; resize: vertical; min-height: 50px; background: var(--surface); color: var(--text); }
   .timeline-add button { background: var(--text); color: var(--surface); border: 0; padding: 7px 12px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; align-self: flex-end; }
   .timeline-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
   .timeline-entry { padding: 8px 10px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 6px; font-size: 12px; }
@@ -1191,7 +1196,7 @@
   <div class="bx-side-logo">
     <h1>Beacon</h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v89 · live</span>
+    <span class="build-tag">v90 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1397,14 +1402,24 @@
         <tbody id="legal-body"></tbody>
       </table>
     </div>
-    <aside class="legal-collections-panel" id="legal-collections-panel">
-      <div class="lcp-header">
-        <h3>Today on legal</h3>
-        <p id="lcp-date"></p>
-      </div>
-      <div class="lcp-total" id="lcp-total"></div>
-      <div class="lcp-list" id="lcp-list"></div>
-    </aside>
+    <div class="legal-right-col">
+      <aside class="legal-collections-panel" id="legal-month-panel">
+        <div class="lcp-header">
+          <h3>Month on legal</h3>
+          <select class="lcp-month-select" id="legal-month-select" onchange="renderMonthlyLegalPanel()"></select>
+        </div>
+        <div class="lcp-total clickable" id="lcp-month-total" onclick="toggleMonthlyLegalList()"></div>
+        <div class="lcp-list" id="lcp-month-list" style="display:none"></div>
+      </aside>
+      <aside class="legal-collections-panel" id="legal-collections-panel">
+        <div class="lcp-header">
+          <h3>Today on legal</h3>
+          <p id="lcp-date"></p>
+        </div>
+        <div class="lcp-total" id="lcp-total"></div>
+        <div class="lcp-list" id="lcp-list"></div>
+      </aside>
+    </div>
   </div>
 </div>
 
@@ -4981,6 +4996,7 @@ function refreshLegalCaseBalances() {
     c.current_pct_paid = m.pct_paid;
     c.current_balance_date = TODAY_ISO;
     c.paid_today_on_case = m.paid_today || 0;
+    c.paid_mtd_on_case = m.paid_mtd || 0;
     // Detect newly-zero balance (PIF event)
     if (prevBalance > 0 && m.balance <= 0 && !c.pif_notified) {
       newlyZero.push(c);
@@ -5040,7 +5056,36 @@ function renderCollectionsPanel() {
     '</div>';
   });
   listEl.innerHTML = html;
+  renderMonthlyLegalPanel();
 }
+
+// ===== "Month on legal" — monthly collections; persists so past months accumulate going forward =====
+let _monthlyLegalSel = null, _monthlyLegalOpen = false;
+function bxMonthLabel(ym){ const p=String(ym||'').split('-'); const names=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return (names[(+p[1])-1]||'?')+' '+p[0]; }
+function bxMonthlyStore(){ try{ return JSON.parse(localStorage.getItem('bx_legal_monthly')||'{}'); }catch(e){ return {}; } }
+function bxMonthlySave(o){ try{ localStorage.setItem('bx_legal_monthly', JSON.stringify(o)); }catch(e){} }
+function renderMonthlyLegalPanel(){
+  const totalEl=document.getElementById('lcp-month-total'), listEl=document.getElementById('lcp-month-list'), sel=document.getElementById('legal-month-select');
+  if(!totalEl||!sel||!listEl) return;
+  const curMonth=(STATS.date_iso||new Date().toISOString().slice(0,10)).slice(0,7);
+  // live current-month snapshot from each case's month-to-date; persist (past months freeze at last value)
+  const liveDeals=legalCases.map(c=>({name:c.merchant_name, amount:Math.round((c.paid_mtd_on_case||0)*100)/100})).filter(d=>d.amount>0).sort((a,b)=>b.amount-a.amount);
+  const store=bxMonthlyStore();
+  store[curMonth]={total:Math.round(liveDeals.reduce((s,d)=>s+d.amount,0)*100)/100, deals:liveDeals};
+  bxMonthlySave(store);
+  // keep the user's chosen month if valid, else default to current
+  const picked=sel.value;
+  if(picked && store[picked]) _monthlyLegalSel=picked;
+  if(!_monthlyLegalSel || !store[_monthlyLegalSel]) _monthlyLegalSel=curMonth;
+  const months=Object.keys(store).sort().reverse();
+  sel.innerHTML=months.map(mo=>`<option value="${mo}"${mo===_monthlyLegalSel?' selected':''}>${bxMonthLabel(mo)}</option>`).join('');
+  const data=store[_monthlyLegalSel]||{total:0,deals:[]}, isCur=_monthlyLegalSel===curMonth;
+  totalEl.innerHTML='<p class="lcp-big'+(data.total===0?' zero':'')+'">'+fmt$(data.total)+' <span class="lcp-month-caret">'+(_monthlyLegalOpen?'▲ hide':'▼ deals')+'</span></p>'+
+    '<p class="lcp-sub">collected across '+data.deals.length+' case'+(data.deals.length===1?'':'s')+(isCur?' this month':'')+'</p>';
+  listEl.innerHTML = data.deals.length ? data.deals.map(d=>'<div class="lcp-row collected"><span class="lcp-name">'+d.name+'</span><span class="lcp-amt">'+fmt$(d.amount)+'</span></div>').join('') : '<div class="lcp-empty">Nothing collected this month.</div>';
+  listEl.style.display=_monthlyLegalOpen?'':'none';
+}
+function toggleMonthlyLegalList(){ _monthlyLegalOpen=!_monthlyLegalOpen; renderMonthlyLegalPanel(); }
 
 // ===== PIF notification banner =====
 function checkAndShowPifBanner() {
