@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback money model: (1) clawback income booked to PNL is now the BOOK comm (comm × book%), not the total commission; (2) when a deal is clawed, its MSC kickback reverses off your page 50/50 — a 'Kickback clawed back' line in the PNL + settle-up (new Monthly KickbackClaw field). Already-paid kickbacks are reversed; not-yet-paid ones are stopped from distributing. Clawback tab: ISO + bounce-code columns.">build 78</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Renamed the daily-sync button + modal title to 'Daily report sync' to match Beacon.">build 79</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -335,7 +335,7 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="btn-row">
           <input type="file" id="crm-file" accept=".csv" style="display:none" onchange="closeCrmModal();importCrmExport(this.files[0])"><button class="btn btn-green" style="box-shadow:0 0 0 1.5px rgba(80,200,120,.55)" onclick="openCrmModal()" title="The preferred way to add deals — the end-of-day CRM deals export. Cleaner data, industry + owner contact included.">⭐ Import CRM export</button>
           <button class="btn btn-blue" onclick="openModal()">➕ Add manually</button>
-          <button class="btn" onclick="openDailyModal()">🔄 Sync daily report</button>
+          <button class="btn" onclick="openDailyModal()">🔄 Daily report sync</button>
           <button class="btn" onclick="exportExcel()">⬇️ Export Excel</button>
         </div>
       </div>
@@ -510,7 +510,7 @@ select.badge:hover{filter:brightness(1.2)}
 <!-- DAILY SYNC MODAL (build 29) -->
 <div id="daily-modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeDailyModal()">
   <div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
-    <div class="modal-title">🔄 Sync daily report</div>
+    <div class="modal-title">🔄 Daily report sync</div>
     <div class="modal-sub">Upload the daily report to reconcile balances and statuses on open deals.</div>
     <div class="upload-zone" id="daily-zone"
       onclick="document.getElementById('daily-input').click()"
