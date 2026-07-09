@@ -91,8 +91,8 @@
   body.compact .sev-tile .count { font-size: 18px; }
   body.compact .tab-bar { margin-bottom: 12px; }
   .bx-density { display:inline-flex; border:1px solid #2c3a57; border-radius:7px; overflow:hidden; margin-left:10px; vertical-align:middle; }
-  .bx-density button { background:#16203a; color:#7c89a5; border:none; padding:3px 8px; font-size:10px; cursor:pointer; font-weight:600; }
-  .bx-density button.on { background:#539bf5; color:#fff; }
+  .tab-bar-actions .bx-density button { background:#16203a; color:#7c89a5; border:none; padding:3px 8px; font-size:10px; cursor:pointer; font-weight:600; border-radius:0; }
+  .tab-bar-actions .bx-density button.on { background:#539bf5; color:#fff; }
   .layout.collapsed { grid-template-columns: 44px 1fr; }
   
   .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 14px; overflow-y: auto; overflow-x: hidden; position: sticky; top: 0; height: 100vh; }
@@ -1199,7 +1199,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v96 · live</span>
+    <span class="build-tag">v97 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
