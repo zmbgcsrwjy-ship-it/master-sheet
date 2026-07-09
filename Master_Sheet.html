@@ -305,7 +305,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback now also triggers on a STOP PAYMENT within 30 days of funding (any stop return code), not just a 4th bounce — a stop is the merchant blocking the ACH, a clear breach. Applies to the Clawback view, tags, and sidebar badge. Matches Beacon v88.">build 76</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback money model: (1) clawback income booked to PNL is now the BOOK comm (comm × book%), not the total commission; (2) when a deal is clawed, its MSC kickback reverses off your page 50/50 — a 'Kickback clawed back' line in the PNL + settle-up (new Monthly KickbackClaw field). Already-paid kickbacks are reversed; not-yet-paid ones are stopped from distributing. Clawback tab: ISO + bounce-code columns.">build 78</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -478,7 +478,7 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="panel" id="panel-clawback" style="display:none">
           <div class="panel-header"><h3>Clawback eligible</h3><span style="font-size:12px;color:var(--text3)">Deals whose commission can be clawed back — 4th bounce within 30 days of funding. Mark <b style="color:#5eead4">Clawed</b> to book the commission into this month's Clawback (flows to PNL, 50/50).</span></div>
           <div class="table-wrap"><table><thead><tr>
-            <th>Date Funded</th><th>Merchant</th><th>Rep</th><th>Commission at risk</th><th>Bounces</th><th>Status</th><th>Actions</th>
+            <th>Date Funded</th><th>Merchant</th><th>Rep</th><th>ISO</th><th>Commission at risk</th><th>Bounces</th><th>Code</th><th>Status</th><th>Actions</th>
           </tr></thead><tbody id="tbody-clawback"></tbody></table></div>
           <div id="clawback-empty" class="empty-state" style="display:none"><div class="icon">⏪</div><h3>Nothing to claw back</h3><p>No deals have gone bad inside the 30-day window.</p></div>
         </div>
@@ -787,6 +787,15 @@ async function ensureFields() {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
+    });
+  }
+  // Monthly table: ensure KickbackClaw (kickback reversals from clawed deals)
+  const mt = data.tables?.find(t => t.name === 'Monthly');
+  if (mt && !new Set(mt.fields.map(f=>f.name)).has('KickbackClaw')) {
+    await fetch(`${AT_META_URL}/${mt.id}/fields`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name:'KickbackClaw', type:'number', options:{precision:2} })
     });
   }
 }
@@ -1695,6 +1704,8 @@ function renderClawback(){
   tbody.innerHTML=rows.map(d=>{
     const tier=clawbackTier(d);
     const n=(bounceByLead[d.lead_id]&&bounceByLead[d.lead_id].count)||0;
+    const bcodes=[...((bounceByLead[d.lead_id]&&bounceByLead[d.lead_id].codes)||[])];
+    const codeHtml = bcodes.length ? bcodes.map(c=>STOP_RCODES.includes(c)?`<span style="color:var(--red);font-weight:600">${c}</span>`:c).join(' ') : '—';
     const status = tier==='eligible' ? `<span class="claw-tag">⏪ Eligible</span>` : `<span class="claw-tag-warn">⏳ ${clawDaysLeft(d)}d to claw</span>`;
     const actions = tier==='eligible'
       ? `<button class="btn btn-sm" style="background:rgba(45,212,191,.16);color:#5eead4;border:1px solid rgba(45,212,191,.5)" onclick="markClawed('${esc(d._id)}')">Mark clawed</button> <button class="btn btn-sm" onclick="dismissClawback('${esc(d._id)}')">Dismiss</button>`
@@ -1703,8 +1714,10 @@ function renderClawback(){
       <td style="color:var(--text3)">${fmtDate(d.date_funded)}</td>
       <td style="font-weight:600">${d.merchant}</td>
       <td style="color:var(--text2)">${d.rep||'—'}</td>
-      <td style="color:#5eead4;font-weight:600">${fmt$(d.comm_amount||0)}</td>
+      <td style="color:var(--text2)">${d.iso||'—'}</td>
+      <td style="color:#5eead4;font-weight:600">${fmt$((d.comm_amount||0)*(d.book_pct||100)/100)}</td>
       <td>${n}</td>
+      <td style="white-space:nowrap">${codeHtml}</td>
       <td style="white-space:nowrap">${status}</td>
       <td style="white-space:nowrap">${actions}</td>
     </tr>`;
@@ -1719,16 +1732,29 @@ async function bookClawbackAmount(month, amount){
   const m=monthlyManual[month];
   const cur=(m&&m.clawback)||0, next=Math.round((cur+amount)*100)/100;
   if(m&&m._id){ await atFetchT('Monthly','PATCH','',{records:[{id:m._id, fields:{Clawback:next}}]}); m.clawback=next; }
-  else{ const out=await atFetchT('Monthly','POST','',{records:[{fields:{Month:month, Clawback:next}}]}); monthlyManual[month]={_id:out.records[0].id, legal:0, clawback:next}; }
+  else{ const out=await atFetchT('Monthly','POST','',{records:[{fields:{Month:month, Clawback:next}}]}); monthlyManual[month]={_id:out.records[0].id, legal:0, clawback:next, kickbackClaw:0}; }
+}
+async function bookKickbackClaw(month, amount){
+  const m=monthlyManual[month];
+  const cur=(m&&m.kickbackClaw)||0, next=Math.round((cur+amount)*100)/100;
+  if(m&&m._id){ await atFetchT('Monthly','PATCH','',{records:[{id:m._id, fields:{KickbackClaw:next}}]}); m.kickbackClaw=next; }
+  else{ const out=await atFetchT('Monthly','POST','',{records:[{fields:{Month:month, KickbackClaw:next}}]}); monthlyManual[month]={_id:out.records[0].id, legal:0, clawback:0, kickbackClaw:next}; }
 }
 async function markClawed(dealId){
   const d=deals.find(x=>x._id===dealId); if(!d) return;
-  const amt=d.comm_amount||0, month=new Date().toISOString().slice(0,7);
-  if(!confirm(`Mark ${d.merchant} as clawed back?\n\nThis books ${fmt$(amt)} (book commission) into ${month}'s Clawback on the Monthly tab, which flows to PNL as income (50/50).`)) return;
+  const bookComm=Math.round((d.comm_amount||0)*(d.book_pct||100)/100*100)/100;  // clawback income = OUR book comm (not total)
+  const kb=d.kickback||0, kbPaid=!!d.kickback_paid;                              // MSC kickback to reverse off your page
+  const month=new Date().toISOString().slice(0,7);
+  let msg=`Mark ${d.merchant} as clawed back?\n\nBooks ${fmt$(bookComm)} book commission into ${month}'s Clawback (income, 50/50).`;
+  if(kb>0) msg += kbPaid
+    ? `\nReverses the ${fmt$(kb)} MSC kickback off your page (already paid out) — shared 50/50 with Sal.`
+    : `\nStops the ${fmt$(kb)} MSC kickback from paying out (not yet distributed).`;
+  if(!confirm(msg)) return;
   try{
     await setClawbackState(dealId,'CLAWED');
-    if(amt>0) await bookClawbackAmount(month, amt);
-    showNotice(`${d.merchant} clawed — ${fmt$(amt)} booked to ${month} Clawback.`,'success',7000);
+    if(bookComm>0) await bookClawbackAmount(month, bookComm);
+    if(kb>0 && kbPaid) await bookKickbackClaw(month, kb);   // reverse only if already paid; unpaid is excluded from kicks
+    showNotice(`${d.merchant} clawed — ${fmt$(bookComm)} to ${month} Clawback${kb>0?`, ${fmt$(kb)} kickback ${kbPaid?'reversed':'stopped'}`:''}.`,'success',7000);
     renderMetrics(); renderClawback(); renderTable();
     if(currentView==='monthly') renderMonthly(); if(currentView==='pnl') renderPnl();
   }catch(err){ showNotice('Clawback failed: '+err.message,'error',8000); }
@@ -2039,7 +2065,7 @@ async function loadMonthlyManual(){
   let offset=null;
   do{
     const data = await atFetchT('Monthly','GET', offset?`?offset=${offset}`:'');
-    data.records.forEach(r=>{ if(r.fields.Month) monthlyManual[r.fields.Month]={_id:r.id, legal:r.fields.Legal||0, clawback:r.fields.Clawback||0}; });
+    data.records.forEach(r=>{ if(r.fields.Month) monthlyManual[r.fields.Month]={_id:r.id, legal:r.fields.Legal||0, clawback:r.fields.Clawback||0, kickbackClaw:r.fields.KickbackClaw||0}; });
     offset = data.offset;
   } while(offset);
 }
@@ -2050,7 +2076,7 @@ async function saveMonthlyCell(month, field, value){
     if(m && m._id){ await atFetchT('Monthly','PATCH','',{records:[{id:m._id, fields:{[field]:v}}]}); m[field.toLowerCase()]=v; }
     else{
       const out = await atFetchT('Monthly','POST','',{records:[{fields:{Month:month,[field]:v}}]});
-      monthlyManual[month]={_id:out.records[0].id, legal:field==='Legal'?v:0, clawback:field==='Clawback'?v:0};
+      monthlyManual[month]={_id:out.records[0].id, legal:field==='Legal'?v:0, clawback:field==='Clawback'?v:0, kickbackClaw:0};
     }
     showNotice(field+' saved for '+month,'success');
   }catch(err){ showNotice('Save failed: '+err.message,'error'); }
@@ -2215,7 +2241,7 @@ async function computePnl(){
   // whatever month happens to be open. Gate on funding month <= curYM: a July-funded kickback is
   // skipped while June is the open close-out month and is picked up automatically once July is open.
   // Undistributed kickbacks from earlier months still carry forward (their month <= curYM).
-  const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid && (d.date_funded||'').slice(0,7) <= curYM)
+  const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid && (d.clawback_state||'').toUpperCase()!=='CLAWED' && (d.date_funded||'').slice(0,7) <= curYM)
     .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback, date:d.date_funded||''}))
     .sort((a,b)=>{ const x=a.date||'9999-99', y=b.date||'9999-99'; return x<y?-1:x>y?1:0; }); // oldest → newest, dateless last
   const ffDue = ffByMonthFrom(deals)[addMonthsYM(curYM,-4)]||0;
@@ -2224,9 +2250,10 @@ async function computePnl(){
   const clawbackTotal = (monthlyManual[curYM]&&monthlyManual[curYM].clawback)||0;
   const clawbackOurEnd = clawbackTotal*HOUSE_SPLIT; // clawback recovered commission — income, 50% house split like legal
   const kickTotal = kicks.reduce((s,k)=>s+k.amount,0);
+  const kickbackClaw = (monthlyManual[curYM]&&monthlyManual[curYM].kickbackClaw)||0;  // clawed-back MSC kickbacks — off your page, 50/50
   const payableTotal = cohorts.reduce((s,c)=>s+c.payable,0);
-  const each = (payableTotal + kickTotal - ffDue - legalOurEnd + clawbackOurEnd)/2;
-  return {month: curYM, cohorts, kicks, ffDue, legalTotal, legalOurEnd, clawbackTotal, clawbackOurEnd, kickTotal, payableTotal, each};
+  const each = (payableTotal + kickTotal - kickbackClaw - ffDue - legalOurEnd + clawbackOurEnd)/2;
+  return {month: curYM, cohorts, kicks, ffDue, legalTotal, legalOurEnd, clawbackTotal, clawbackOurEnd, kickTotal, kickbackClaw, payableTotal, each};
 }
 
 function pnlRowsHtml(p){
@@ -2238,6 +2265,7 @@ function pnlRowsHtml(p){
   const legalTotal  = p.legalTotal!=null ? p.legalTotal : (p.legal||0);
   const clawbackOurEnd = p.clawbackOurEnd!=null ? p.clawbackOurEnd : 0;
   const clawbackTotal  = p.clawbackTotal!=null ? p.clawbackTotal : 0;
+  const kickbackClaw   = p.kickbackClaw||0;
   let h='';
   h+=sec('MONTHLY PNL','pnl-sec-blue');
   if(!p.cohorts.length) h+='<tr><td colspan="7" style="color:var(--text3)">No funded deals yet.</td></tr>';
@@ -2254,6 +2282,7 @@ function pnlRowsHtml(p){
   h+=sec('KICKBACKS — UPFRONT BANK (100% OURS)','pnl-sec-green');
   if(!p.kicks.length) h+='<tr><td colspan="7" style="color:var(--text3)">No undistributed kickbacks.</td></tr>';
   p.kicks.forEach(k=>{ const dt=k.date?`<span style="color:var(--text3);font-weight:400">${fmtDate(k.date)}</span>&nbsp;&nbsp;`:''; h+=`<tr><td style="font-weight:600">${dt}${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${moneyDiv(k.amount/2)}${money(k.amount/2)}</tr>`; });
+  if(kickbackClaw>0) h+=`<tr><td style="font-weight:600">Kickback clawed back (${monthLabelFull(p.month)})</td>${money(-kickbackClaw,true)}${money(-kickbackClaw,true)}<td>—</td>${money(-kickbackClaw,true)}${moneyDiv(-kickbackClaw/2,true)}${money(-kickbackClaw/2,true)}</tr>`;
   h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-yellow');
   h+=`<tr><td style="font-weight:600">FF due (${monthLabelFull(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${moneyDiv(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
   h+=sec('LEGAL FEES — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-red');
@@ -2269,7 +2298,7 @@ function pnlRowsHtml(p){
 function pnlSettleHtml(p){
   const legalOurEnd = p.legalOurEnd!=null ? p.legalOurEnd : (p.legal||0);
   const salPage = (p.payableTotal||0) - (p.ffDue||0) - legalOurEnd + (p.clawbackOurEnd||0);
-  const mattPage = (p.kickTotal||0);
+  const mattPage = (p.kickTotal||0) - (p.kickbackClaw||0);
   const each = p.each!=null ? p.each : (salPage+mattPage)/2;
   const transfer = each - mattPage; // >0 Sal→Matt ; <0 Matt→Sal
   let line;
@@ -2316,7 +2345,7 @@ async function closeOutMonth(){
     await loadPnlState();
     const p=await computePnl();
     if(pnlSnapshots.some(s=>s.month===p.month)){ showNotice(monthLabelFull(p.month)+' is already closed — see history.','warn'); renderPnl(); return; }
-    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nEligible month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+'\nFF deducted: '+fmt$(p.ffDue)+'\nLegal deducted (our end): '+fmt$(p.legalOurEnd)+'\nClawback added (our end): '+fmt$(p.clawbackOurEnd)+'\n\nThis locks the snapshot and settles each eligible month into the ledger — positive months pay, dark (30-day no-pay) losses deduct, recoveries credit back. It cannot be re-run for this month.');
+    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nEligible month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+(p.kickbackClaw>0?'\nKickback clawed back: -'+fmt$(p.kickbackClaw):'')+'\nFF deducted: '+fmt$(p.ffDue)+'\nLegal deducted (our end): '+fmt$(p.legalOurEnd)+'\nClawback added (our end): '+fmt$(p.clawbackOurEnd)+'\n\nThis locks the snapshot and settles each eligible month into the ledger — positive months pay, dark (30-day no-pay) losses deduct, recoveries credit back. It cannot be re-run for this month.');
     if(!ok) return;
     showLoading('Closing out '+monthLabelFull(p.month)+'...');
     await atFetchT('PnlSnapshots','POST','',{records:[{fields:{Month:p.month, ClosedAt:new Date().toISOString(), SalPayout:Math.round(p.each*100)/100, MattPayout:Math.round(p.each*100)/100, DataJSON:JSON.stringify(p)}}]});
