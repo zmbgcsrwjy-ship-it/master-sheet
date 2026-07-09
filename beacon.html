@@ -1199,7 +1199,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v92 · live</span>
+    <span class="build-tag">v93 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1696,7 +1696,7 @@ function beaconReconstruct(raw, todayISO){
       _rid: r.id,
       lead_id: lid, name: f.Merchant||'', status: f.Status||'ACTIVE',
       funded: f.DateFunded||'', balance: Number(f.Balance)||0, pct_paid: pct,
-      paid_today: Number(f.PaidToday)||0, paid_mtd: Number(f.PaidMTD)||0,
+      paid_today: Number(f.PaidToday)||0, paid_mtd: Number(f.PaidMTD)||0, last_cleared: (f.LastCleared||'').slice(0,10),
       bounced_today:false, bounce_amt:0, bounce_type:'', return_code:'', freq:'',
       mtd_bounces:0, days_delinq:0, streak_len:0, severity_rank:100, sev_class:'none',
       group_order:99, last_pull:'', bucket:(f.Status==='DEFAULT'?'DEFAULT':'ACTIVE'),
@@ -1918,6 +1918,7 @@ function beaconMatchDeal(bounce, merchants){
 // Idempotent sync: skip rows whose Bounce key already exists. Returns summary.
 async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceName){
   const toCreate=[]; const unmatched=[]; const ambiguous=[]; const skipped=[];
+  const batchStops={};  // stop dates added in THIS run, per deal — so multi-day reports don't self-duplicate
   for (const b of parsed.bounces){
     const bDay=b.returnDate||b.settleDate;
     const key=b.merchant+' — '+bDay;
@@ -1927,6 +1928,16 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
     if (m.ambiguous) ambiguous.push(b.merchant);
     const _stopCodes = ['R02','R05','R07','R08','R10','R16','R29'];
     const _isStop = b.type==='stop' || b.type==='revocation' || _stopCodes.indexOf((b.returnCode||'').toUpperCase())>=0;
+    // v93: a stop payment is a persistent state, not a daily event. When the report re-lists an
+    // ongoing stop on a later day, that's the SAME stop — don't re-stamp the calendar. Only treat it
+    // as a NEW stop if the deal RESUMED (a payment cleared) since its last stop.
+    if (_isStop) {
+      const priorStops=[...(m.deal._stopDates||[]), ...(batchStops[m.deal._rid]||[])].filter(d=>d && d<bDay).sort();
+      const lastStop=priorStops.length?priorStops[priorStops.length-1]:null;
+      const resumed=lastStop && m.deal.last_cleared && m.deal.last_cleared>lastStop;
+      if (lastStop && !resumed){ skipped.push(key+' (ongoing stop, first recorded '+lastStop+')'); continue; }
+      (batchStops[m.deal._rid]=batchStops[m.deal._rid]||[]).push(bDay);
+    }
     const sev = _isStop ? 'STOP' : (b.consec>1?'CONSEC':'NEW');
     toCreate.push({fields:{ 'Bounce':key, 'Deal':[m.deal._rid], 'Date':bDay, 'Amount':b.amount,
       'Return Code':b.returnCode, 'Severity':sev, 'Consecutive Count':b.consec,
