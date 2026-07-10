@@ -306,7 +306,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Added a browser-tab favicon (chart mark).">build 80</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Allocator: each ISO gets its own color (allocator-only, no green/gold/red) applied to the ISO name and the amount to send them, so it pops when allocating.">build 81</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1859,6 +1859,15 @@ const ALLOC_SPREAD = 0.03;   // full 3 points held back
 const HHC_KB_SPLIT = 0.5;    // HHC's share of those 3 points (the other half is your kickback)
 let allocGroupKeys = [];
 const allocIsoKey = d => { const s=String(d.iso||'').trim(); return (s && s!=='—' && s.toUpperCase()!=='UNASSIGNED') ? s : '__NOISO__'; };
+// Allocator-only: give each ISO a stable, distinct color so the ISO + what you owe them pop.
+// Avoids colors already used here (green = MSC, gold = HHC) and red. Not used anywhere else in the sheet.
+const ALLOC_ISO_COLORS = ['#5b9dff','#c084fc','#fb923c','#22d3ee','#f472b6','#818cf8','#e879f9','#38bdf8'];
+function allocIsoColor(iso){
+  const s=String(iso||'').trim().toUpperCase();
+  if(!s || s==='__NOISO__' || s==='—' || s==='UNASSIGNED') return '';
+  let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return ALLOC_ISO_COLORS[h % ALLOC_ISO_COLORS.length];
+}
 const allocKbTotal = d => Math.round((d.funded||0)*ALLOC_SPREAD*100)/100;                 // full 3 points
 const allocKbOurs  = d => Math.round(allocKbTotal(d)*(1-HHC_KB_SPLIT)*100)/100;            // your 1.5% → recorded kickback
 const allocKbHhc   = d => Math.round((allocKbTotal(d)-allocKbOurs(d))*100)/100;            // HHC's 1.5% → send to them
@@ -1922,19 +1931,21 @@ function renderAllocator(){
   </tr></thead><tbody>`;
   allocGroupKeys.forEach((key,gi)=>{
     const grp=groups[key], isNo=key==='__NOISO__';
+    const isoClr = isNo ? '' : allocIsoColor(key);
     const gSend=grp.reduce((s,r)=>s+r.isoComm,0), gKbOurs=grp.reduce((s,r)=>s+r.kbOurs,0), gKbHhc=grp.reduce((s,r)=>s+r.kbHhc,0);
     const label=isNo?'No ISO — your commission, nothing to send out':key;
-    const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+fmt$(gSend)} · HHC ${fmt$(gKbHhc)} · MSC ${fmt$(gKbOurs)}`;
-    h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="11"><span class="alloc-iso-name">${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
+    const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+(isoClr?`<b style="color:${isoClr}">${fmt$(gSend)}</b>`:fmt$(gSend))} · HHC ${fmt$(gKbHhc)} · MSC ${fmt$(gKbOurs)}`;
+    h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="11"><span class="alloc-iso-name"${isoClr?` style="color:${isoClr}"`:''}>${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
     grp.forEach(r=>{
+      const rowClr = r.hasIso ? allocIsoColor(r.d.iso) : '';
       h+=`<tr>
         <td class="pif-c pif-dim">${fmtDate(r.d.date_funded)}</td>
         <td>${r.d.merchant}</td>
         <td class="pif-dim">${r.d.rep||'—'}</td>
-        <td class="pif-dim">${r.hasIso?r.d.iso:'<span style="'+dim+'">—</span>'}</td>
+        <td${rowClr?` style="font-weight:600;color:${rowClr}"`:' class="pif-dim"'}>${r.hasIso?r.d.iso:'<span style="'+dim+'">—</span>'}</td>
         <td class="pif-c">${fmt$(r.d.comm_amount)}</td>
         <td class="pif-c pif-dim">${r.commPct?r.commPct.toFixed(1)+'%':'—'}</td>
-        <td class="pif-c">${r.hasIso?fmt$(r.isoComm):'<span style="'+dim+'">no ISO — yours</span>'}</td>
+        <td class="pif-c"${rowClr?` style="font-weight:700;color:${rowClr}"`:''}>${r.hasIso?fmt$(r.isoComm):'<span style="'+dim+'">no ISO — yours</span>'}</td>
         <td class="pif-c pif-dim">${r.isoPct!=null?r.isoPct.toFixed(1)+'%':'—'}</td>
         <td class="pif-c" style="color:#c9a15a">${fmt$(r.kbHhc)}</td>
         <td class="pif-c" style="color:var(--green)">${fmt$(r.kbOurs)}</td>
