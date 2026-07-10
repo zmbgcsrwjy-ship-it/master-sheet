@@ -306,7 +306,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback tab: added a Days Left column showing how many days remain in the 30-day clawback window before a deal is no longer eligible (amber when low).">build 82</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawed back table: added Undo — reverses the exact book-comm + kickback bookings from the month they were booked (stored on claw) and reopens the deal.">build 84</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -482,6 +482,11 @@ select.badge:hover{filter:brightness(1.2)}
             <th>Date Funded</th><th>Merchant</th><th>Rep</th><th>ISO</th><th>Commission at risk</th><th>Bounces</th><th>Code</th><th>Status</th><th>Days Left</th><th>Actions</th>
           </tr></thead><tbody id="tbody-clawback"></tbody></table></div>
           <div id="clawback-empty" class="empty-state" style="display:none"><div class="icon">⏪</div><h3>Nothing to claw back</h3><p>No deals have gone bad inside the 30-day window.</p></div>
+          <div class="panel-header" style="margin-top:24px"><h3>Clawed back</h3><span style="font-size:12px;color:var(--text3)">Deals you've already recovered — a running record. Each was booked into that month's Clawback.</span></div>
+          <div class="table-wrap"><table><thead><tr>
+            <th>Date Funded</th><th>Merchant</th><th>Rep</th><th>ISO</th><th>Amount Clawed</th><th>Bounces</th><th>Code</th><th>Actions</th>
+          </tr></thead><tbody id="tbody-clawed"></tbody></table></div>
+          <div id="clawed-empty" class="empty-state" style="display:none;padding:14px 0"><p style="color:var(--text3);margin:0">Nothing clawed back yet.</p></div>
         </div>
       </div>
     </div>
@@ -731,6 +736,7 @@ async function atFetch(method, path='', body=null) {
 const REQUIRED_FIELDS = [
   {name:'Merchant',    type:'singleLineText'},
   {name:'ClawbackState', type:'singleLineText'},
+  {name:'ClawedInfo', type:'singleLineText'},
   {name:'DateFunded',  type:'date', options:{dateFormat:{name:'iso'}}},
   {name:'Funded',      type:'number', options:{precision:2}},
   {name:'RTR',         type:'number', options:{precision:2}},
@@ -880,7 +886,8 @@ function fieldsToDeal(id, f) {
     owner_phone:  f.OwnerPhone   || '',
     notes:        f.Notes        || '',
     collections_state: f.CollectionsState || '',   // Beacon-owned — Master Sheet only displays it
-    clawback_state: f.ClawbackState || ''          // clawback lifecycle: '' | FORCED | CLAWED | DISMISSED
+    clawback_state: f.ClawbackState || '',          // clawback lifecycle: '' | FORCED | CLAWED | DISMISSED
+    clawed_info: f.ClawedInfo || ''                  // JSON {m,bc,kb} of the claw booking, for undo
   };
 }
 
@@ -939,8 +946,10 @@ function daysBetweenYMD(a,b){ if(!a||!b) return null; const d=(new Date(b+'T00:0
 function clawbackTier(d){
   const st=(d.clawback_state||'').toUpperCase();
   if(st==='CLAWED'||st==='DISMISSED') return null;   // resolved — no tag
-  if(st==='FORCED') return 'eligible';               // manually promoted
+  if(st==='FORCED') return 'eligible';               // manually promoted (stays eligible regardless of age)
   const funded=d.date_funded; if(!funded) return null;
+  const ageToday=daysBetweenYMD(funded, msTodayYMD());
+  if(ageToday!=null && ageToday>CLAW_WINDOW) return null;  // 30-day window closed — no longer eligible, drops off the tab
   const e=bounceByLead[d.lead_id];
   const dates=(e&&e.dates)?e.dates:[];
   const stops=(e&&e.stopDates)?e.stopDates:[];
@@ -1693,8 +1702,48 @@ function renderDefaults(){
 }
 
 // ─── CLAWBACK VIEW (build 62) ────────────────────────────
+async function undoClawback(dealId){
+  const d=deals.find(x=>x._id===dealId); if(!d) return;
+  let info=null; try{ info=JSON.parse(d.clawed_info||'null'); }catch(e){}
+  const msg = info
+    ? `Undo the clawback on ${d.merchant}?\n\nReverses ${fmt$(info.bc||0)} out of ${info.m}'s Clawback${info.kb?` and the ${fmt$(info.kb)} kickback reversal`:''}, and puts the deal back on the eligible list (if still inside the 30-day window).`
+    : `Undo the clawback on ${d.merchant}?\n\nThis one was clawed before undo tracking existed — the state will reset, but the month's Clawback booking won't be auto-reversed. Adjust the Monthly tab by hand if needed.`;
+  if(!confirm(msg)) return;
+  try{
+    if(info){ if(info.bc) await bookClawbackAmount(info.m, -info.bc); if(info.kb) await bookKickbackClaw(info.m, -info.kb); }
+    await atFetch('PATCH','',{records:[{id:dealId, fields:{ClawbackState:'', ClawedInfo:''}}]});
+    d.clawback_state=''; d.clawed_info='';
+    showNotice(`${d.merchant} clawback undone${info?` — ${fmt$(info.bc||0)} reversed from ${info.m}`:''}.`,'success',6000);
+    renderMetrics(); renderClawback(); renderTable();
+    if(currentView==='monthly') renderMonthly(); if(currentView==='pnl') renderPnl();
+  }catch(err){ showNotice('Undo failed: '+err.message,'error',8000); }
+}
+function renderClawedTable(){
+  const cbody=document.getElementById('tbody-clawed'), cempty=document.getElementById('clawed-empty');
+  if(!cbody) return;
+  const clawed=deals.filter(d=>(d.clawback_state||'').toUpperCase()==='CLAWED');
+  if(!clawed.length){ cbody.innerHTML=''; if(cempty) cempty.style.display=''; return; }
+  if(cempty) cempty.style.display='none';
+  clawed.sort((a,b)=>(a.date_funded||'')<(b.date_funded||'')?1:-1);  // most recent funding first
+  cbody.innerHTML=clawed.map(d=>{
+    const n=(bounceByLead[d.lead_id]&&bounceByLead[d.lead_id].count)||0;
+    const bcodes=[...((bounceByLead[d.lead_id]&&bounceByLead[d.lead_id].codes)||[])];
+    const codeHtml = bcodes.length ? bcodes.map(c=>STOP_RCODES.includes(c)?`<span style="color:var(--red);font-weight:600">${c}</span>`:c).join(' ') : '—';
+    return `<tr>
+      <td style="color:var(--text3)">${fmtDate(d.date_funded)}</td>
+      <td style="font-weight:600">${d.merchant}</td>
+      <td style="color:var(--text2)">${d.rep||'—'}</td>
+      <td style="color:var(--text2)">${d.iso||'—'}</td>
+      <td style="color:#5eead4;font-weight:600">${fmt$((d.comm_amount||0)*(d.book_pct||100)/100)}</td>
+      <td>${n}</td>
+      <td style="white-space:nowrap">${codeHtml}</td>
+      <td style="white-space:nowrap"><button class="btn btn-sm" onclick="undoClawback('${d._id}')">↩ Undo</button></td>
+    </tr>`;
+  }).join('');
+}
 function renderClawback(){
   const rows=deals.filter(d=>clawbackTier(d));
+  renderClawedTable();
   const tbody=document.getElementById('tbody-clawback'), empty=document.getElementById('clawback-empty');
   if(!tbody) return;
   if(!rows.length){ tbody.innerHTML=''; empty.style.display=''; return; }
@@ -1710,7 +1759,7 @@ function renderClawback(){
     const status = tier==='eligible' ? `<span class="claw-tag">⏪ Eligible</span>` : `<span class="claw-tag-warn">⏳ ${clawDaysLeft(d)}d to claw</span>`;
     const dleft = clawDaysLeft(d);
     const daysCell = dleft<=0
-      ? `<span style="color:var(--text3)">Window closed</span>`
+      ? `<span style="color:var(--amber);font-weight:600">Closes today</span>`
       : `<span style="color:${dleft<=5?'var(--amber)':'var(--text2)'};font-weight:600">${dleft} day${dleft===1?'':'s'} left</span>`;
     const actions = tier==='eligible'
       ? `<button class="btn btn-sm" style="background:rgba(45,212,191,.16);color:#5eead4;border:1px solid rgba(45,212,191,.5)" onclick="markClawed('${esc(d._id)}')">Mark clawed</button> <button class="btn btn-sm" onclick="dismissClawback('${esc(d._id)}')">Dismiss</button>`
@@ -1760,6 +1809,8 @@ async function markClawed(dealId){
     await setClawbackState(dealId,'CLAWED');
     if(bookComm>0) await bookClawbackAmount(month, bookComm);
     if(kb>0 && kbPaid) await bookKickbackClaw(month, kb);   // reverse only if already paid; unpaid is excluded from kicks
+    const info={m:month, bc:bookComm, kb:(kb>0&&kbPaid)?kb:0};   // remember exactly what/where we booked, for undo
+    await atFetch('PATCH','',{records:[{id:dealId, fields:{ClawedInfo:JSON.stringify(info)}}]}); d.clawed_info=JSON.stringify(info);
     showNotice(`${d.merchant} clawed — ${fmt$(bookComm)} to ${month} Clawback${kb>0?`, ${fmt$(kb)} kickback ${kbPaid?'reversed':'stopped'}`:''}.`,'success',7000);
     renderMetrics(); renderClawback(); renderTable();
     if(currentView==='monthly') renderMonthly(); if(currentView==='pnl') renderPnl();
