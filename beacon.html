@@ -1200,7 +1200,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v99 · live</span>
+    <span class="build-tag">v100 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1825,7 +1825,10 @@ function beaconReconstruct(raw, todayISO){
       // than the deal's FIRST stop is the same ongoing stop being re-listed. Flag it so the calendar /
       // stop counts don't keep marking it as a new stop. The original (first) stop still shows.
       const _handled = !!m.resolution_type;
-      const _carriedStop = _handled && sev==='stop' && Array.isArray(m._stopDates) && m._stopDates.length>0 && d > m._stopDates[0];
+      // Fail-safe: if the agreed resume date has passed and they're STILL stopping, that's a broken
+      // agreement — do NOT collapse it, surface it on the calendar (matches the board's "BROKE SUSPENDED").
+      const _brokeResume = m.resume_date && d >= m.resume_date;
+      const _carriedStop = _handled && !_brokeResume && sev==='stop' && Array.isArray(m._stopDates) && m._stopDates.length>0 && d > m._stopDates[0];
       return { lead_id:m.lead_id||0, name:m.name||String(f.Bounce||'').split(' — ')[0],
         bounce_amt:Number(f.Amount)||0, bounce_type:(sev==='stop'?'stop':'bounce'), _carriedStop:_carriedStop,
         return_code:f['Return Code']||'', sev_class:sev, group_order:bGroupOrder(sev), severity_rank:100,
@@ -1942,7 +1945,8 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       const lastStop=priorStops.length?priorStops[priorStops.length-1]:null;
       const resumed=lastStop && m.deal.last_cleared && m.deal.last_cleared>lastStop;
       const handled=!!m.deal.resolution_type;  // sent to legal / suspended / etc. — already handled
-      if (lastStop && (handled || !resumed)){ skipped.push(key+' (ongoing/handled stop)'); continue; }
+      const brokeResume=m.deal.resume_date && bDay>=m.deal.resume_date;  // agreed resume passed, still stopping → surface
+      if (lastStop && !brokeResume && (handled || !resumed)){ skipped.push(key+' (ongoing/handled stop)'); continue; }
       (batchStops[m.deal._rid]=batchStops[m.deal._rid]||[]).push(bDay);
     }
     const sev = _isStop ? 'STOP' : (b.consec>1?'CONSEC':'NEW');
