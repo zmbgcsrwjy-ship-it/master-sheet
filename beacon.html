@@ -471,6 +471,7 @@
   .cal-dow { text-align: center; font-size: 11px; font-weight: 500; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; padding: 4px 0; }
   .cal-cell { aspect-ratio: 2.1 / 1; min-height: 50px; border: 0.5px solid var(--border); border-radius: 6px; padding: 6px 8px; background: var(--surface); cursor: pointer; transition: all 0.12s; display: flex; flex-direction: column; justify-content: space-between; box-shadow: var(--shadow-inset); }
   .cal-cell.empty { background: transparent; border-color: transparent; cursor: default; box-shadow: none; }
+  .day-bounce-count { font-size: 9.5px; font-weight: 500; color: var(--text-3); margin-top: auto; line-height: 1; letter-spacing: 0.02em; }
   .cal-cell.no-data { cursor: not-allowed; opacity: 0.85; }
   .cal-cell.no-data:hover { background: var(--surface); }
   .cal-cell.future { opacity: 0.7; cursor: not-allowed; }
@@ -1200,7 +1201,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v100 · live</span>
+    <span class="build-tag">v101 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2868,6 +2869,14 @@ function renderCalendar() {
     }
     if (_tags.childNodes.length) topRow.appendChild(_tags);
     cell.appendChild(topRow);
+    // Small corner count of total bounces that day (plain text, not a pill)
+    if (!isWeekend && dayHist && dayHist.bounce_events && dayHist.bounce_events.length > 0) {
+      const bc = document.createElement("div");
+      bc.className = "day-bounce-count";
+      const n = dayHist.bounce_events.length;
+      bc.textContent = n + " bounce" + (n===1 ? "" : "s");
+      cell.appendChild(bc);
+    }
     
     
     // Click handler — clickable if has data, not a weekend, not a future-no-resume day
