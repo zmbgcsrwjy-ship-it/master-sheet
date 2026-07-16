@@ -778,6 +778,10 @@
   /* Force merchant cell content (chip + name + flag) onto a single line via flex layout.
      Prevents the chip-on-top, name-below wrapping that happened when content exceeded column width. */
   table.matrix td.merchant-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wk-board-name { color: var(--sev-wkly) !important; font-weight: 700 !important; }
+  .merchant-contact { font-size: 10px; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .merchant-contact a { color: #5b9dff; text-decoration: none; }
+  .merchant-contact a:hover { text-decoration: underline; }
   table.matrix .merchant-cell-inner { display: flex; align-items: center; gap: 0; min-width: 0; }
   table.matrix .merchant-cell-inner > * { flex-shrink: 0; }
   table.matrix .merchant-cell-inner .merchant-name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -1201,7 +1205,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v101 · live</span>
+    <span class="build-tag">v102 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2496,16 +2500,17 @@ function getWatchList() {
       continue;
     }
     
-    // ACTIVE — weekly bouncers (last bounce within 30 days, unresolved)
-    // Mirror the existing getUnresolvedWeeklies logic
-    if (!m.bounced_today && !m.resolution_type) {
+    // ACTIVE — weekly bouncers. A weekly bounce = ~5 dailies that didn't clear, so we surface it on
+    // the FIRST weekly bounce (not the 2nd) — including deals bouncing today — and keep it here until
+    // it's resolved, so it stays on radar before the next weekly hits.
+    if (!m.resolution_type && !hasOpenLegalCase(m.lead_id) && isWeeklyDeal(m)) {
       const wkBounces = collectMerchantBounces(m, true); // weekly only
-      if (wkBounces.length >= 2) {
+      if (wkBounces.length >= 1) {
         const last = wkBounces[wkBounces.length - 1];
         const lastDate = new Date(last.date + "T00:00:00");
         const daysAgo = bdDiff(lastDate, todayDate);
-        if (daysAgo <= 30) {
-          active.push({ m, reason: 'unresolved-weekly', label: 'WEEKLY · ' + wkBounces.length + ' RECENT', sortAge: daysAgo });
+        if (daysAgo <= 45) {
+          active.push({ m, reason: 'unresolved-weekly', label: 'WEEKLY BOUNCE · ' + wkBounces.length + ' missed', sortAge: daysAgo });
           continue;
         }
       }
@@ -4117,7 +4122,13 @@ function buildRow(m, editable) {
     chips += '<span class="resolved-chip">' + resTxt + '</span>';
   }
   
-  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="merchant-name">' + m.name + '</span>' + statusFlag + noteInd + beaconClawTag(m) + '</div></td>';
+  const _nameCls = 'merchant-name' + (isWeeklyDeal(m) ? ' wk-board-name' : '');
+  const _cParts = [];
+  if (m.owner_name) _cParts.push(m.owner_name);
+  if (m.owner_phone) _cParts.push('<a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a>');
+  if (m.owner_email) _cParts.push('<a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a>');
+  const _contactLine = _cParts.length ? '<div class="merchant-contact">' + _cParts.join(' · ') + '</div>' : '';
+  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="' + _nameCls + '">' + m.name + '</span>' + statusFlag + noteInd + beaconClawTag(m) + '</div>' + _contactLine + '</td>';
   
   let actionsCell = '';
   if (editable) {
