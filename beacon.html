@@ -787,16 +787,18 @@
   .mname-click:hover { text-decoration: underline; text-underline-offset: 2px; }
   .minfo-expand { background: var(--surface-2) !important; border-left: 4px solid var(--sev-wkly) !important; }
   .minfo-expand td { padding: 14px 18px !important; }
-  .minfo-panel { display: grid; grid-template-columns: 260px 1fr; gap: 24px; }
-  .minfo-panel .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 8px; }
-  .minfo-panel .minfo-row { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; font-size: 13px; color: var(--text); }
-  .minfo-panel .minfo-row .minfo-lbl { width: 50px; flex-shrink: 0; color: var(--text-2); font-size: 11px; }
-  .minfo-panel .minfo-row a { color: #5b9dff; text-decoration: none; }
-  .minfo-panel .minfo-row a:hover { text-decoration: underline; }
+  .minfo-panel { display: block; }
+  .minfo-panel .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 6px; }
+  .minfo-panel .minfo-line { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 13px; color: var(--text); }
+  .minfo-panel .minfo-item { white-space: nowrap; }
+  .minfo-panel .minfo-item .minfo-lbl { color: var(--text-2); font-size: 11px; margin-right: 5px; }
+  .minfo-panel .minfo-dot { color: var(--text-3); margin: 0 12px; }
+  .minfo-panel .minfo-line a { color: #5b9dff; text-decoration: none; }
+  .minfo-panel .minfo-line a:hover { text-decoration: underline; }
   .minfo-panel .minfo-empty { font-size: 12px; color: var(--text-3); font-style: italic; }
   .minfo-panel .minfo-note { border-left: 2px solid var(--border-strong); padding: 3px 0 3px 10px; margin-bottom: 8px; font-size: 12.5px; color: var(--text); line-height: 1.45; }
   .minfo-panel .minfo-note-date { font-size: 10px; color: var(--text-3); margin-bottom: 2px; }
-  table.matrix .merchant-cell-inner { display: flex; align-items: center; gap: 0; min-width: 0; }
+  table.matrix .merchant-cell-inner { display: flex; align-items: center; gap: 8px; min-width: 0; }
   table.matrix .merchant-cell-inner > * { flex-shrink: 0; }
   table.matrix .merchant-cell-inner .merchant-name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; }
   /* v86: clawback chip — teal identity, matches Master Sheet. Solid = eligible, dashed = window closing */
@@ -1220,7 +1222,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v107 · live</span>
+    <span class="build-tag">v108 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2284,25 +2286,28 @@ function fmt$(n) { if (n >= 1000) return "$" + Math.round(n).toLocaleString(); r
 function fmt$c(n) { return "$" + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); } // exact cents — for the bounce amount
 function bxFmtPhone(s){ var d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return d.length===10 ? '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6) : String(s||''); }
 function showMerchantInfo(leadId){
-  const existing = document.querySelector('tr.minfo-expand[data-parent-id="' + leadId + '"]');
+  const wasOpen = document.querySelector('tr.minfo-expand[data-parent-id="' + leadId + '"]');
+  // Only one dropdown open at a time — close every open one first (like the Master Sheet).
+  document.querySelectorAll('tr.minfo-expand').forEach(el => el.remove());
+  document.querySelectorAll('.minfo-open').forEach(el => el.classList.remove('minfo-open'));
+  if (wasOpen) return;  // re-clicking the already-open row just closes it
   const parent = document.querySelector('tr[data-lead-id="' + leadId + '"]:not(.row-expand):not(.minfo-expand)');
-  if (existing) { existing.remove(); if (parent) parent.classList.remove('minfo-open'); return; }
   if (!parent) return;
   const m = state.find(x => x.lead_id === leadId); if(!m) return;
   const c = [];
-  if(m.owner_name)  c.push('<div class="minfo-row"><span class="minfo-lbl">Owner</span><span>' + m.owner_name + '</span></div>');
-  if(m.owner_phone) c.push('<div class="minfo-row"><span class="minfo-lbl">Phone</span><a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a></div>');
-  if(m.owner_email) c.push('<div class="minfo-row"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a></div>');
-  const contactHtml = '<div class="minfo-section">Contact</div>' + (c.length ? c.join('') : '<div class="minfo-empty">No contact saved on the Master Sheet for this deal.</div>');
+  if(m.owner_name)  c.push('<span class="minfo-item"><span class="minfo-lbl">Owner</span>' + m.owner_name + '</span>');
+  if(m.owner_phone) c.push('<span class="minfo-item"><span class="minfo-lbl">Phone</span><a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a></span>');
+  if(m.owner_email) c.push('<span class="minfo-item"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a></span>');
+  const contactHtml = '<div class="minfo-section">Contact</div><div class="minfo-line">' + (c.length ? c.join('<span class="minfo-dot">·</span>') : '<span class="minfo-empty">No contact saved on the Master Sheet for this deal.</span>') + '</div>';
   const notes = (m.notes_log || []).filter(e => e.text && e.text.trim()).sort((a,b) => b.date_iso.localeCompare(a.date_iso));
-  const notesHtml = '<div class="minfo-section">Notes</div>' + (notes.length
+  const notesHtml = '<div class="minfo-section" style="margin-top:12px">Notes</div>' + (notes.length
     ? notes.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date_iso) + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('')
     : '<div class="minfo-empty">No notes logged yet.</div>');
   const colspan = parent.children.length;
   const exp = document.createElement('tr');
   exp.className = 'minfo-expand';
   exp.dataset.parentId = leadId;
-  exp.innerHTML = '<td colspan="' + colspan + '"><div class="minfo-panel"><div class="minfo-col">' + contactHtml + '</div><div class="minfo-col">' + notesHtml + '</div></div></td>';
+  exp.innerHTML = '<td colspan="' + colspan + '"><div class="minfo-panel">' + contactHtml + notesHtml + '</div></td>';
   parent.parentNode.insertBefore(exp, parent.nextSibling);
   parent.classList.add('minfo-open');
 }
