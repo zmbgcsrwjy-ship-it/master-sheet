@@ -654,6 +654,8 @@
   table.matrix thead th { background: var(--section-header-grad); text-align: left; font-weight: 700; color: var(--text); padding: 9px 14px; font-size: 12px; letter-spacing: 0.02em; border-bottom: 0.5px solid var(--border); }
   table.matrix th.num, table.matrix td.num { text-align: right; }
   table.matrix th.ctr, table.matrix td.ctr { text-align: center; }
+  table.matrix td.hit-cell { position: relative; }
+  table.matrix td.hit-cell .lag-icon { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); margin: 0; }
   table.matrix tbody tr { border-top: 0.5px solid var(--border); border-left: 4px solid transparent; }
   table.matrix tbody tr:first-child { border-top: 0; }
   table.matrix tbody td { padding: 11px 14px; vertical-align: middle; }
@@ -1218,7 +1220,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v106 · live</span>
+    <span class="build-tag">v107 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1352,14 +1354,14 @@
     <thead><tr>
       <th style="width:24%">Merchant</th>
       <th class="ctr" style="width:7%">Hit date</th>
-      <th class="num" style="width:8%">Bounce $</th>
+      <th class="ctr" style="width:8%">Bounce $</th>
       <th class="ctr" style="width:6%">Freq</th>
-      <th class="num" style="width:6%">% Paid</th>
-      <th class="num" style="width:9%">Balance</th>
+      <th class="ctr" style="width:6%">% Paid</th>
+      <th class="ctr" style="width:9%">Balance</th>
       <th class="ctr" style="width:7%">Days delinq</th>
       <th class="ctr" style="width:5%">MTD</th>
       <th class="ctr" style="width:7%">Last pay</th>
-      <th style="width:8%">REP</th>
+      <th class="ctr" style="width:8%">REP</th>
       <th class="ctr" style="width:13%"></th>
     </tr></thead>
     <tbody id="main-body"></tbody>
@@ -4173,7 +4175,7 @@ function buildRow(m, editable) {
   }
   
   const _nameCls = 'merchant-name mname-click' + (isWeeklyDeal(m) ? ' wk-board-name' : '');
-  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="' + _nameCls + '" title="Contact info + notes">' + m.name + '</span>' + statusFlag + noteInd + beaconClawTag(m) + '</div></td>';
+  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner"><span class="' + _nameCls + '" title="Contact info + notes">' + m.name + '</span>' + chips + statusFlag + noteInd + beaconClawTag(m) + '</div></td>';
   
   let actionsCell = '';
   if (editable) {
@@ -4225,15 +4227,15 @@ function buildRow(m, editable) {
   }
   
   tr.innerHTML = merchantCell +
-    '<td class="ctr secondary">' + fmtDate(m.hit_date) + lagBadge(m.hit_date, viewDate) + '</td>' +
-    '<td class="num">' + fmt$c(m.bounce_amt || 0) + '</td>' +
+    '<td class="ctr secondary hit-cell">' + fmtDate(m.hit_date) + lagBadge(m.hit_date, viewDate) + '</td>' +
+    '<td class="ctr">' + fmt$c(m.bounce_amt || 0) + '</td>' +
     '<td class="ctr">' + (editable ? freqPillEditable(m) : freqPill(m.freq)) + '</td>' +
-    '<td class="num">' + fmtPct(m.pct_paid) + '</td>' +
-    '<td class="num balance-cell">' + fmt$(m.balance) + '</td>' +
+    '<td class="ctr">' + fmtPct(m.pct_paid) + '</td>' +
+    '<td class="ctr balance-cell">' + fmt$(m.balance) + '</td>' +
     '<td class="ctr">' + (m.days_delinq || '—') + '</td>' +
     '<td class="ctr">' + (m.mtd_bounces || 0) + '</td>' +
     '<td class="ctr secondary">' + fmtDate(m.last_pull) + '</td>' +
-    '<td class="secondary">' + shortRep(m.rep) + '</td>' +
+    '<td class="ctr secondary">' + shortRep(m.rep) + '</td>' +
     actionsCell;
   return tr;
 }
