@@ -805,8 +805,9 @@
   
   /* Visual spacer between top operational sections and bottom review sections (broken / legal-still).
      A blank row with subtle separator that creates a clear mental break. */
-  tr.group-spacer td { padding: 0; height: 18px; background: transparent; border: 0; border-top: 0.5px dashed var(--border-strong); border-left: 4px solid transparent !important; }
-  [data-theme="dark"] tr.group-spacer td { border-top-color: var(--border-strong); }
+  tr.group-spacer td { padding: 0; height: 16px; background: transparent; border: 0 !important; }
+  tr.group-sep td { border-top-left-radius: 9px; border-top-right-radius: 9px; }
+  tr.group-sep + tr td:first-child, tr.group-sep td:first-child { border-left-width: 4px; }
   table.matrix .secondary { color: var(--text-2); }
   table.matrix .actions-cell { white-space: nowrap; padding-right: 14px; }
   table.matrix .actions-inner { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
@@ -1217,7 +1218,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v105 · live</span>
+    <span class="build-tag">v106 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3998,17 +3999,14 @@ function renderMainTable() {
   let spacerInsertedBeforeBottomGroup = false;
   for (const m of events) {
     const sevKey = m._displayClass;
-    // Insert ONE visual spacer the first time we hit a bottom-tier section (broken or legal-still).
-    // This creates the "page break" feel — bottom sections are a different mental mode (review, not action).
-    const isBottomTier = sevKey === "broken" || sevKey === "legal-still";
-    if (isBottomTier && !spacerInsertedBeforeBottomGroup) {
-      const spacer = document.createElement("tr");
-      spacer.className = "group-spacer";
-      spacer.innerHTML = '<td colspan="11"></td>';
-      body.appendChild(spacer);
-      spacerInsertedBeforeBottomGroup = true;
-    }
     if (sevKey !== currentSev) {
+      // Gap before every category so they read as separate sections instead of one mushed table.
+      if (currentSev !== null) {
+        const gap = document.createElement("tr");
+        gap.className = "group-spacer";
+        gap.innerHTML = '<td colspan="11"></td>';
+        body.appendChild(gap);
+      }
       currentSev = sevKey;
       const sep = document.createElement("tr");
       const sepCls = currentSev === "consecutive" ? "cons" 
