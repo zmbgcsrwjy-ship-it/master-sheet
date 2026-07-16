@@ -513,6 +513,7 @@
   .cal-cell .day-meta { font-size: 10px; color: var(--text-2); display: flex; gap: 3px; justify-content: flex-start; align-items: flex-end; flex-wrap: wrap; }
   .cal-tag { display:inline-block; padding:1px 6px; border-radius:9px; font-size:9.5px; font-weight:700; line-height:1.45; letter-spacing:.02em; white-space:nowrap; }
   .cal-tag-stop { background: rgba(229,83,75,.18);   color:#ff8079; }
+  .cal-tag-weekly { background: rgba(197,138,224,.20); color: var(--sev-wkly); }
   
   /* Heatmap red — only revocations drive it */
   .cal-cell.heat-1 { background: #FCEFEF; }
@@ -1216,7 +1217,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v104 · live</span>
+    <span class="build-tag">v105 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1826,6 +1827,7 @@ function beaconReconstruct(raw, todayISO){
       if (e.sev_class==='stop' && !e._carriedStop){ s.stop_count++; s.stop_count_today++; s.stop_exp+=e.balance||0; }
       else if (e.sev_class==='consecutive'){ s.consec_count++; s.consec_exp+=e.balance||0; }
       else if (e.sev_class==='new'){ s.new_count++; s.new_exp+=e.balance||0; }
+      if (e._weekly && !e._carriedStop){ s.weekly_count++; }
     }
     s.action_count=s.nsf_count;
     s.failed_pulls=Math.round(s.failed_pulls*100)/100;
@@ -1845,8 +1847,9 @@ function beaconReconstruct(raw, todayISO){
       // agreement — do NOT collapse it, surface it on the calendar (matches the board's "BROKE SUSPENDED").
       const _brokeResume = m.resume_date && d >= m.resume_date;
       const _carriedStop = _handled && !_brokeResume && sev==='stop' && Array.isArray(m._stopDates) && m._stopDates.length>0 && d > m._stopDates[0];
+      const _weekly = m.lead_id ? isWeeklyDeal(m) : false;   // weekly-FREQUENCY deal (by origFreq), not the event tag
       return { lead_id:m.lead_id||0, name:m.name||String(f.Bounce||'').split(' — ')[0],
-        bounce_amt:Number(f.Amount)||0, bounce_type:(sev==='stop'?'stop':'bounce'), _carriedStop:_carriedStop,
+        bounce_amt:Number(f.Amount)||0, bounce_type:(sev==='stop'?'stop':'bounce'), _carriedStop:_carriedStop, _weekly:_weekly,
         return_code:f['Return Code']||'', sev_class:sev, group_order:bGroupOrder(sev), severity_rank:100,
         streak_len:Number(f['Consecutive Count'])||0, status:m.status||'', balance:m.balance||0,
         pct_paid:m.pct_paid||0, freq:m._freqField||'Daily', mtd_bounces:0,
@@ -2538,7 +2541,7 @@ function getWatchList() {
     // the FIRST weekly bounce (not the 2nd) — including deals bouncing today — and keep it here until
     // it's resolved, so it stays on radar before the next weekly hits.
     if (!m.resolution_type && !hasOpenLegalCase(m.lead_id) && isWeeklyDeal(m)) {
-      const wkBounces = collectMerchantBounces(m, true); // weekly only
+      const wkBounces = collectMerchantBounces(m, false); // all bounces — the deal is already confirmed weekly
       if (wkBounces.length >= 1) {
         const last = wkBounces[wkBounces.length - 1];
         const lastDate = new Date(last.date + "T00:00:00");
@@ -2904,6 +2907,14 @@ function renderCalendar() {
         t.textContent = stp + " stop" + (stp===1?"":"s");
         t.title = stp + " stop/revocation" + (stp===1?"":"s") + " this day";
         _tags.appendChild(t);
+      }
+      const wk = dayHist.stats.weekly_count || 0;
+      if (wk > 0) {
+        const w = document.createElement("span");
+        w.className = "cal-tag cal-tag-weekly";
+        w.textContent = wk + " weekly";
+        w.title = wk + " weekly-payment bounce" + (wk===1?"":"s") + " this day";
+        _tags.appendChild(w);
       }
     }
     if (_tags.childNodes.length) topRow.appendChild(_tags);
@@ -4111,7 +4122,14 @@ function buildBrokenContextRow(m) {
 
 function buildRow(m, editable) {
   const tr = document.createElement("tr");
-  if (editable) tr.dataset.leadId = m.lead_id;
+  if (editable) {
+    tr.dataset.leadId = m.lead_id;
+    tr.style.cursor = "pointer";
+    tr.addEventListener("click", function(e){
+      if (e.target.closest("button, a, input, textarea, select, .resolve-btn, .row-btn, .resolve-menu")) return;
+      showMerchantInfo(m.lead_id);
+    });
+  }
   
   let sevClass;
   if (m._displayClass === "broken") sevClass = "sev-broken";
@@ -4157,7 +4175,7 @@ function buildRow(m, editable) {
   }
   
   const _nameCls = 'merchant-name mname-click' + (isWeeklyDeal(m) ? ' wk-board-name' : '');
-  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="' + _nameCls + '" onclick="showMerchantInfo(' + m.lead_id + ')" title="Contact info + notes">' + m.name + '</span>' + statusFlag + noteInd + beaconClawTag(m) + '</div></td>';
+  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="' + _nameCls + '" title="Contact info + notes">' + m.name + '</span>' + statusFlag + noteInd + beaconClawTag(m) + '</div></td>';
   
   let actionsCell = '';
   if (editable) {
