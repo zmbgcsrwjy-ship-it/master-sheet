@@ -782,17 +782,20 @@
   .wk-board-name { color: var(--sev-wkly) !important; font-weight: 700 !important; }
   .mname-click { cursor: pointer; }
   .mname-click:hover { text-decoration: underline; text-underline-offset: 2px; }
-  #bx-minfo .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 16px 0 6px; }
-  #bx-minfo .minfo-row { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; font-size: 13px; color: var(--text); }
-  #bx-minfo .minfo-row .minfo-lbl { width: 54px; flex-shrink: 0; color: var(--text-2); font-size: 11px; }
-  #bx-minfo .minfo-row a { color: #5b9dff; text-decoration: none; }
-  #bx-minfo .minfo-row a:hover { text-decoration: underline; }
-  #bx-minfo .minfo-empty { font-size: 12px; color: var(--text-3); font-style: italic; }
-  #bx-minfo .minfo-note { border-left: 2px solid var(--border-strong); padding: 4px 0 4px 10px; margin-bottom: 8px; font-size: 12.5px; color: var(--text); line-height: 1.45; }
-  #bx-minfo .minfo-note-date { font-size: 10px; color: var(--text-3); margin-bottom: 2px; }
+  .minfo-expand { background: var(--surface-2) !important; border-left: 4px solid var(--sev-wkly) !important; }
+  .minfo-expand td { padding: 14px 18px !important; }
+  .minfo-panel { display: grid; grid-template-columns: 260px 1fr; gap: 24px; }
+  .minfo-panel .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 8px; }
+  .minfo-panel .minfo-row { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; font-size: 13px; color: var(--text); }
+  .minfo-panel .minfo-row .minfo-lbl { width: 50px; flex-shrink: 0; color: var(--text-2); font-size: 11px; }
+  .minfo-panel .minfo-row a { color: #5b9dff; text-decoration: none; }
+  .minfo-panel .minfo-row a:hover { text-decoration: underline; }
+  .minfo-panel .minfo-empty { font-size: 12px; color: var(--text-3); font-style: italic; }
+  .minfo-panel .minfo-note { border-left: 2px solid var(--border-strong); padding: 3px 0 3px 10px; margin-bottom: 8px; font-size: 12.5px; color: var(--text); line-height: 1.45; }
+  .minfo-panel .minfo-note-date { font-size: 10px; color: var(--text-3); margin-bottom: 2px; }
   table.matrix .merchant-cell-inner { display: flex; align-items: center; gap: 0; min-width: 0; }
   table.matrix .merchant-cell-inner > * { flex-shrink: 0; }
-  table.matrix .merchant-cell-inner .merchant-name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  table.matrix .merchant-cell-inner .merchant-name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; }
   /* v86: clawback chip — teal identity, matches Master Sheet. Solid = eligible, dashed = window closing */
   .claw-chip { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:9px; margin-left:6px; white-space:nowrap; background:rgba(45,212,191,.18); color:#0c8f7e; border:1px solid rgba(45,212,191,.55); }
   .claw-chip-warn { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:9px; margin-left:6px; white-space:nowrap; background:transparent; color:#0c8f7e; border:1px dashed rgba(45,212,191,.6); }
@@ -1213,7 +1216,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v103 · live</span>
+    <span class="build-tag">v104 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1540,16 +1543,6 @@
   </div>
 </div>
 <style>@keyframes bxspin{to{transform:rotate(360deg)}}</style>
-<div id="bx-minfo" style="display:none;position:fixed;inset:0;z-index:9600;background:rgba(8,12,20,.72);align-items:center;justify-content:center;backdrop-filter:blur(2px)" onclick="if(event.target===this)closeMerchantInfo()">
-  <div style="background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;padding:22px 24px;max-width:440px;width:90%;max-height:82vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div><h3 id="minfo-name" style="margin:0;font-size:17px;color:var(--text)"></h3><div id="minfo-sub" style="font-size:12px;color:var(--text-2);margin-top:3px"></div></div>
-      <button onclick="closeMerchantInfo()" style="background:none;border:none;color:var(--text-3);font-size:22px;cursor:pointer;line-height:1;padding:0">&times;</button>
-    </div>
-    <div id="minfo-contact"></div>
-    <div id="minfo-notes"></div>
-  </div>
-</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -2284,21 +2277,28 @@ function persistState() { /* v72: state lives in Airtable */ }
 function fmt$(n) { if (n >= 1000) return "$" + Math.round(n).toLocaleString(); return "$" + Math.round(n); }
 function fmt$c(n) { return "$" + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); } // exact cents — for the bounce amount
 function bxFmtPhone(s){ var d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return d.length===10 ? '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6) : String(s||''); }
-function closeMerchantInfo(){ var e=document.getElementById('bx-minfo'); if(e) e.style.display='none'; }
 function showMerchantInfo(leadId){
+  const existing = document.querySelector('tr.minfo-expand[data-parent-id="' + leadId + '"]');
+  const parent = document.querySelector('tr[data-lead-id="' + leadId + '"]:not(.row-expand):not(.minfo-expand)');
+  if (existing) { existing.remove(); if (parent) parent.classList.remove('minfo-open'); return; }
+  if (!parent) return;
   const m = state.find(x => x.lead_id === leadId); if(!m) return;
-  document.getElementById('minfo-name').textContent = m.name;
-  document.getElementById('minfo-sub').textContent = fmt$(m.balance) + ' balance · ' + (origFreq(m) || 'Daily');
   const c = [];
   if(m.owner_name)  c.push('<div class="minfo-row"><span class="minfo-lbl">Owner</span><span>' + m.owner_name + '</span></div>');
   if(m.owner_phone) c.push('<div class="minfo-row"><span class="minfo-lbl">Phone</span><a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a></div>');
   if(m.owner_email) c.push('<div class="minfo-row"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a></div>');
-  document.getElementById('minfo-contact').innerHTML = '<div class="minfo-section">Contact</div>' + (c.length ? c.join('') : '<div class="minfo-empty">No contact saved on the Master Sheet for this deal.</div>');
+  const contactHtml = '<div class="minfo-section">Contact</div>' + (c.length ? c.join('') : '<div class="minfo-empty">No contact saved on the Master Sheet for this deal.</div>');
   const notes = (m.notes_log || []).filter(e => e.text && e.text.trim()).sort((a,b) => b.date_iso.localeCompare(a.date_iso));
-  document.getElementById('minfo-notes').innerHTML = '<div class="minfo-section">Notes</div>' + (notes.length
+  const notesHtml = '<div class="minfo-section">Notes</div>' + (notes.length
     ? notes.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date_iso) + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('')
     : '<div class="minfo-empty">No notes logged yet.</div>');
-  document.getElementById('bx-minfo').style.display = 'flex';
+  const colspan = parent.children.length;
+  const exp = document.createElement('tr');
+  exp.className = 'minfo-expand';
+  exp.dataset.parentId = leadId;
+  exp.innerHTML = '<td colspan="' + colspan + '"><div class="minfo-panel"><div class="minfo-col">' + contactHtml + '</div><div class="minfo-col">' + notesHtml + '</div></div></td>';
+  parent.parentNode.insertBefore(exp, parent.nextSibling);
+  parent.classList.add('minfo-open');
 }
 function fmt$k(n) { if (n >= 1e6) return "$" + (n/1e6).toFixed(3) + "M"; if (n >= 1000) return "$" + Math.round(n/1000) + "K"; return "$" + Math.round(n); }
 function fmtPct(n) { return Math.round(n * 100) + "%"; }
