@@ -681,6 +681,7 @@
   .bc-label { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--sev-broken); opacity: 0.7; }
   .bc-value { color: var(--text); font-weight: 500; font-size: 12px; }
   .bc-value.bc-gap { color: var(--sev-broken); font-weight: 700; }
+  .bc-value.bc-promise { display: inline-block; align-self: flex-start; background: var(--sev-broken-bg); color: var(--sev-broken); font-weight: 800; font-size: 12.5px; padding: 3px 10px; border-radius: 5px; border: 1px solid var(--sev-broken-bar); letter-spacing: 0.01em; }
   .bc-code { display: inline-block; padding: 1px 6px; border-radius: 3px; font-weight: 700; font-size: 10.5px; letter-spacing: 0.04em; background: rgba(91,7,7,0.12); color: var(--sev-broken); }
   [data-theme="dark"] .bc-code { background: rgba(255,138,130,0.18); }
   .bc-code.bc-code-now { background: var(--sev-broken); color: #fff; }
@@ -779,9 +780,16 @@
      Prevents the chip-on-top, name-below wrapping that happened when content exceeded column width. */
   table.matrix td.merchant-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wk-board-name { color: var(--sev-wkly) !important; font-weight: 700 !important; }
-  .merchant-contact { font-size: 10px; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-  .merchant-contact a { color: #5b9dff; text-decoration: none; }
-  .merchant-contact a:hover { text-decoration: underline; }
+  .mname-click { cursor: pointer; }
+  .mname-click:hover { text-decoration: underline; text-underline-offset: 2px; }
+  #bx-minfo .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 16px 0 6px; }
+  #bx-minfo .minfo-row { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; font-size: 13px; color: var(--text); }
+  #bx-minfo .minfo-row .minfo-lbl { width: 54px; flex-shrink: 0; color: var(--text-2); font-size: 11px; }
+  #bx-minfo .minfo-row a { color: #5b9dff; text-decoration: none; }
+  #bx-minfo .minfo-row a:hover { text-decoration: underline; }
+  #bx-minfo .minfo-empty { font-size: 12px; color: var(--text-3); font-style: italic; }
+  #bx-minfo .minfo-note { border-left: 2px solid var(--border-strong); padding: 4px 0 4px 10px; margin-bottom: 8px; font-size: 12.5px; color: var(--text); line-height: 1.45; }
+  #bx-minfo .minfo-note-date { font-size: 10px; color: var(--text-3); margin-bottom: 2px; }
   table.matrix .merchant-cell-inner { display: flex; align-items: center; gap: 0; min-width: 0; }
   table.matrix .merchant-cell-inner > * { flex-shrink: 0; }
   table.matrix .merchant-cell-inner .merchant-name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -1205,7 +1213,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v102 · live</span>
+    <span class="build-tag">v103 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1532,6 +1540,16 @@
   </div>
 </div>
 <style>@keyframes bxspin{to{transform:rotate(360deg)}}</style>
+<div id="bx-minfo" style="display:none;position:fixed;inset:0;z-index:9600;background:rgba(8,12,20,.72);align-items:center;justify-content:center;backdrop-filter:blur(2px)" onclick="if(event.target===this)closeMerchantInfo()">
+  <div style="background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;padding:22px 24px;max-width:440px;width:90%;max-height:82vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div><h3 id="minfo-name" style="margin:0;font-size:17px;color:var(--text)"></h3><div id="minfo-sub" style="font-size:12px;color:var(--text-2);margin-top:3px"></div></div>
+      <button onclick="closeMerchantInfo()" style="background:none;border:none;color:var(--text-3);font-size:22px;cursor:pointer;line-height:1;padding:0">&times;</button>
+    </div>
+    <div id="minfo-contact"></div>
+    <div id="minfo-notes"></div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -2266,6 +2284,22 @@ function persistState() { /* v72: state lives in Airtable */ }
 function fmt$(n) { if (n >= 1000) return "$" + Math.round(n).toLocaleString(); return "$" + Math.round(n); }
 function fmt$c(n) { return "$" + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); } // exact cents — for the bounce amount
 function bxFmtPhone(s){ var d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return d.length===10 ? '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6) : String(s||''); }
+function closeMerchantInfo(){ var e=document.getElementById('bx-minfo'); if(e) e.style.display='none'; }
+function showMerchantInfo(leadId){
+  const m = state.find(x => x.lead_id === leadId); if(!m) return;
+  document.getElementById('minfo-name').textContent = m.name;
+  document.getElementById('minfo-sub').textContent = fmt$(m.balance) + ' balance · ' + (origFreq(m) || 'Daily');
+  const c = [];
+  if(m.owner_name)  c.push('<div class="minfo-row"><span class="minfo-lbl">Owner</span><span>' + m.owner_name + '</span></div>');
+  if(m.owner_phone) c.push('<div class="minfo-row"><span class="minfo-lbl">Phone</span><a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a></div>');
+  if(m.owner_email) c.push('<div class="minfo-row"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a></div>');
+  document.getElementById('minfo-contact').innerHTML = '<div class="minfo-section">Contact</div>' + (c.length ? c.join('') : '<div class="minfo-empty">No contact saved on the Master Sheet for this deal.</div>');
+  const notes = (m.notes_log || []).filter(e => e.text && e.text.trim()).sort((a,b) => b.date_iso.localeCompare(a.date_iso));
+  document.getElementById('minfo-notes').innerHTML = '<div class="minfo-section">Notes</div>' + (notes.length
+    ? notes.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date_iso) + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('')
+    : '<div class="minfo-empty">No notes logged yet.</div>');
+  document.getElementById('bx-minfo').style.display = 'flex';
+}
 function fmt$k(n) { if (n >= 1e6) return "$" + (n/1e6).toFixed(3) + "M"; if (n >= 1000) return "$" + Math.round(n/1000) + "K"; return "$" + Math.round(n); }
 function fmtPct(n) { return Math.round(n * 100) + "%"; }
 function fmtDate(s) { if (!s) return "—"; const d = new Date(s + "T00:00:00"); if (isNaN(d)) return s; return (d.getMonth()+1) + "/" + d.getDate(); }
@@ -4062,7 +4096,7 @@ function buildBrokenContextRow(m) {
   
   const cells = '<td colspan="11"><div class="broken-context">' +
     '<div class="broken-context-grid">' +
-      '<div class="bc-cell"><span class="bc-label">Promise</span><span class="bc-value">' + promiseLabel + '</span></div>' +
+      '<div class="bc-cell"><span class="bc-label">Promise</span><span class="bc-value bc-promise">' + promiseLabel + '</span></div>' +
       '<div class="bc-cell"><span class="bc-label">Made on</span><span class="bc-value">' + fmtDate(m.resolution_date) + '</span></div>' +
       '<div class="bc-cell"><span class="bc-label">Gap</span><span class="bc-value bc-gap">' + (daysGap || '—') + '</span></div>' +
       '<div class="bc-cell"><span class="bc-label">Original</span><span class="bc-value"><span class="bc-code">' + origCode + '</span> ' + (origCodeName || '') + '</span></div>' +
@@ -4122,18 +4156,14 @@ function buildRow(m, editable) {
     chips += '<span class="resolved-chip">' + resTxt + '</span>';
   }
   
-  const _nameCls = 'merchant-name' + (isWeeklyDeal(m) ? ' wk-board-name' : '');
-  const _cParts = [];
-  if (m.owner_name) _cParts.push(m.owner_name);
-  if (m.owner_phone) _cParts.push('<a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a>');
-  if (m.owner_email) _cParts.push('<a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a>');
-  const _contactLine = _cParts.length ? '<div class="merchant-contact">' + _cParts.join(' · ') + '</div>' : '';
-  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="' + _nameCls + '">' + m.name + '</span>' + statusFlag + noteInd + beaconClawTag(m) + '</div>' + _contactLine + '</td>';
+  const _nameCls = 'merchant-name mname-click' + (isWeeklyDeal(m) ? ' wk-board-name' : '');
+  const merchantCell = '<td class="merchant-cell"><div class="merchant-cell-inner">' + chips + '<span class="' + _nameCls + '" onclick="showMerchantInfo(' + m.lead_id + ')" title="Contact info + notes">' + m.name + '</span>' + statusFlag + noteInd + beaconClawTag(m) + '</div></td>';
   
   let actionsCell = '';
   if (editable) {
-    const resolveBtnLabel = m.resolution_type ? '✓ ' + prettyResType(m.resolution_type) : 'Resolve';
-    const resolveBtnClass = m.resolution_type ? 'resolve-btn resolved' : 'resolve-btn';
+    const _brokenRow = m._displayClass === "broken";   // broke the promise → needs a NEW resolution, don't show it as still resolved
+    const resolveBtnLabel = (m.resolution_type && !_brokenRow) ? '✓ ' + prettyResType(m.resolution_type) : 'Resolve';
+    const resolveBtnClass = (m.resolution_type && !_brokenRow) ? 'resolve-btn resolved' : 'resolve-btn';
     actionsCell = '<td class="actions-cell ctr"><div class="actions-inner">' +
       '<button class="row-btn" onclick="toggleExpand(' + m.lead_id + ')">Note</button>' +
       '<button class="' + resolveBtnClass + '" onclick="toggleResolveExpand(event, ' + m.lead_id + ')">' + resolveBtnLabel + '</button>' +
