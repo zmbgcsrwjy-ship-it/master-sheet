@@ -307,7 +307,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL: clawed deal names under the kickback-reversal and clawback rows now render as their own white rows, stacked, like the kickback list.">build 88</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Collections pill for lowered deals now reads LOWERED (matching Beacon) instead of REDUCED; pill still appears via the LOWERED collections state.">build 90</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1615,7 +1615,7 @@ function renderTable(){
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
-      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}${isExternalFunder(d.funder)?' — participation in '+esc(d.funder)+"'s deal":''}">${isExternalFunder(d.funder)?'<span style="color:var(--peach)">'+d.merchant+'</span>':(d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant)}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}${clawbackTag(d)}</td>
+      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}${isExternalFunder(d.funder)?' — participation in '+esc(d.funder)+"'s deal":''}">${isExternalFunder(d.funder)?'<span style="color:var(--peach)">'+d.merchant+'</span>':(d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant)}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}<span style="float:right;margin-left:12px">${clawbackTag(d)}</span></td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
       <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
