@@ -494,6 +494,8 @@
   .cal-tooltip { position: fixed; z-index: 1000; background: #1B1B1A; color: #F0EFEB; padding: 10px 12px; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.35); font-size: 12px; max-width: 320px; pointer-events: none; opacity: 0; transition: opacity 0.12s; border: 0.5px solid rgba(255,255,255,0.08); }
   .cal-tooltip.shown { opacity: 1; }
   .cal-tooltip .tt-header { font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 6px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; }
+  .cal-tooltip .tt-subhead { font-size: 10.5px; color: rgba(255,255,255,0.5); margin: 8px 0 4px; font-weight: 700; letter-spacing: 0.03em; }
+  .cal-tooltip .tt-subhead:first-of-type { margin-top: 2px; }
   .cal-tooltip .tt-header-stops { color: #F2A8A1; }
   .cal-tooltip .tt-section-spacer { margin-top: 10px; padding-top: 10px; border-top: 0.5px solid rgba(255,255,255,0.1); }
   .cal-tooltip .tt-row { display: flex; gap: 10px; padding: 3px 0; align-items: baseline; }
@@ -1223,7 +1225,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v112 · live</span>
+    <span class="build-tag">v113 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2583,7 +2585,8 @@ function getWatchList() {
         const lastDateStr = wkBounces.length ? wkBounces[wkBounces.length - 1].date : (STATS.date_iso || bLocalToday());
         const lastDate = new Date(lastDateStr + "T00:00:00");
         const daysAgo = bdDiff(lastDate, todayDate);
-        if (daysAgo <= 45) {
+        const clearedSince = m.last_cleared && m.last_cleared > lastDateStr;  // caught up — a payment cleared after the bounce
+        if (!clearedSince && daysAgo <= 45) {
           active.push({ m, reason: 'unresolved-weekly', label: 'WEEKLY BOUNCE · ' + n + ' missed', sortAge: daysAgo });
           continue;
         }
@@ -2733,6 +2736,13 @@ function navMonth(delta) {
 function goToday() {
   viewDate = TODAY_ISO;
   calMonth = TODAY_ISO.slice(0,7);
+  renderCalendar();
+  renderForDate();
+}
+function jumpToDate(iso) {
+  if (!iso) return;
+  viewDate = iso;
+  calMonth = iso.slice(0,7);
   renderCalendar();
   renderForDate();
 }
@@ -2983,8 +2993,11 @@ function renderCalendar() {
     const dayStops = (!isWeekend && dayHist && dayHist.bounce_events) 
       ? dayHist.bounce_events.filter(ev => ev.sev_class === 'stop' || ev.bounce_type === 'Expected Payment Missing' || STOP_RCODES.indexOf(ev.return_code) >= 0)
       : [];
-    if (!isWeekend && (dayResumes.length > 0 || dayStops.length > 0)) {
-      cell.addEventListener("mouseenter", e => showCalTooltip(e.currentTarget, iso, dayResumes, dayStops));
+    const dayBounces = (!isWeekend && dayHist && dayHist.bounce_events)
+      ? dayHist.bounce_events.filter(ev => !(ev.sev_class === 'stop' || ev.bounce_type === 'Expected Payment Missing' || STOP_RCODES.indexOf(ev.return_code) >= 0) && !ev._carriedStop)
+      : [];
+    if (!isWeekend && (dayResumes.length > 0 || dayStops.length > 0 || dayBounces.length > 0 || dayNextHits.length > 0)) {
+      cell.addEventListener("mouseenter", e => showCalTooltip(e.currentTarget, iso, dayResumes, dayStops, dayBounces, dayNextHits));
       cell.addEventListener("mouseleave", hideCalTooltip);
     }
     
@@ -2994,62 +3007,41 @@ function renderCalendar() {
 
 // Singleton tooltip element — created once, repositioned/repopulated as cells are hovered
 let _calTooltipEl = null;
-function showCalTooltip(cell, iso, resumes, stops) {
-  resumes = resumes || [];
-  stops = stops || [];
-  if (resumes.length === 0 && stops.length === 0) return;
-  if (!_calTooltipEl) {
-    _calTooltipEl = document.createElement("div");
-    _calTooltipEl.className = "cal-tooltip";
-    document.body.appendChild(_calTooltipEl);
+function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits) {
+  resumes = resumes || []; stops = stops || []; bounces = bounces || []; nextHits = nextHits || [];
+  if (!resumes.length && !stops.length && !bounces.length && !nextHits.length) return;
+  if (!_calTooltipEl) { _calTooltipEl = document.createElement("div"); _calTooltipEl.className = "cal-tooltip"; document.body.appendChild(_calTooltipEl); }
+  const rowFor = (ev, detailCls, detail) => {
+    const live = state.find(s => s.lead_id === ev.lead_id);
+    const isWeekly = ev._weekly || ev.freq === 'Weekly' || (live && isWeeklyDeal(live));
+    const nameCls = isWeekly ? 'tt-name tt-name-weekly' : 'tt-name';
+    const wkIcon = isWeekly ? '<span class="tt-weekly-icon">\u26a0</span>' : '';
+    return '<div class="tt-row">' + wkIcon + '<span class="' + nameCls + '">' + (ev.name || '(unknown)') + '</span><span class="tt-detail ' + (detailCls||'') + '">' + detail + '</span></div>';
+  };
+  let html = '<div class="tt-header">' + fmtLongDate(iso) + '</div>';
+  if (bounces.length) {
+    html += '<div class="tt-subhead">\u25cf ' + bounces.length + ' bounce' + (bounces.length===1?'':'s') + '</div>';
+    html += bounces.map(ev => { const code=ev.return_code||'\u2014'; const cn=rcodeName(code); return rowFor(ev,'',code+(cn?': '+cn:'')); }).join("");
   }
-  // Stops section — show name + R-code with definition
-  let stopsHtml = "";
-  if (stops.length > 0) {
-    const stopRows = stops.map(ev => {
-      const code = (ev.bounce_type === 'Expected Payment Missing') ? 'EPM' : (ev.return_code || '—');
-      const codeName = rcodeName(code);
-      const detail = code + (codeName ? ': ' + codeName : '');
-      // Look up live merchant to see if weekly (color continuity)
-      const live = state.find(s => s.lead_id === ev.lead_id);
-      const isWeekly = ev.freq === 'Weekly' || (live && isWeeklyDeal(live));
-      const nameCls = isWeekly ? 'tt-name tt-name-weekly' : 'tt-name';
-      const wkIcon = isWeekly ? '<span class="tt-weekly-icon">⚠</span>' : '';
-      return '<div class="tt-row">' + wkIcon + '<span class="' + nameCls + '">' + (ev.name || '(unknown)') + '</span><span class="tt-detail tt-stop">' + detail + '</span></div>';
-    }).join("");
-    stopsHtml = '<div class="tt-header tt-header-stops">🛑 ' + stops.length + ' stop' + (stops.length === 1 ? '' : 's') + ' on ' + fmtLongDate(iso) + '</div>' + stopRows;
+  if (stops.length) {
+    html += '<div class="tt-subhead">\ud83d\uded1 ' + stops.length + ' stop' + (stops.length===1?'':'s') + '</div>';
+    html += stops.map(ev => { const code=(ev.bounce_type==='Expected Payment Missing')?'EPM':(ev.return_code||'\u2014'); const cn=rcodeName(code); return rowFor(ev,'tt-stop',code+(cn?': '+cn:'')); }).join("");
   }
-  // Resumes section — existing logic
-  let resumesHtml = "";
-  if (resumes.length > 0) {
-    const resumeRows = resumes.map(r => {
-      const origAmt = r.bounce_amt || 0;
-      let detail = scheduledActionLabel(r.type);
-      if (r.type === 'lowered' && r.lowered_amount > 0 && origAmt > 0) {
-        detail += ' · $' + r.lowered_amount.toFixed(0) + ' → $' + origAmt.toFixed(0) + '/day';
-      } else if (origAmt > 0) {
-        detail += ' · $' + origAmt.toFixed(0) + '/day';
-      }
-      const isWeekly = r.freq === 'Weekly';
-      const nameCls = isWeekly ? 'tt-name tt-name-weekly' : 'tt-name';
-      const wkIcon = isWeekly ? '<span class="tt-weekly-icon">⚠</span>' : '';
-      return '<div class="tt-row">' + wkIcon + '<span class="' + nameCls + '">' + r.name + '</span><span class="tt-detail">' + detail + '</span></div>';
-    }).join("");
-    const header = stops.length > 0 
-      ? '<div class="tt-header tt-section-spacer">↻ ' + resumes.length + ' resume' + (resumes.length === 1 ? '' : 's') + '</div>'
-      : '<div class="tt-header">' + fmtLongDate(iso) + ' · ' + resumes.length + ' resume' + (resumes.length === 1 ? '' : 's') + '</div>';
-    resumesHtml = header + resumeRows;
+  if (resumes.length) {
+    html += '<div class="tt-subhead">\u21bb ' + resumes.length + ' resume' + (resumes.length===1?'':'s') + '</div>';
+    html += resumes.map(r => { const origAmt=r.bounce_amt||0; let detail=scheduledActionLabel(r.type); if(r.type==='lowered'&&r.lowered_amount>0&&origAmt>0) detail+=' \u00b7 $'+r.lowered_amount.toFixed(0)+' \u2192 $'+origAmt.toFixed(0)+'/day'; else if(origAmt>0) detail+=' \u00b7 $'+origAmt.toFixed(0)+'/day'; return rowFor({name:r.name,lead_id:r.lead_id,freq:r.freq},'',detail); }).join("");
   }
-  _calTooltipEl.innerHTML = stopsHtml + resumesHtml;
-  // Position above the cell, centered. Flip below if it would overflow the top of viewport.
+  if (nextHits.length) {
+    html += '<div class="tt-subhead">\u2197 ' + nextHits.length + ' next hit</div>';
+    html += nextHits.map(x => rowFor({name:x.name,lead_id:x.lead_id},'','next weekly pull')).join("");
+  }
+  _calTooltipEl.innerHTML = html;
   const rect = cell.getBoundingClientRect();
   _calTooltipEl.classList.add("shown");
-  // Need to render first to measure
   const ttRect = _calTooltipEl.getBoundingClientRect();
   let left = rect.left + (rect.width / 2) - (ttRect.width / 2);
   let top = rect.top - ttRect.height - 8;
-  if (top < 8) top = rect.bottom + 8; // flip below if too close to top
-  // Clamp horizontally to viewport with 8px margin
+  if (top < 8) top = rect.bottom + 8;
   if (left < 8) left = 8;
   if (left + ttRect.width > window.innerWidth - 8) left = window.innerWidth - ttRect.width - 8;
   _calTooltipEl.style.left = left + "px";
@@ -3208,6 +3200,10 @@ function renderWatchTier(tier, items) {
     card.className = 'watch-card ' + tierClass + (isWeekly ? ' is-weekly' : '');
     card.style.cursor = 'pointer';
     card.dataset.leadId = m.lead_id;  // for hover cross-highlight with bounce table
+    card.addEventListener('click', () => {
+      const bd = m._bounceDates || [];
+      jumpToDate(bd.length ? bd[bd.length-1] : (m.resolution_date || TODAY_ISO));
+    });
     
     // Detail line is reason-specific
     let detail = '';
