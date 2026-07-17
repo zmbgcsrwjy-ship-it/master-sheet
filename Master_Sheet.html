@@ -306,7 +306,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawed back table: added Undo — reverses the exact book-comm + kickback bookings from the month they were booked (stored on claw) and reopens the deal.">build 84</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback: widened the warning to 1+ bounce within the final 7 days of the window, and added a proactive closing-soon pill in the topbar (click to jump to the Clawback tab) so eligible/warning deals about to age out do not get missed.">build 85</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -333,6 +333,7 @@ select.badge:hover{filter:brightness(1.2)}
           <h2 id="view-title">All deals</h2>
           <p>Live sync with Airtable — you and Sal always see the same book</p>
         </div>
+        <div id="claw-alert" onclick="setView('clawback')" title="Deals whose clawback window closes within 7 days — decide before they age out" style="display:none;cursor:pointer;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);font-size:13px;font-weight:700"></div>
         <div class="btn-row">
           <input type="file" id="crm-file" accept=".csv" style="display:none" onchange="closeCrmModal();importCrmExport(this.files[0])"><button class="btn btn-green" style="box-shadow:0 0 0 1.5px rgba(80,200,120,.55)" onclick="openCrmModal()" title="The preferred way to add deals — the end-of-day CRM deals export. Cleaner data, industry + owner contact included.">⭐ Import CRM export</button>
           <button class="btn btn-blue" onclick="openModal()">➕ Add manually</button>
@@ -939,7 +940,7 @@ function bounceBadges(d){
 // (3 bounces = still working it; the 4th = there's a problem). 2–3 bounces in the last 5 days of
 // that window get a softer "window closing" warning. Beacon and Master Sheet compute this the same
 // way; Master Sheet owns the resolution (CLAWED/DISMISSED/FORCED) written to the deal.
-const CLAW_WINDOW=30, CLAW_TRIGGER=4, CLAW_WARN_MIN=2, CLAW_WARN_DAYS=5;
+const CLAW_WINDOW=30, CLAW_TRIGGER=4, CLAW_WARN_MIN=1, CLAW_WARN_DAYS=7;
 function msTodayYMD(){ return new Date().toISOString().slice(0,10); }
 function daysBetweenYMD(a,b){ if(!a||!b) return null; const d=(new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000; return Math.round(d); }
 // returns 'eligible' | 'warning' | null
@@ -964,6 +965,7 @@ function clawbackTier(d){
   return null;
 }
 function clawDaysLeft(d){ const age=daysBetweenYMD(d.date_funded, msTodayYMD()); return Math.max(0, CLAW_WINDOW-(age==null?CLAW_WINDOW:age)); }
+function clawClosingSoon(){ return deals.filter(d=>{ const t=clawbackTier(d); return (t==='eligible'||t==='warning') && clawDaysLeft(d)<=CLAW_WARN_DAYS; }).length; }
 function clawbackTag(d){
   const t=clawbackTier(d);
   if(t==='eligible') return `<span class="claw-tag" title="Clawback eligible — a 4th bounce OR a stop payment within 30 days of funding. ${fmt$(d.comm_amount||0)} commission recoverable from ${esc0(d.rep)||'the rep'}.">⏪ Clawback</span>`;
@@ -2062,6 +2064,8 @@ function renderMetrics(){
   document.getElementById('pif-badge').textContent=pifs.length;
   document.getElementById('default-badge').textContent=defs.length;
   document.getElementById('clawback-badge').textContent=deals.filter(d=>clawbackTier(d)==='eligible').length;
+  { const closing=clawClosingSoon(), ca=document.getElementById('claw-alert');
+    if(ca){ if(closing>0){ ca.style.display='inline-flex'; ca.textContent='⚠ '+closing+' clawback'+(closing===1?'':'s')+' closing \u22647d'; } else ca.style.display='none'; } }
   allocBadge();
   const pnlEl=document.getElementById('m-pnl');
   pnlEl.textContent=fmtK(totalPNL);

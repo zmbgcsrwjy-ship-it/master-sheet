@@ -785,9 +785,9 @@
   .wk-board-name { color: var(--sev-wkly) !important; font-weight: 700 !important; }
   .mname-click { cursor: pointer; }
   .mname-click:hover { text-decoration: underline; text-underline-offset: 2px; }
-  .minfo-expand { background: var(--surface-2) !important; border-left: 4px solid var(--sev-wkly) !important; }
+  .minfo-expand { background: var(--surface-2) !important; border-left: 3px solid var(--border-strong) !important; }
   .minfo-expand td { padding: 14px 18px !important; }
-  .minfo-panel { display: block; }
+  .minfo-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
   .minfo-panel .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 6px; }
   .minfo-panel .minfo-line { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 13px; color: var(--text); }
   .minfo-panel .minfo-item { white-space: nowrap; }
@@ -1222,10 +1222,11 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v108 · live</span>
+    <span class="build-tag">v110 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
+  <div id="bx-claw-alert" title="Deals whose clawback window closes within 7 days — claw them from the Master Sheet before they age out" style="display:none;flex-direction:column;gap:2px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.14);color:#f5b23c;border:1px solid rgba(245,158,11,.42);font-size:12px;font-weight:700;margin-bottom:16px;line-height:1.4"></div>
   <div class="watch-list">
     <div class="watch-list-header">
       <span class="watch-list-title">Watch List</span>
@@ -1674,7 +1675,7 @@ function bDisp(iso){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date
 function bParseNotePayload(note){ try{ const j=JSON.parse(note); return (j&&j.v===1)?j:null; }catch(e){ return null; } }
 
 // ---------- CLAWBACK (v86) — display-only; Master Sheet owns the resolution ----------
-var BCLAW_WINDOW=30, BCLAW_TRIGGER=4, BCLAW_WARN_MIN=2, BCLAW_WARN_DAYS=5;
+var BCLAW_WINDOW=30, BCLAW_TRIGGER=4, BCLAW_WARN_MIN=1, BCLAW_WARN_DAYS=7;
 function bDaysBetween(a,b){ if(!a||!b) return null; return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000); }
 function beaconClawTier(m){
   const st=String(m.clawback_state||'').toUpperCase();
@@ -2300,14 +2301,14 @@ function showMerchantInfo(leadId){
   if(m.owner_email) c.push('<span class="minfo-item"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a></span>');
   const contactHtml = '<div class="minfo-section">Contact</div><div class="minfo-line">' + (c.length ? c.join('<span class="minfo-dot">·</span>') : '<span class="minfo-empty">No contact saved on the Master Sheet for this deal.</span>') + '</div>';
   const notes = (m.notes_log || []).filter(e => e.text && e.text.trim()).sort((a,b) => b.date_iso.localeCompare(a.date_iso));
-  const notesHtml = '<div class="minfo-section" style="margin-top:12px">Notes</div>' + (notes.length
+  const notesHtml = '<div class="minfo-section">Notes</div>' + (notes.length
     ? notes.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date_iso) + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('')
     : '<div class="minfo-empty">No notes logged yet.</div>');
   const colspan = parent.children.length;
   const exp = document.createElement('tr');
   exp.className = 'minfo-expand';
   exp.dataset.parentId = leadId;
-  exp.innerHTML = '<td colspan="' + colspan + '"><div class="minfo-panel">' + contactHtml + notesHtml + '</div></td>';
+  exp.innerHTML = '<td colspan="' + colspan + '"><div class="minfo-panel"><div>' + contactHtml + '</div><div>' + notesHtml + '</div></div></td>';
   parent.parentNode.insertBefore(exp, parent.nextSibling);
   parent.classList.add('minfo-open');
 }
@@ -2349,7 +2350,7 @@ function origReturnCode(m) {
   return m.return_code || m.original_return_code || '';
 }
 function isWeeklyDeal(m) {
-  return origFreq(m) === 'Weekly';
+  return origFreq(m) === 'Weekly' || (m._freqField || '') === 'Weekly' || (m.original_freq || '') === 'Weekly';
 }
 
 // Snapshot original bounce context onto the merchant when a resolution is set.
@@ -2550,12 +2551,13 @@ function getWatchList() {
     // it's resolved, so it stays on radar before the next weekly hits.
     if (!m.resolution_type && !hasOpenLegalCase(m.lead_id) && isWeeklyDeal(m)) {
       const wkBounces = collectMerchantBounces(m, false); // all bounces — the deal is already confirmed weekly
-      if (wkBounces.length >= 1) {
-        const last = wkBounces[wkBounces.length - 1];
-        const lastDate = new Date(last.date + "T00:00:00");
+      const n = wkBounces.length || (m.bounced_today ? 1 : 0);   // today's bounce may not be in history yet
+      if (n >= 1) {
+        const lastDateStr = wkBounces.length ? wkBounces[wkBounces.length - 1].date : (STATS.date_iso || bLocalToday());
+        const lastDate = new Date(lastDateStr + "T00:00:00");
         const daysAgo = bdDiff(lastDate, todayDate);
         if (daysAgo <= 45) {
-          active.push({ m, reason: 'unresolved-weekly', label: 'WEEKLY BOUNCE · ' + wkBounces.length + ' missed', sortAge: daysAgo });
+          active.push({ m, reason: 'unresolved-weekly', label: 'WEEKLY BOUNCE · ' + n + ' missed', sortAge: daysAgo });
           continue;
         }
       }
@@ -3115,6 +3117,22 @@ function renderForDate() {
 
 function renderSidebar() {
   const watch = getWatchList();
+  // Clawback closing-soon heads-up (Beacon can't claw — it points you to the Master Sheet)
+  const alertEl = document.getElementById('bx-claw-alert');
+  if (alertEl) {
+    let closing = 0;
+    for (const m of state) {
+      const t = beaconClawTier(m);
+      if (t !== 'eligible' && t !== 'warning') continue;
+      const dl = Math.max(0, BCLAW_WINDOW - (bDaysBetween(m.funded, bLocalToday()) || BCLAW_WINDOW));
+      if (dl <= BCLAW_WARN_DAYS) closing++;
+    }
+    if (closing > 0) {
+      alertEl.style.display = 'flex';
+      alertEl.innerHTML = '\u23ea ' + closing + ' clawback' + (closing===1?'':'s') + ' closing \u22647d' +
+        '<span style="font-weight:500;font-size:10.5px;opacity:0.85">Claw them in the Master Sheet before they age out</span>';
+    } else alertEl.style.display = 'none';
+  }
   
   // Render each tier
   renderWatchTier('hot', watch.hot);
