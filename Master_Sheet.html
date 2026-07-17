@@ -307,7 +307,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="All Deals: clawed-back deals now keep a green ✓ Clawed tag. PNL: the clawback income row and the kickback-reversal row now list each clawed deal by name and amount.">build 87</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL: clawed deal names under the kickback-reversal and clawback rows now render as their own white rows, stacked, like the kickback list.">build 88</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2351,7 +2351,7 @@ function clawedDealsForMonth(month){
 }
 function pnlRowsHtml(p){
   const sec=(label,cls)=>`<tr><td colspan="7" class="pnl-sec ${cls}">${label}</td></tr>`;
-  const nameLine=(items)=>items.length?`<tr><td colspan="7" style="color:var(--text3);font-size:11px;padding:2px 10px 6px 22px">↳ ${items.join('&nbsp;&nbsp;·&nbsp;&nbsp;')}</td></tr>`:'';
+  const clawRow=(name,amt,red)=>`<tr><td style="padding-left:22px;color:var(--text);font-weight:500">${name}</td>${money(amt,red)}<td></td><td></td><td></td><td></td><td></td></tr>`;
   const clawedList=clawedDealsForMonth(p.month);
   const money=(v,red)=>`<td class="${red||(v<-0.005)?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
   const moneyDiv=(v,red)=>`<td class="pnl-div ${red||(v<-0.005)?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
@@ -2378,14 +2378,14 @@ function pnlRowsHtml(p){
   if(!p.kicks.length) h+='<tr><td colspan="7" style="color:var(--text3)">No undistributed kickbacks.</td></tr>';
   p.kicks.forEach(k=>{ const dt=k.date?`<span style="color:var(--text3);font-weight:400">${fmtDate(k.date)}</span>&nbsp;&nbsp;`:''; h+=`<tr><td style="font-weight:600">${dt}${k.label}</td>${money(k.amount)}${money(k.amount)}<td>—</td>${money(k.amount)}${moneyDiv(k.amount/2)}${money(k.amount/2)}</tr>`; });
   if(kickbackClaw>0) h+=`<tr><td style="font-weight:600">Kickback clawed back (${monthLabelFull(p.month)})</td>${money(-kickbackClaw,true)}${money(-kickbackClaw,true)}<td>—</td>${money(-kickbackClaw,true)}${moneyDiv(-kickbackClaw/2,true)}${money(-kickbackClaw/2,true)}</tr>`;
-  if(kickbackClaw>0) h+=nameLine(clawedList.filter(c=>c.kb>0).map(c=>`${c.name} <span style="color:var(--red)">${fmt$(-c.kb)}</span>`));
+  if(kickbackClaw>0) h+=clawedList.filter(c=>c.kb>0).map(c=>clawRow(c.name,-c.kb,true)).join('');
   h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-yellow');
   h+=`<tr><td style="font-weight:600">FF due (${monthLabelFull(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${moneyDiv(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
   h+=sec('LEGAL FEES — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-red');
   h+=`<tr><td style="font-weight:600">Legal (${monthLabelFull(p.month)})</td>${money(-legalTotal,legalTotal>0)}${money(-legalOurEnd,legalOurEnd>0)}<td>—</td>${money(-legalOurEnd,legalOurEnd>0)}${moneyDiv(-legalOurEnd/2,legalOurEnd>0)}${money(-legalOurEnd/2,legalOurEnd>0)}</tr>`;
   h+=sec('CLAWBACKS — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-teal');
   h+=`<tr><td style="font-weight:600">Clawback (${monthLabelFull(p.month)})</td>${money(clawbackTotal)}${money(clawbackOurEnd)}<td>—</td>${money(clawbackOurEnd)}${moneyDiv(clawbackOurEnd/2)}${money(clawbackOurEnd/2)}</tr>`;
-  h+=nameLine(clawedList.map(c=>`${c.name} <span style="color:#5eead4">${fmt$(c.bc)}</span>`));
+  h+=clawedList.map(c=>clawRow(c.name,c.bc,false)).join('');
   h+=`<tr><td style="font-weight:800;background:var(--bg3)">PAYOUT</td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td class="pnl-div ${nz(p.each)?(p.each>0?'pnl-pos':'pnl-neg'):''}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td><td class="${nz(p.each)?(p.each>0?'pnl-pos':'pnl-neg'):''}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td></tr>`;
   return h;
 }
