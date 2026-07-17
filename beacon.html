@@ -514,6 +514,7 @@
   .cal-tag { display:inline-block; padding:1px 6px; border-radius:9px; font-size:9.5px; font-weight:700; line-height:1.45; letter-spacing:.02em; white-space:nowrap; }
   .cal-tag-stop { background: rgba(229,83,75,.18);   color:#ff8079; }
   .cal-tag-weekly { background: rgba(197,138,224,.20); color: var(--sev-wkly); }
+  .cal-tag-nexthit { background: rgba(91,157,255,.18); color: #5b9dff; }
   
   /* Heatmap red — only revocations drive it */
   .cal-cell.heat-1 { background: #FCEFEF; }
@@ -1222,7 +1223,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v111 · live</span>
+    <span class="build-tag">v112 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1362,6 +1363,7 @@
       <th class="ctr" style="width:6%">% Paid</th>
       <th class="ctr" style="width:9%">Balance</th>
       <th class="ctr" style="width:7%">Days delinq</th>
+      <th class="ctr" style="width:5%">Consec</th>
       <th class="ctr" style="width:5%">MTD</th>
       <th class="ctr" style="width:7%">Last pay</th>
       <th class="ctr" style="width:8%">REP</th>
@@ -1728,7 +1730,7 @@ function beaconReconstruct(raw, todayISO){
       lead_id: lid, name: f.Merchant||'', status: f.Status||'ACTIVE',
       funded: f.DateFunded||'', balance: Number(f.Balance)||0, pct_paid: pct,
       paid_today: Number(f.PaidToday)||0, paid_mtd: Number(f.PaidMTD)||0, last_cleared: (f.LastCleared||'').slice(0,10),
-      bounced_today:false, bounce_amt:0, bounce_type:'', return_code:'', freq:'',
+      bounced_today:false, bounce_amt:0, bounce_type:'', return_code:'', freq:f.Frequency||'',
       mtd_bounces:0, days_delinq:0, streak_len:0, severity_rank:100, sev_class:'none',
       group_order:99, last_pull:'', bucket:(f.Status==='DEFAULT'?'DEFAULT':'ACTIVE'),
       hit_date:'', return_date:'', contacted_today:false, contact_time:'',
@@ -1912,7 +1914,7 @@ function beaconReconstruct(raw, todayISO){
     }
     delete m._openStopCandidate;
   });
-  merchants.forEach(m=>{ delete m._freqField; });
+  // (keep _freqField — isWeeklyDeal relies on it for deals that bounced earlier in the week)
   return {state:merchants, history:historyOut, legalCases:legalCasesOut, STATS:statsOut, TODAY_ISO:today, noteRidMap};
 }
 
@@ -2402,6 +2404,18 @@ function hasOpenLegalCase(leadId) {
 }
 
 // Compute resumes scheduled for a given date (from current state + historical resume notes)
+function nextHitsOn(iso) {
+  // For a weekly deal we spoke to, project the next weekly pull (same weekday, +7d) so we can watch for it.
+  return state.filter(m => {
+    if (m.resolution_type !== 'spoke') return false;
+    if (!isWeeklyDeal(m)) return false;
+    const bd = m._bounceDates || [];
+    if (!bd.length) return false;
+    let nd = new Date(bd[bd.length-1] + "T00:00:00");
+    while (nd.toISOString().slice(0,10) < TODAY_ISO) nd.setDate(nd.getDate() + 7);
+    return nd.toISOString().slice(0,10) === iso;
+  }).map(m => ({ name: m.name, lead_id: m.lead_id, balance: m.balance }));
+}
 function resumesOn(iso) {
   const list = state.filter(m => 
     (m.resolution_type === 'paused' || m.resolution_type === 'lowered') && 
@@ -2883,6 +2897,7 @@ function renderCalendar() {
     
     const dayHist = history[iso];
     const dayResumes = resumesOn(iso);
+    const dayNextHits = nextHitsOn(iso);
     const isFuture = new Date(iso) > new Date(TODAY_ISO);
     const isTodayCell = iso === TODAY_ISO;
     // Weekend detection — using local date construction to avoid TZ shift
@@ -2890,10 +2905,10 @@ function renderCalendar() {
     const dow = dateObj.getDay(); // 0 = Sun, 6 = Sat
     const isWeekend = (dow === 0 || dow === 6);
     // A cell has "data" if there's history OR it's today OR there are resumes (past or future)
-    const hasData = !!dayHist || isTodayCell || dayResumes.length > 0;
+    const hasData = !!dayHist || isTodayCell || dayResumes.length > 0 || dayNextHits.length > 0;
     
     if (isWeekend) cell.classList.add("weekend");
-    else if (isFuture && dayResumes.length === 0) cell.classList.add("future");
+    else if (isFuture && dayResumes.length === 0 && dayNextHits.length === 0) cell.classList.add("future");
     else if (!hasData) cell.classList.add("no-data");
     if (iso === viewDate) cell.classList.add("selected");
     if (isTodayCell) cell.classList.add("today");
@@ -2922,6 +2937,13 @@ function renderCalendar() {
       pill.textContent = dayResumes.length + " resume";
       _tags.appendChild(pill);
     }
+    if (!isWeekend && dayNextHits.length > 0) {
+      const nh = document.createElement("span");
+      nh.className = "cal-tag cal-tag-nexthit";
+      nh.textContent = dayNextHits.length + " next hit";
+      nh.title = 'Next expected weekly pull (spoke to) — ' + dayNextHits.map(x=>x.name).join(', ');
+      _tags.appendChild(nh);
+    }
     if (!isWeekend && dayHist && dayHist.stats) {
       const stp = dayHist.stats.stop_count_today || 0;
       if (stp > 0) {
@@ -2936,7 +2958,8 @@ function renderCalendar() {
         const w = document.createElement("span");
         w.className = "cal-tag cal-tag-weekly";
         w.textContent = wk + " weekly";
-        w.title = wk + " weekly-payment bounce" + (wk===1?"":"s") + " this day";
+        const wkNames = (dayHist.bounce_events||[]).filter(e=>e._weekly && !e._carriedStop).map(e=>e.name).filter(Boolean);
+        w.title = wkNames.length ? ('Weekly bounce — ' + wkNames.join(', ')) : (wk + " weekly-payment bounce" + (wk===1?"":"s") + " this day");
         _tags.appendChild(w);
       }
     }
@@ -2953,7 +2976,7 @@ function renderCalendar() {
     
     
     // Click handler — clickable if has data, not a weekend, not a future-no-resume day
-    if (!isWeekend && hasData && !(isFuture && dayResumes.length === 0)) {
+    if (!isWeekend && hasData && !(isFuture && dayResumes.length === 0 && dayNextHits.length === 0)) {
       cell.addEventListener("click", () => selectDate(iso));
     }
     // Hover tooltip — fires for cells with scheduled resumes OR stops on that day
@@ -4042,7 +4065,7 @@ function renderMainTable() {
       if (currentSev !== null) {
         const gap = document.createElement("tr");
         gap.className = "group-spacer";
-        gap.innerHTML = '<td colspan="11"></td>';
+        gap.innerHTML = '<td colspan="12"></td>';
         body.appendChild(gap);
       }
       currentSev = sevKey;
@@ -4063,7 +4086,7 @@ function renderMainTable() {
       const hiddenSuffix = (hidden && hidden.count > 0)
         ? '<span class="sep-hidden-flag" title="Toggle \'show already-handled\' to see these">· ' + hidden.count + ' already-handled hidden</span>'
         : '';
-      sep.innerHTML = '<td colspan="11">' + SEV_LABELS_LOCAL[currentSev] + '<span class="sep-count">' + count + ' merchant' + (count===1?'':'s') + ' · ' + fmt$(exp) + ' exposure · ' + fmt$(dollars) + ' bounced ' + labelDate + '</span>' + hiddenSuffix + '</td>';
+      sep.innerHTML = '<td colspan="12">' + SEV_LABELS_LOCAL[currentSev] + '<span class="sep-count">' + count + ' merchant' + (count===1?'':'s') + ' · ' + fmt$(exp) + ' exposure · ' + fmt$(dollars) + ' bounced ' + labelDate + '</span>' + hiddenSuffix + '</td>';
       body.appendChild(sep);
     }
     body.appendChild(buildRow(m, today));
@@ -4076,7 +4099,7 @@ function renderMainTable() {
   
   if (events.length === 0) {
     const tr = document.createElement("tr");
-    tr.innerHTML = '<td colspan="11" style="padding: 24px; text-align: center; color: var(--text-2);">' + (today ? "No bounces today. Book is clean." : "No bounces on " + fmtLongDate(viewDate) + ".") + '</td>';
+    tr.innerHTML = '<td colspan="12" style="padding: 24px; text-align: center; color: var(--text-2);">' + (today ? "No bounces today. Book is clean." : "No bounces on " + fmtLongDate(viewDate) + ".") + '</td>';
     body.appendChild(tr);
   }
 }
@@ -4141,7 +4164,7 @@ function buildBrokenContextRow(m) {
                        m.resolution_type === 'lowered' ? 'Was lowered to $' + (m.lowered_amount || 0).toFixed(0) + '/day' :
                        prettyResType(m.resolution_type);
   
-  const cells = '<td colspan="11"><div class="broken-context">' +
+  const cells = '<td colspan="12"><div class="broken-context">' +
     '<div class="broken-context-grid">' +
       '<div class="bc-cell"><span class="bc-label">Promise</span><span class="bc-value bc-promise">' + promiseLabel + '</span></div>' +
       '<div class="bc-cell"><span class="bc-label">Made on</span><span class="bc-value">' + fmtDate(m.resolution_date) + '</span></div>' +
@@ -4269,6 +4292,7 @@ function buildRow(m, editable) {
     '<td class="ctr">' + fmtPct(m.pct_paid) + '</td>' +
     '<td class="ctr balance-cell">' + fmt$(m.balance) + '</td>' +
     '<td class="ctr">' + (m.days_delinq || '—') + '</td>' +
+    '<td class="ctr">' + (m.streak_len >= 5 ? '<span style="color:var(--sev-broken);font-weight:800">' + m.streak_len + '</span>' : (m.streak_len || '—')) + '</td>' +
     '<td class="ctr">' + (m.mtd_bounces || 0) + '</td>' +
     '<td class="ctr secondary">' + fmtDate(m.last_pull) + '</td>' +
     '<td class="ctr secondary">' + shortRep(m.rep) + '</td>' +
