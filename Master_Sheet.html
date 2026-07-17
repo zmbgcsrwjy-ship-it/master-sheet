@@ -306,7 +306,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback: widened the warning to 1+ bounce within the final 7 days of the window, and added a proactive closing-soon pill in the topbar (click to jump to the Clawback tab) so eligible/warning deals about to age out do not get missed.">build 85</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Bounce tags: legal pill now red (purple reserved for weekly), bouncing blue / red on a stop payment, resume green + lowered teal, pill tooltip shows resume date / lowered detail (from Beacon via CollectionsDetail); clawback tab shows weekly deals in purple.">build 86</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -738,6 +738,7 @@ const REQUIRED_FIELDS = [
   {name:'Merchant',    type:'singleLineText'},
   {name:'ClawbackState', type:'singleLineText'},
   {name:'ClawedInfo', type:'singleLineText'},
+  {name:'CollectionsDetail', type:'singleLineText'},
   {name:'DateFunded',  type:'date', options:{dateFormat:{name:'iso'}}},
   {name:'Funded',      type:'number', options:{precision:2}},
   {name:'RTR',         type:'number', options:{precision:2}},
@@ -887,6 +888,7 @@ function fieldsToDeal(id, f) {
     owner_phone:  f.OwnerPhone   || '',
     notes:        f.Notes        || '',
     collections_state: f.CollectionsState || '',   // Beacon-owned — Master Sheet only displays it
+    collections_detail: f.CollectionsDetail || '', // Beacon-owned — resume date / lowered detail, for the pill tooltip
     clawback_state: f.ClawbackState || '',          // clawback lifecycle: '' | FORCED | CLAWED | DISMISSED
     clawed_info: f.ClawedInfo || ''                  // JSON {m,bc,kb} of the claw booking, for undo
   };
@@ -1450,8 +1452,18 @@ function hasContact(d){ return !!(d.industry||d.owner_name||d.owner_phone||d.own
 
 function csChip(d){
   const s=d.collections_state; if(!s||s==='OK') return '';
-  const col={'BOUNCING':'#e5534b','SUSPENDED':'#d4a72c','RESUME SCHEDULED':'#539bf5','LEGAL':'#986ee2'}[s]||'#888';
-  return `<span title="Collections (Beacon): ${s}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:#fff;background:${col};vertical-align:middle;white-space:nowrap">${s==='RESUME SCHEDULED'?'RESUME SCHED':s}</span>`;
+  const hasStop = bounceByLead[d.lead_id] && bounceByLead[d.lead_id].hasStop;
+  let col;
+  if(s==='LEGAL') col='#e5534b';                                  // red — legal (purple is reserved for weekly deals)
+  else if(s==='BOUNCING') col = hasStop ? '#e5534b' : '#539bf5';  // red if a stop payment, else blue
+  else if(s==='SUSPENDED') col='#d4a72c';                         // gold
+  else if(s==='RESUME SCHEDULED') col='#3fb950';                  // green — resuming
+  else if(s==='LOWERED') col='#2dd4bf';                           // teal — lowered
+  else col='#888';
+  const detail = d.collections_detail || '';
+  const tip = 'Collections (Beacon): ' + s + (detail ? ' — ' + detail : '') + (s==='BOUNCING'&&hasStop?' (stop payment)':'');
+  const label = s==='RESUME SCHEDULED'?'RESUME SCHED':s;
+  return `<span title="${tip}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:#fff;background:${col};vertical-align:middle;white-space:nowrap">${label}</span>`;
 }
 async function setDealStatus(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
@@ -1733,7 +1745,7 @@ function renderClawedTable(){
     const codeHtml = bcodes.length ? bcodes.map(c=>STOP_RCODES.includes(c)?`<span style="color:var(--red);font-weight:600">${c}</span>`:c).join(' ') : '—';
     return `<tr>
       <td style="color:var(--text3)">${fmtDate(d.date_funded)}</td>
-      <td style="font-weight:600">${d.merchant}</td>
+      <td style="font-weight:600">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}</td>
       <td style="color:var(--text2)">${d.rep||'—'}</td>
       <td style="color:var(--text2)">${d.iso||'—'}</td>
       <td style="color:#5eead4;font-weight:600">${fmt$((d.comm_amount||0)*(d.book_pct||100)/100)}</td>
@@ -1768,7 +1780,7 @@ function renderClawback(){
       : `<button class="btn btn-sm" style="border:1px dashed rgba(45,212,191,.5);color:#7fded0" onclick="forceClawback('${esc(d._id)}')" title="Promote to eligible now — for a deal you already know is dead, before a 4th bounce lands">Claw it now</button> <button class="btn btn-sm" onclick="dismissClawback('${esc(d._id)}')">Dismiss</button>`;
     return `<tr>
       <td style="color:var(--text3)">${fmtDate(d.date_funded)}</td>
-      <td style="font-weight:600">${d.merchant}</td>
+      <td style="font-weight:600">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}</td>
       <td style="color:var(--text2)">${d.rep||'—'}</td>
       <td style="color:var(--text2)">${d.iso||'—'}</td>
       <td style="color:#5eead4;font-weight:600">${fmt$((d.comm_amount||0)*(d.book_pct||100)/100)}</td>

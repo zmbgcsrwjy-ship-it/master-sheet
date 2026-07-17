@@ -1222,7 +1222,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v110 · live</span>
+    <span class="build-tag">v111 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1645,6 +1645,13 @@ async function beaconPreflight(){
       else { await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables/'+dt.id+'/fields', {method:'POST', body:{name:'LastCleared', type:'date', options:{dateFormat:{name:'iso'}}}}); bLcOk=true; }
     }
   }catch(e){ bLcOk=false; }
+  // ensure Deals.CollectionsDetail exists so we can hand the resume-date / lowered detail to the Master Sheet tooltip
+  try{
+    const dtc = meta.tables.find(x=>x.name==='Deals');
+    if(dtc && !(dtc.fields||[]).some(f=>f.name==='CollectionsDetail')){
+      await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables/'+dtc.id+'/fields', {method:'POST', body:{name:'CollectionsDetail', type:'singleLineText'}});
+    }
+  }catch(e){}
   const onPhoenix = BEACON_CFG.baseId === PHOENIX_BASE_ID;
   const problems = [];
   for (const tName of Object.keys(BEACON_MANIFEST)){
@@ -1987,7 +1994,7 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
     const rid=rec.fields.Deal&&rec.fields.Deal[0]; if(!rid) continue;
     const m=merchants.find(x=>x._rid===rid); if(!m) continue;
     const cur=m._collectionsState||'';
-    if (!protect.has(cur) && !m.resolution_type) patches.push({id:rid, fields:{'CollectionsState':'BOUNCING'}});
+    if (!protect.has(cur) && !m.resolution_type) patches.push({id:rid, fields:{'CollectionsState':'BOUNCING', 'CollectionsDetail':''}});
   }
   const seen=new Set(); const dedup=patches.filter(p=>!seen.has(p.id)&&seen.add(p.id));
   if (dedup.length) await atPatch('Deals', dedup);
@@ -1998,8 +2005,14 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
 function beaconCollectionsStateFor(m){
   if (m.resolution_type==='legal') return 'LEGAL';
   if (m.resolution_type==='paused') return m.resume_date ? 'RESUME SCHEDULED' : 'SUSPENDED';
-  if (m.resolution_type==='spoke'||m.resolution_type==='lowered') return 'OK';
+  if (m.resolution_type==='lowered') return 'LOWERED';
+  if (m.resolution_type==='spoke') return 'OK';
   return m.bounced_today ? 'BOUNCING' : 'OK';
+}
+function beaconCollectionsDetailFor(m){
+  if (m.resolution_type==='paused' && m.resume_date){ const d=m.resume_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Resume '+md; }
+  if (m.resolution_type==='lowered' && m.lowered_amount) return 'Lowered to $'+Number(m.lowered_amount).toLocaleString()+'/day';
+  return '';
 }
 async function beaconPushResolution(m, todayISO){
   const typeMap={spoke:'Spoke to', lowered:'Lowered', paused:'Suspend Payment', legal:'Legal'};
@@ -2011,12 +2024,12 @@ async function beaconPushResolution(m, todayISO){
     'By': BEACON_CFG.user };
   if (m.resume_date) fields['Resume Date']=m.resume_date;
   await atCreate('Actions',[{fields}]);
-  await atPatch('Deals',[{id:m._rid, fields:{'CollectionsState':beaconCollectionsStateFor(m)}}]);
+  await atPatch('Deals',[{id:m._rid, fields:{'CollectionsState':beaconCollectionsStateFor(m), 'CollectionsDetail':beaconCollectionsDetailFor(m)}}]);
 }
 async function beaconPushClear(m, todayISO){
   await atCreate('Actions',[{fields:{ 'Action':'CLEARED — '+m.name+' — '+todayISO, 'Deal':[m._rid],
     'When':todayISO+'T17:00:00.000Z', 'Type':'Note', 'Note':JSON.stringify({v:1,kind:'clear'}), 'By':BEACON_CFG.user }}]);
-  await atPatch('Deals',[{id:m._rid, fields:{'CollectionsState':beaconCollectionsStateFor(m)}}]);
+  await atPatch('Deals',[{id:m._rid, fields:{'CollectionsState':beaconCollectionsStateFor(m), 'CollectionsDetail':beaconCollectionsDetailFor(m)}}]);
 }
 async function beaconPushNote(m, todayISO, noteRidMap){
   const entry=(m.notes_log||[]).find(e=>e.date_iso===todayISO);
