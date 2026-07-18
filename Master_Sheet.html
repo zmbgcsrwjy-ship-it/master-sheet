@@ -159,6 +159,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .claw-tag{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(45,212,191,.16);color:#5eead4;border:1px solid rgba(45,212,191,.55);margin-left:6px;vertical-align:middle;font-weight:600}
 .claw-tag-warn{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:3px;background:transparent;color:#7fded0;border:1px dashed rgba(45,212,191,.55);margin-left:6px;vertical-align:middle;font-weight:600}
 .claw-tag-done{background:var(--green-bg)!important;color:var(--green)!important;border:1px solid var(--green-border)!important}
+.claw-pin{position:absolute;left:180px;top:50%;transform:translateY(-50%);cursor:pointer;line-height:0}
 .pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
 .wk-name{color:var(--wk-purple);font-weight:700}
 
@@ -307,7 +308,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Reverted the merchant column to build 88 — clawback tag inline after the name, no width block.">build 92</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="All Deals: clawback tags pinned at a fixed spot (absolute, no layout change) so they line up in a column, and are now clickable buttons that open the Clawback tab.">build 93</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -970,11 +971,14 @@ function clawbackTier(d){
 function clawDaysLeft(d){ const age=daysBetweenYMD(d.date_funded, msTodayYMD()); return Math.max(0, CLAW_WINDOW-(age==null?CLAW_WINDOW:age)); }
 function clawClosingSoon(){ return deals.filter(d=>{ const t=clawbackTier(d); return (t==='eligible'||t==='warning') && clawDaysLeft(d)<=CLAW_WARN_DAYS; }).length; }
 function clawbackTag(d){
-  if((d.clawback_state||'').toUpperCase()==='CLAWED') return `<span class="claw-tag claw-tag-done" title="Commission clawed back — booked into that month's Clawback (flows to PNL, 50/50).">✓ Clawed</span>`;
-  const t=clawbackTier(d);
-  if(t==='eligible') return `<span class="claw-tag" title="Clawback eligible — a 4th bounce OR a stop payment within 30 days of funding. ${fmt$(d.comm_amount||0)} commission recoverable from ${esc0(d.rep)||'the rep'}.">⏪ Clawback</span>`;
-  if(t==='warning'){ const n=clawDaysLeft(d); return `<span class="claw-tag-warn" title="Window closing — ${n} day${n!==1?'s':''} left. 2–3 bounces so far; if it hits a 4th before the cutoff, the commission becomes clawback-eligible.">⏳ ${n}d to claw</span>`; }
-  return '';
+  let tag='';
+  if((d.clawback_state||'').toUpperCase()==='CLAWED') tag=`<span class="claw-tag claw-tag-done" title="Commission clawed back — booked into that month's Clawback (flows to PNL, 50/50).">✓ Clawed</span>`;
+  else { const t=clawbackTier(d);
+    if(t==='eligible') tag=`<span class="claw-tag" title="Clawback eligible — a 4th bounce OR a stop payment within 30 days of funding. ${fmt$(d.comm_amount||0)} commission recoverable from ${esc0(d.rep)||'the rep'}.">⏪ Clawback</span>`;
+    else if(t==='warning'){ const n=clawDaysLeft(d); tag=`<span class="claw-tag-warn" title="Window closing — ${n} day${n!==1?'s':''} left. 2–3 bounces so far; if it hits a 4th before the cutoff, the commission becomes clawback-eligible.">⏳ ${n}d to claw</span>`; }
+  }
+  if(!tag) return '';
+  return `<span class="claw-pin" onclick="event.stopPropagation();setView('clawback')">${tag}</span>`;
 }
 function esc0(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 async function loadDeals() {
@@ -1615,7 +1619,7 @@ function renderTable(){
     const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return`<tr class="${_break?'month-break':''}">
       <td style="color:var(--text3);font-size:11px;white-space:nowrap">${fmtDate(d.date_funded)}</td>
-      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}${isExternalFunder(d.funder)?' — participation in '+esc(d.funder)+"'s deal":''}">${isExternalFunder(d.funder)?'<span style="color:var(--peach)">'+d.merchant+'</span>':(d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant)}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}${clawbackTag(d)}</td>
+      <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;white-space:nowrap;position:relative;cursor:${hasContact(d)?'pointer':'default'}" title="${esc(d.merchant)}${hasContact(d)?' — click for owner contact':''}${isExternalFunder(d.funder)?' — participation in '+esc(d.funder)+"'s deal":''}">${isExternalFunder(d.funder)?'<span style="color:var(--peach)">'+d.merchant+'</span>':(d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant)}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}${isRenewal?'<span class="renew-tag">🔁 Refi</span>':''}${clawbackTag(d)}</td>
       <td style="color:var(--text2)">${fmt$(d.bank_fees)}</td>
       <td style="color:var(--text2)">${fmt$(d.comm_amount)}</td>
       <td style="font-size:11px;color:var(--text2);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.rep||'—'}</td>
