@@ -823,7 +823,7 @@
   
   .code-chip { display: inline-block; padding: 2px 7px; border-radius: 4px; background: var(--sev-stop-bg); color: var(--sev-stop); font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.03em; }
   .code-chip.epm { background: #EFEAE0; color: #5B3A0B; }
-  .streak-chip { display: inline-block; padding: 3px 9px; border-radius: 4px; background: #FBEAEA; color: #B7261C; font-size: 13px; font-weight: 800; margin-right: 8px; letter-spacing: 0.02em; }
+  .streak-chip { display: inline-block; padding: 2px 7px; border-radius: 4px; background: #FBEAEA; color: #B7261C; font-size: 11px; font-weight: 700; margin-right: 6px; letter-spacing: 0.02em; }
   .weekly-chip { display: inline-block; padding: 3px 9px; border-radius: 4px; background: #FBEAEA; color: #B7261C; font-size: 13px; font-weight: 800; margin-right: 8px; letter-spacing: 0.02em; }
   .inflight-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--good-bg); color: var(--good); font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.03em; border: 0.5px solid var(--good-bar); }
   .resolved-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--good-bg); color: var(--good); font-size: 11px; font-weight: 600; margin-right: 6px; border: 0.5px solid var(--good-bar); }
@@ -1225,7 +1225,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v113 · live</span>
+    <span class="build-tag">v115 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1999,6 +1999,15 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
     const m=merchants.find(x=>x._rid===rid); if(!m) continue;
     const cur=m._collectionsState||'';
     if (!protect.has(cur) && !m.resolution_type) patches.push({id:rid, fields:{'CollectionsState':'BOUNCING', 'CollectionsDetail':''}});
+  }
+  // Reconcile: ensure every resolved deal's CollectionsState reflects its resolution (fixes deals
+  // resolved before the state existed — e.g. lowered/reduced deals that never got the LOWERED state).
+  for (const m of merchants){
+    if (!m.resolution_type) continue;
+    const want = beaconCollectionsStateFor(m);
+    if (want && want !== 'OK' && (m._collectionsState||'') !== want){
+      patches.push({id:m._rid, fields:{'CollectionsState':want, 'CollectionsDetail':beaconCollectionsDetailFor(m)}});
+    }
   }
   const seen=new Set(); const dedup=patches.filter(p=>!seen.has(p.id)&&seen.add(p.id));
   if (dedup.length) await atPatch('Deals', dedup);
