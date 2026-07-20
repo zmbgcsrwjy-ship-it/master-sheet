@@ -1225,7 +1225,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v118 · live</span>
+    <span class="build-tag">v119 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3233,8 +3233,10 @@ function renderWatchTier(tier, items) {
     card.style.cursor = 'pointer';
     card.dataset.leadId = m.lead_id;  // for hover cross-highlight with bounce table
     card.addEventListener('click', () => {
-      const bd = m._bounceDates || [];
-      jumpToDate(bd.length ? bd[bd.length-1] : (m.resolution_date || TODAY_ISO));
+      const hist = collectMerchantBounces(m, false);   // history-based — matches the card's "last bounce" and includes missed-payment bounces not in _bounceDates
+      const target = hist.length ? hist[hist.length-1].date
+        : ((m._bounceDates||[]).slice(-1)[0] || m.resolution_date || TODAY_ISO);
+      jumpToDate(target);
     });
     
     // Detail line is reason-specific
