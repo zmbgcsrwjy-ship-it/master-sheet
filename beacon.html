@@ -1225,7 +1225,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v119 · live</span>
+    <span class="build-tag">v120 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3261,17 +3261,21 @@ function renderWatchTier(tier, items) {
         '<span>' + m.name + '</span>' +
         '<span class="watch-tag">' + it.label + '</span>' +
       '</div>' +
-      '<div class="watch-detail">' + detail + '</div>';
+      '<div class="watch-detail">' + detail + '</div>' +
+      ((!m.resolution_type || it.reason === 'broken-promise') ? sidebarActionBlock(m) : '');
+    const _ta = card.querySelector(".us-notes-ta");
+    if (_ta) _ta.addEventListener("input", onFieldChange);
     
-    card.addEventListener('click', () => {
-      // Jump to today and scroll to that merchant
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.us-actions, .us-notes-panel, .us-resolve-panel, button, input, textarea, label')) return;
+      // Jump to the day this deal last bounced (matches the card's "last bounce" date)
+      const hist = collectMerchantBounces(m, false);
+      const target = hist.length ? hist[hist.length-1].date : ((m._bounceDates||[]).slice(-1)[0] || m.resolution_date || TODAY_ISO);
       showTab('daily');
-      if (!isViewingToday()) {
-        viewDate = TODAY_ISO;
-        calMonth = TODAY_ISO.slice(0, 7);
-        renderCalendar();
-        renderForDate();
-      }
+      viewDate = target;
+      calMonth = target.slice(0, 7);
+      renderCalendar();
+      renderForDate();
       setTimeout(() => {
         const row = document.querySelector('tr[data-lead-id="' + m.lead_id + '"]:not(.row-expand)');
         if (row) {
@@ -3695,6 +3699,40 @@ function usToggleResolve(ev, leadId) {
       if (dr) dr.classList.remove("shown");
     }
   }
+}
+function usSpoke(ev, leadId){
+  ev.stopPropagation();
+  const m = state.find(x => x.lead_id === leadId); if(!m) return;
+  m.resolution_type = 'spoke'; m.resolution_date = TODAY_ISO; m.resume_date = ''; m.lowered_amount = 0;
+  beaconPushResolution(m, TODAY_ISO).catch(beaconWriteErr);
+  renderForDate(); renderSidebar(); renderCalendar();
+}
+function sidebarActionBlock(m){
+  return ''+
+    '<div class="us-actions">'+
+      '<button class="us-action-btn" onclick="usToggleNotes(event,'+m.lead_id+')">Note</button>'+
+      '<button class="us-action-btn primary" onclick="usToggleResolve(event,'+m.lead_id+')">Resolve</button>'+
+    '</div>'+
+    '<div class="us-notes-panel" id="us-notes-'+m.lead_id+'">'+ renderSidebarNotesEditor(m, "active") +'</div>'+
+    '<div class="us-resolve-panel" id="us-panel-'+m.lead_id+'">'+
+      '<button class="us-opt" onclick="usSpoke(event,'+m.lead_id+')">Spoke to merchant</button>'+
+      '<button class="us-opt legal" onclick="usOpenLegal(event,'+m.lead_id+')">Send to legal / collections…</button>'+
+      '<button class="us-opt" onclick="usShowDate(event,'+m.lead_id+',\'paused\')">Resume payment…</button>'+
+      '<button class="us-opt" onclick="usShowDate(event,'+m.lead_id+',\'lowered\')">Lowered payment…</button>'+
+      '<div class="us-date-row" id="us-date-row-'+m.lead_id+'">'+
+        '<label id="us-date-label-'+m.lead_id+'">Resume date</label>'+
+        '<div class="us-mini-cal" id="us-mini-cal-'+m.lead_id+'"></div>'+
+        '<input type="hidden" id="us-resume-'+m.lead_id+'" />'+
+        '<div class="us-lowered-amt-row" id="us-lowered-amt-row-'+m.lead_id+'">'+
+          '<label>New daily payment</label>'+
+          '<div class="amt-input-wrap"><span class="amt-prefix">$</span>'+
+            '<input type="number" id="us-lowered-amt-'+m.lead_id+'" placeholder="0.00" step="0.01" min="0.01" />'+
+          '</div>'+
+          '<div class="amt-hint" style="font-size:10px;color:var(--text-3);margin-top:4px;font-style:italic">amount to pull each business day until the original payment resumes</div>'+
+        '</div>'+
+        '<button class="us-confirm" id="us-confirm-'+m.lead_id+'" onclick="usConfirmDate(event,'+m.lead_id+')" disabled>Pick a date</button>'+
+      '</div>'+
+    '</div>';
 }
 function usOpenLegal(ev, leadId) {
   ev.stopPropagation();
