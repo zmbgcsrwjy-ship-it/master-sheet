@@ -192,7 +192,7 @@
     font-size: 12px;
     transition: all 0.15s;
   }
-  .watch-card:hover { box-shadow: var(--shadow-sm); transform: translateX(1px); }
+  .watch-card:hover { background: var(--surface-2); transition: background 0.14s ease; }
   .watch-card.hot { border-left-color: var(--sev-stop-bar); background: var(--sev-stop-tint); }
   .watch-card.hot:hover { background: var(--sev-stop-bg); }
   .watch-card.active-tier { border-left-color: var(--watch-active-bar); background: var(--watch-active-tint); }
@@ -251,7 +251,7 @@
   }
   .upcoming-resume-badge.weekly { background: var(--sev-wkly); }
   .sidebar-card { background: var(--surface); border: 0.5px solid var(--border); border-left: 3px solid var(--border-strong); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; font-size: 12px; box-shadow: var(--shadow-sm); transition: all 0.15s; }
-  .sidebar-card:hover { box-shadow: var(--shadow-md); transform: translateX(1px); }
+  .sidebar-card:hover { background: var(--surface-2); transition: background 0.14s ease; }
   .sidebar-card.broken { background: var(--sev-broken-bg); border-left-color: var(--sev-broken-bar); }
   .sidebar-card.stop { border-left-color: var(--sev-stop-bar); background: var(--sev-stop-tint); }
   .sidebar-card.stop:hover { background: var(--sev-stop-bg); }
@@ -347,6 +347,7 @@
   .bx-side-logo .sub { font-size: 11px; color: var(--text-2); display: block; margin-top: 4px; line-height: 1.35; }
   .bx-side-logo .build-tag { font-size: 11px; color: var(--text-2); display: block; margin-top: 4px; font-family: -apple-system, BlinkMacSystemFont, monospace; letter-spacing: 0.02em; }
   .layout.collapsed .bx-side-logo { display: none; }
+  .layout.collapsed #bx-claw-alert { display: none !important; }
   header.brief-header { display: flex; justify-content: flex-end; align-items: flex-end; gap: 24px; margin-bottom: 8px; }
   .brief-title h1 { 
     font-size: 34px; 
@@ -551,7 +552,15 @@
   .resumes-panel-header p { font-size: 12px; color: var(--text-2); margin: 0; }
   .resumes-list { display: flex; flex-direction: column; gap: 6px; }
   .minfo-expand-div { background: var(--surface-2); border: 0.5px solid var(--border-strong); border-left: 3px solid var(--border-strong); border-radius: 6px; padding: 12px 14px; margin: -2px 0 4px; }
-  .resume-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--surface); border: 0.5px solid var(--good-bar); border-radius: 6px; font-size: 13px; box-shadow: var(--shadow-sm); }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 8px; border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.28); }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  * { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+  .resume-item:hover { background: var(--surface-2); }
+  .resume-item { transition: background 0.14s ease; display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--surface); border: 0.5px solid var(--good-bar); border-radius: 6px; font-size: 13px; box-shadow: var(--shadow-sm); }
   .resume-item .res-name { font-weight: 600; flex: 1; }
   .resume-item .res-name-weekly { color: var(--sev-wkly); }
   .resume-item .res-weekly-icon {
@@ -840,14 +849,12 @@
      Soft accent outline + slight bg lift so the match is unmistakable without being jarring. */
   .watch-card.cross-highlight,
   .sidebar-card.cross-highlight {
-    outline: 2px solid var(--sev-new-bar);
-    outline-offset: -1px;
-    box-shadow: 0 0 0 4px rgba(67, 120, 187, 0.22);
-    transition: outline 0.08s, box-shadow 0.08s;
+    background: var(--surface-3);
+    transition: background 0.14s ease;
   }
   table.matrix tr.cross-highlight td {
-    background: var(--sev-new-bg) !important;
-    transition: background 0.08s;
+    background: var(--surface-2) !important;
+    transition: background 0.14s ease;
   }
   .freq-pill-editable { 
     cursor: pointer; 
@@ -1226,7 +1233,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v122 · live</span>
+    <span class="build-tag">v123 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
