@@ -1226,7 +1226,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v121 · live</span>
+    <span class="build-tag">v122 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3946,9 +3946,9 @@ function usConfirmDate(ev, leadId) {
   showToast(msg);
 }
 
-// Close any open sidebar resolve or notes panel when clicking outside an unresolved-stop card
+// Close any open sidebar resolve or notes panel when clicking outside a card that has one
 document.addEventListener("click", e => {
-  if (!e.target.closest(".sidebar-card.unresolved-stop")) {
+  if (!e.target.closest(".sidebar-card.unresolved-stop, .watch-card")) {
     document.querySelectorAll(".us-resolve-panel.shown").forEach(el => {
       el.classList.remove("shown");
       const dr = el.querySelector(".us-date-row");
