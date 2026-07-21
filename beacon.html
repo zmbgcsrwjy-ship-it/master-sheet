@@ -1234,7 +1234,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v125 · live</span>
+    <span class="build-tag">v126 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2345,14 +2345,24 @@ function fmt$(n) { if (n >= 1000) return "$" + Math.round(n).toLocaleString(); r
 function fmt$c(n) { return "$" + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); } // exact cents — for the bounce amount
 function bxFmtPhone(s){ var d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return d.length===10 ? '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6) : String(s||''); }
 function merchantInfoInnerHtml(m){
+  const legalCase = (typeof legalCases !== 'undefined') ? legalCases.find(x => x.lead_id === m.lead_id) : null;
   const c = [];
   if(m.owner_name)  c.push('<span class="minfo-item"><span class="minfo-lbl">Owner</span>' + m.owner_name + '</span>');
   if(m.owner_phone) c.push('<span class="minfo-item"><span class="minfo-lbl">Phone</span><a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a></span>');
   if(m.owner_email) c.push('<span class="minfo-item"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a></span>');
+  if(legalCase && legalCase.legal_company) c.push('<span class="minfo-item"><span class="minfo-lbl">Legal co.</span><span style="color:#FF6B61;font-weight:600">' + legalCase.legal_company + '</span></span>');
   const contactHtml = '<div class="minfo-section">Contact</div><div class="minfo-line">' + (c.length ? c.join('<span class="minfo-dot">·</span>') : '<span class="minfo-empty">No contact saved on the Master Sheet for this deal.</span>') + '</div>';
-  const notes = (m.notes_log || []).filter(e => e.text && e.text.trim()).sort((a,b) => b.date_iso.localeCompare(a.date_iso));
-  const notesHtml = '<div class="minfo-section">Notes</div>' + (notes.length
-    ? notes.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date_iso) + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('')
+  // Notes — general deal notes + the legal case history, joined into one timeline
+  const entries = (m.notes_log || []).filter(e => e.text && e.text.trim()).map(e => ({ date: e.date_iso, text: e.text, legal: false }));
+  if (legalCase && Array.isArray(legalCase.updates)) {
+    legalCase.updates.forEach(u => {
+      const t = [u.note, u.contact ? '→ ' + u.contact : '', u.method ? '(' + u.method + ')' : '', u.bounce_code ? '· ' + u.bounce_code : ''].filter(Boolean).join(' ');
+      if (t.trim()) entries.push({ date: u.date, text: t.trim(), legal: true });
+    });
+  }
+  entries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const notesHtml = '<div class="minfo-section">Notes' + (legalCase ? ' <span style="color:#FF6B61;font-weight:600">· incl. legal history</span>' : '') + '</div>' + (entries.length
+    ? entries.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date) + (e.legal ? ' <span style="color:#FF6B61">· legal</span>' : '') + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('')
     : '<div class="minfo-empty">No notes logged yet.</div>');
   return '<div>' + contactHtml + '</div><div>' + notesHtml + '</div>';
 }
@@ -5501,12 +5511,18 @@ function toggleCaseDetail(leadId) {
   const detail = document.createElement("tr");
   detail.className = "case-detail";
   detail.dataset.parentId = leadId;
-  const timelineHtml = (c.updates && c.updates.length > 0)
-    ? c.updates.slice().reverse().map(u => {
+  const _lm = state.find(x => x.lead_id === leadId);
+  const _tl = (c.updates || []).map(u => ({ u: u, date: u.date }));
+  if (_lm && Array.isArray(_lm.notes_log)) _lm.notes_log.filter(e => e.text && e.text.trim()).forEach(e => _tl.push({ note: e, date: e.date_iso }));
+  _tl.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  const timelineHtml = (_tl.length > 0)
+    ? _tl.map(it => {
+        if (it.note) {
+          return '<div class="timeline-entry"><div class="entry-date">' + fmtDate(it.date) + ' <span style="color:var(--text-3)">· note</span></div>' + escapeHtml(it.note.text || '') + '</div>';
+        }
+        const u = it.u;
         if (u.type === "notify") {
-          // Notify entries: distinct visual treatment, structured content
           const noteHtml = u.note ? '<div class="entry-note">' + escapeHtml(u.note) + '</div>' : '';
-          // Bounce code chip — shows WHY they were notified (the R-code or EPM)
           const codeName = u.bounce_code ? rcodeName(u.bounce_code) : "";
           const codeChip = u.bounce_code 
             ? '<span class="entry-code-chip" title="' + u.bounce_code + (codeName ? ' — ' + codeName : '') + '">' + u.bounce_code + (codeName ? ': ' + codeName : '') + '</span>'
