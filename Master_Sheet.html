@@ -307,7 +307,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Reverted clawback tags to the build 92 layout — inline after the name, no positioning changes.">build 94</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Collections legal pill recolored to slate to match Beacon new palette (weekly=purple, stop=red, bouncing=blue, legal=slate).">build 95</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1456,7 +1456,7 @@ function csChip(d){
   const s=d.collections_state; if(!s||s==='OK') return '';
   const hasStop = bounceByLead[d.lead_id] && bounceByLead[d.lead_id].hasStop;
   let col;
-  if(s==='LEGAL') col='#e5534b';                                  // red — legal (purple is reserved for weekly deals)
+  if(s==='LEGAL') col='#6b7885';                                  // slate — legal (handled); matches Beacon
   else if(s==='BOUNCING') col = hasStop ? '#e5534b' : '#539bf5';  // red if a stop payment, else blue
   else if(s==='SUSPENDED') col='#d4a72c';                         // gold
   else if(s==='RESUME SCHEDULED') col='#3fb950';                  // green — resuming
