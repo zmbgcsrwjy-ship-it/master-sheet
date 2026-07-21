@@ -800,7 +800,7 @@
   .mname-click:hover { text-decoration: underline; text-underline-offset: 2px; }
   .minfo-expand { background: var(--surface-2) !important; border-left: 3px solid var(--border-strong) !important; }
   .minfo-expand td { padding: 14px 18px !important; }
-  .minfo-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
+  .minfo-panel { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
   .minfo-panel .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 6px; }
   .minfo-panel .minfo-line { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 13px; color: var(--text); }
   .minfo-panel .minfo-item { white-space: nowrap; }
@@ -1234,7 +1234,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v126 · live</span>
+    <span class="build-tag">v127 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
