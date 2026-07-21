@@ -550,6 +550,7 @@
   .resumes-panel-header h3 { font-size: 14px; font-weight: 600; margin: 0; color: var(--good); letter-spacing: 0.02em; }
   .resumes-panel-header p { font-size: 12px; color: var(--text-2); margin: 0; }
   .resumes-list { display: flex; flex-direction: column; gap: 6px; }
+  .minfo-expand-div { background: var(--surface-2); border: 0.5px solid var(--border-strong); border-left: 3px solid var(--border-strong); border-radius: 6px; padding: 12px 14px; margin: -2px 0 4px; }
   .resume-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--surface); border: 0.5px solid var(--good-bar); border-radius: 6px; font-size: 13px; box-shadow: var(--shadow-sm); }
   .resume-item .res-name { font-weight: 600; flex: 1; }
   .resume-item .res-name-weekly { color: var(--sev-wkly); }
@@ -1225,7 +1226,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v120 · live</span>
+    <span class="build-tag">v121 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2335,15 +2336,7 @@ function persistState() { /* v72: state lives in Airtable */ }
 function fmt$(n) { if (n >= 1000) return "$" + Math.round(n).toLocaleString(); return "$" + Math.round(n); }
 function fmt$c(n) { return "$" + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); } // exact cents — for the bounce amount
 function bxFmtPhone(s){ var d=String(s||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return d.length===10 ? '('+d.slice(0,3)+') '+d.slice(3,6)+'-'+d.slice(6) : String(s||''); }
-function showMerchantInfo(leadId){
-  const wasOpen = document.querySelector('tr.minfo-expand[data-parent-id="' + leadId + '"]');
-  // Only one dropdown open at a time — close every open one first (like the Master Sheet).
-  document.querySelectorAll('tr.minfo-expand').forEach(el => el.remove());
-  document.querySelectorAll('.minfo-open').forEach(el => el.classList.remove('minfo-open'));
-  if (wasOpen) return;  // re-clicking the already-open row just closes it
-  const parent = document.querySelector('tr[data-lead-id="' + leadId + '"]:not(.row-expand):not(.minfo-expand)');
-  if (!parent) return;
-  const m = state.find(x => x.lead_id === leadId); if(!m) return;
+function merchantInfoInnerHtml(m){
   const c = [];
   if(m.owner_name)  c.push('<span class="minfo-item"><span class="minfo-lbl">Owner</span>' + m.owner_name + '</span>');
   if(m.owner_phone) c.push('<span class="minfo-item"><span class="minfo-lbl">Phone</span><a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a></span>');
@@ -2353,11 +2346,36 @@ function showMerchantInfo(leadId){
   const notesHtml = '<div class="minfo-section">Notes</div>' + (notes.length
     ? notes.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date_iso) + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('')
     : '<div class="minfo-empty">No notes logged yet.</div>');
+  return '<div>' + contactHtml + '</div><div>' + notesHtml + '</div>';
+}
+function showResumeInfo(leadId, itemEl){
+  const next = itemEl.nextElementSibling;
+  const isOpen = next && next.classList && next.classList.contains('minfo-expand-div') && next.dataset.parentId === String(leadId);
+  document.querySelectorAll('.minfo-expand-div').forEach(el => el.remove());
+  document.querySelectorAll('tr.minfo-expand').forEach(el => el.remove());
+  document.querySelectorAll('.minfo-open').forEach(el => el.classList.remove('minfo-open'));
+  if (isOpen) return;
+  const m = state.find(x => x.lead_id === leadId); if(!m) return;
+  const panel = document.createElement('div');
+  panel.className = 'minfo-expand-div';
+  panel.dataset.parentId = leadId;
+  panel.innerHTML = '<div class="minfo-panel">' + merchantInfoInnerHtml(m) + '</div>';
+  itemEl.parentNode.insertBefore(panel, itemEl.nextSibling);
+}
+function showMerchantInfo(leadId){
+  const wasOpen = document.querySelector('tr.minfo-expand[data-parent-id="' + leadId + '"]');
+  document.querySelectorAll('tr.minfo-expand').forEach(el => el.remove());
+  document.querySelectorAll('.minfo-expand-div').forEach(el => el.remove());
+  document.querySelectorAll('.minfo-open').forEach(el => el.classList.remove('minfo-open'));
+  if (wasOpen) return;
+  const parent = document.querySelector('tr[data-lead-id="' + leadId + '"]:not(.row-expand):not(.minfo-expand)');
+  if (!parent) return;
+  const m = state.find(x => x.lead_id === leadId); if(!m) return;
   const colspan = parent.children.length;
   const exp = document.createElement('tr');
   exp.className = 'minfo-expand';
   exp.dataset.parentId = leadId;
-  exp.innerHTML = '<td colspan="' + colspan + '"><div class="minfo-panel"><div>' + contactHtml + '</div><div>' + notesHtml + '</div></div></td>';
+  exp.innerHTML = '<td colspan="' + colspan + '"><div class="minfo-panel">' + merchantInfoInnerHtml(m) + '</div></td>';
   parent.parentNode.insertBefore(exp, parent.nextSibling);
   parent.classList.add('minfo-open');
 }
@@ -3132,6 +3150,9 @@ function renderForDate() {
         amtTxt +
         '<span class="res-bal">' + (r.balance ? fmt$(r.balance) + ' bal' : '') + '</span>' +
         (r.note ? '<span class="res-note">' + r.note + '</span>' : '');
+      item.style.cursor = 'pointer';
+      item.title = 'Contact info + notes';
+      item.addEventListener('click', () => showResumeInfo(r.lead_id, item));
       resList.appendChild(item);
     });
   } else {
