@@ -307,7 +307,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Collections legal pill recolored to slate to match Beacon new palette (weekly=purple, stop=red, bouncing=blue, legal=slate).">build 95</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Legal collections pill now reads in red on its slate background so legal deals stand out.">build 96</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1465,7 +1465,8 @@ function csChip(d){
   const detail = d.collections_detail || '';
   const tip = 'Collections (Beacon): ' + s + (detail ? ' — ' + detail : '') + (s==='BOUNCING'&&hasStop?' (stop payment)':'');
   const label = s==='RESUME SCHEDULED'?'RESUME SCHED':s;
-  return `<span title="${tip}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:#fff;background:${col};vertical-align:middle;white-space:nowrap">${label}</span>`;
+  const txt = s==='LEGAL' ? '#ff6b61' : '#fff';   // legal reads in red on its slate pill so it stands out
+  return `<span title="${tip}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:${txt};background:${col};vertical-align:middle;white-space:nowrap">${label}</span>`;
 }
 async function setDealStatus(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;

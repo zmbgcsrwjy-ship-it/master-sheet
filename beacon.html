@@ -949,6 +949,7 @@
   button.resolve-btn { background: var(--text); border: 0.5px solid var(--text); font: inherit; font-size: 12px; padding: 5px 12px; border-radius: 6px; cursor: pointer; color: var(--surface); margin-left: 6px; }
   button.resolve-btn:hover { background: var(--text-hover); }
   button.resolve-btn.resolved { background: var(--good-bg); color: var(--good); border-color: var(--good-bar); }
+  button.resolve-btn.resolved-legal { background: rgba(255,107,97,.18); color: #FF6B61; border-color: rgba(255,107,97,.55); }
   /* Inline-expand row containing the resolve menu — sits beneath the bounce row, pushes everything below */
   .resolve-expand { background: var(--surface-2) !important; }
   .resolve-expand > td { padding: 10px 14px 14px !important; }
@@ -1022,9 +1023,9 @@
   
   /* === Sent to Legal — daily bounce table row treatment === */
   tr.sev-legal-still { background: var(--sev-legal-tint); border-left-color: var(--sev-legal-bar); }
-  tr.sev-legal-still .merchant-name { font-weight: 700; color: var(--sev-legal); }
+  tr.sev-legal-still .merchant-name { font-weight: 700; color: #FF6B61; }
   tr.sev-legal-still .balance-cell { color: var(--sev-legal); }
-  tr.group-sep.sep-legal-still td { color: var(--sev-legal); background: var(--sev-legal-bg); border-left-color: var(--sev-legal-bar); }
+  tr.group-sep.sep-legal-still td { color: #FF6B61; background: var(--sev-legal-bg); border-left-color: var(--sev-legal-bar); }
   .legal-still-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--sev-legal-bg); color: var(--sev-legal); font-size: 11px; font-weight: 700; margin-right: 6px; letter-spacing: 0.03em; }
   
   /* === Sidebar Sent to Legal cards === */
@@ -1233,7 +1234,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v124 · live</span>
+    <span class="build-tag">v125 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -4336,7 +4337,7 @@ function buildRow(m, editable) {
   if (editable) {
     const _brokenRow = m._displayClass === "broken";   // broke the promise → needs a NEW resolution, don't show it as still resolved
     const resolveBtnLabel = (m.resolution_type && !_brokenRow) ? '✓ ' + prettyResType(m.resolution_type) : 'Resolve';
-    const resolveBtnClass = (m.resolution_type && !_brokenRow) ? 'resolve-btn resolved' : 'resolve-btn';
+    const resolveBtnClass = (m.resolution_type && !_brokenRow) ? ('resolve-btn resolved' + (m.resolution_type==='legal' ? ' resolved-legal' : '')) : 'resolve-btn';
     actionsCell = '<td class="actions-cell ctr"><div class="actions-inner">' +
       '<button class="row-btn" onclick="toggleExpand(' + m.lead_id + ')">Note</button>' +
       '<button class="' + resolveBtnClass + '" onclick="toggleResolveExpand(event, ' + m.lead_id + ')">' + resolveBtnLabel + '</button>' +
