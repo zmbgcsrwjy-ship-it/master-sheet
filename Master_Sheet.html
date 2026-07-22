@@ -307,7 +307,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL: Kickback-clawed-back restored as a label-only separator (no values). Monthly tab: Legal/Clawback inputs show formatted dollar values with commas.">build 99</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly tab: Legal/Clawback dollar inputs centered.">build 100</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2520,8 +2520,8 @@ async function renderMonthly(){
     const style=r.isTotal?'font-weight:700;background:var(--bg3)':'';
     const manualCells=r.isTotal
       ? `<td style="${style}${nz(r.legal)?';color:var(--red)':''}">${fmt$(r.legal)}</td><td style="${style}${nz(r.clawback)?';color:#5eead4':''}">${fmt$(r.clawback)}</td>`
-      : `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.legal?fmt$(r.legal):''}" placeholder="$0.00" style="width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${nz(r.legal)?'var(--red)':'var(--text)'};padding:4px 8px;font-size:12px;text-align:right" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Legal',(this.value||'').replace(/[^0-9.]/g,''))"></td>`+
-        `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.clawback?fmt$(r.clawback):''}" placeholder="$0.00" style="width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:12px;text-align:right" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Clawback',(this.value||'').replace(/[^0-9.]/g,''))"></td>`;
+      : `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.legal?fmt$(r.legal):''}" placeholder="$0.00" style="width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${nz(r.legal)?'var(--red)':'var(--text)'};padding:4px 8px;font-size:12px;text-align:center" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Legal',(this.value||'').replace(/[^0-9.]/g,''))"></td>`+
+        `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.clawback?fmt$(r.clawback):''}" placeholder="$0.00" style="width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:12px;text-align:center" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Clawback',(this.value||'').replace(/[^0-9.]/g,''))"></td>`;
     return `<tr>
       <td style="${style};white-space:nowrap">${r.label}</td>
       <td style="${style}">${r.tdf}</td><td style="${style}">${r.nw}</td><td style="${style}">${r.rf}</td>
