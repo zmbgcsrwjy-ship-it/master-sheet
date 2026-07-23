@@ -140,8 +140,9 @@ tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--bg3)}
 tbody td{padding:11px 14px;vertical-align:middle}
 /* build 102: Monthly tab — Legal (col 14) + Clawback (col 15) align as one centered column: header, input boxes, and totals row all match */
+/* build 103: extra right padding pulls that whole column pair leftward so it sits closer to Finance Fees */
 #panel-monthly table th:nth-child(14),#panel-monthly table th:nth-child(15),
-#panel-monthly table td:nth-child(14),#panel-monthly table td:nth-child(15){text-align:center}
+#panel-monthly table td:nth-child(14),#panel-monthly table td:nth-child(15){text-align:center;padding-right:70px}
 
 /* BADGES */
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
@@ -310,7 +311,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly tab: Legal and Clawback now align as one centered column — header, input boxes, and totals row all match (was: only the boxes were centered against left-aligned headers/totals).">build 102</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Password is now remembered in this browser after one successful unlock (same behaviour as Beacon) — no re-prompt on refresh.">build 104</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -642,11 +643,13 @@ const getAirtableKey  = () => BAKED_AIRTABLE.startsWith('pat')    ? BAKED_AIRTAB
 // ─── STARTUP ─────────────────────────────────────────────
 window.addEventListener('load', () => {
   localStorage.removeItem('ms_password'); // obsolete per-browser password (pre-build-10) — clean up
-  document.getElementById('password-screen').style.display = 'flex';
+  const _remembered = (() => { try { return localStorage.getItem('ms_authed') === MS_PW_HASH; } catch(e) { return false; } })();
+  document.getElementById('password-screen').style.display = _remembered ? 'none' : 'flex';
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app').style.display = 'none';
   document.getElementById('pw-input').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
   document.getElementById('setup-airtable').addEventListener('keydown',  e => { if(e.key==='Enter') setupAndBake(); });
+  if (_remembered) unlockApp();   // already unlocked in this browser — go straight in
 });
 
 // --- PASSWORD (shared — build 10) ---
@@ -668,6 +671,7 @@ async function checkPassword() {
     return;
   }
   unlockApp();
+  try { localStorage.setItem('ms_authed', MS_PW_HASH); } catch(e) {}  // remembered in this browser (same behaviour as Beacon)
 }
 
 function unlockApp() {
