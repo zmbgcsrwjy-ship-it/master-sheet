@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v131 · live</span>
+    <span class="build-tag">v132 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -5288,8 +5288,16 @@ function refreshLegalCaseBalances() {
     c.current_balance = m.balance;
     c.current_pct_paid = m.pct_paid;
     c.current_balance_date = TODAY_ISO;
-    c.paid_today_on_case = m.paid_today || 0;
-    c.paid_mtd_on_case = m.paid_mtd || 0;
+    // Only money collected AFTER the deal was sent to legal counts as a legal-team recovery.
+    // The balance drop since send is the ceiling on what can be credited to the case.
+    const sinceSend = Math.max(0, (c.balance_at_send || 0) - (m.balance || 0));
+    const sentYM = String(c.sent_date || '').slice(0, 7);
+    const curYM  = String(TODAY_ISO).slice(0, 7);
+    c.collected_since_send = sinceSend;
+    // Sent today / this month → strip out whatever they paid before it went to legal.
+    // Sent in an earlier month → every payment in this period is already post-legal.
+    c.paid_today_on_case = (c.sent_date === TODAY_ISO) ? Math.min(m.paid_today || 0, sinceSend) : (m.paid_today || 0);
+    c.paid_mtd_on_case   = (sentYM === curYM)          ? Math.min(m.paid_mtd   || 0, sinceSend) : (m.paid_mtd   || 0);
     // Detect newly-zero balance (PIF event)
     if (prevBalance > 0 && m.balance <= 0 && !c.pif_notified) {
       newlyZero.push(c);
