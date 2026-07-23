@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly tab: Legal and Clawback now follow the table's standard column convention (left-aligned, normal padding, slimmer input) so they space like every other column.">build 105</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback tab: the bounce count now shows in purple for weekly deals, in both the eligible and clawed-back tables.">build 106</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1757,7 +1757,7 @@ function renderClawedTable(){
       <td style="color:var(--text2)">${d.rep||'—'}</td>
       <td style="color:var(--text2)">${d.iso||'—'}</td>
       <td style="color:#5eead4;font-weight:600">${fmt$((d.comm_amount||0)*(d.book_pct||100)/100)}</td>
-      <td>${n}</td>
+      <td>${d.frequency==='Weekly'?'<span class="wk-name">'+n+'</span>':n}</td>
       <td style="white-space:nowrap">${codeHtml}</td>
       <td style="white-space:nowrap"><button class="btn btn-sm" onclick="undoClawback('${d._id}')">↩ Undo</button></td>
     </tr>`;
@@ -1792,7 +1792,7 @@ function renderClawback(){
       <td style="color:var(--text2)">${d.rep||'—'}</td>
       <td style="color:var(--text2)">${d.iso||'—'}</td>
       <td style="color:#5eead4;font-weight:600">${fmt$((d.comm_amount||0)*(d.book_pct||100)/100)}</td>
-      <td>${n}</td>
+      <td>${d.frequency==='Weekly'?'<span class="wk-name">'+n+'</span>':n}</td>
       <td style="white-space:nowrap">${codeHtml}</td>
       <td style="white-space:nowrap">${status}</td>
       <td style="white-space:nowrap">${daysCell}</td>
