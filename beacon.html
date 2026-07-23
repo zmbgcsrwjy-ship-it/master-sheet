@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v133 · live</span>
+    <span class="build-tag">v134 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1666,7 +1666,10 @@ async function beaconPreflight(){
     const dtc = meta.tables.find(x=>x.name==='Deals');
     for (const fname of ['CollectionsDetail','LegalCompany']){
       if(dtc && !(dtc.fields||[]).some(f=>f.name===fname)){
-        await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables/'+dtc.id+'/fields', {method:'POST', body:{name:fname, type:'singleLineText'}});
+        try{
+          await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables/'+dtc.id+'/fields', {method:'POST', body:{name:fname, type:'singleLineText'}});
+          console.log('[beacon] created Deals.'+fname);
+        }catch(e){ console.warn('[beacon] could NOT create Deals.'+fname+' \u2014 add it manually as a single-line text field', e); }
       }
     }
   }catch(e){}
@@ -2279,8 +2282,26 @@ async function reconcileCollectionsStates(){
       if ((m._legalCompany || '') !== _lc){ fields['LegalCompany'] = _lc; m._legalCompany = _lc; }
       if (Object.keys(fields).length) patches.push({id:m._rid, fields:fields});
     }
-    if (patches.length) await atPatch('Deals', patches);
-  }catch(e){ /* non-fatal — the Master Sheet just won't show the pill until next load */ }
+    if (!patches.length) return;
+    try{
+      await atPatch('Deals', patches);
+      console.log('[beacon] reconciled ' + patches.length + ' deal(s) \u2014 collections state / legal company');
+    }catch(err){
+      const msg = String((err && err.message) || err);
+      console.error('[beacon reconcile write failed]', msg);
+      if (/unknown field/i.test(msg) && /legalcompany/i.test(msg)){
+        // The LegalCompany column isn't in the Deals table yet. Write everything else so the
+        // collections pills still work, and say so out loud instead of failing silently.
+        const stripped = patches
+          .map(p => { const f = Object.assign({}, p.fields); delete f.LegalCompany; return {id:p.id, fields:f}; })
+          .filter(p => Object.keys(p.fields).length);
+        if (stripped.length){ try{ await atPatch('Deals', stripped); }catch(e2){ console.error('[beacon reconcile retry]', e2); } }
+        showToast('\u26a0 Deals table needs a "LegalCompany" text field \u2014 legal firm can\'t reach the Master Sheet until it exists');
+      } else {
+        beaconWriteErr(err);
+      }
+    }
+  }catch(e){ console.error('[beacon reconcile]', e); }
 }
 async function syncBounceReport(file){
   if (!file) return;
