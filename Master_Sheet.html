@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback tab: the bounce count now shows in purple for weekly deals, in both the eligible and clawed-back tables.">build 106</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Defaults tab: new Legal co. column (collections firm, passed across from Beacon) and the merchant name is now clickable for owner contact.">build 107</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -469,6 +469,7 @@ select.badge:hover{filter:brightness(1.2)}
             <th onclick="sortDefaults('merchant')">Merchant ↕</th>
             <th onclick="sortDefaults('rep')">Rep ↕</th>
             <th onclick="sortDefaults('iso')">ISO ↕</th>
+            <th onclick="sortDefaults('legal_company')">Legal co. ↕</th>
             <th onclick="sortDefaults('funded')">Funded ↕</th>
             <th onclick="sortDefaults('rtr')">RTR ↕</th>
             <th onclick="sortDefaults('balance')">Balance ↕</th>
@@ -745,6 +746,7 @@ const REQUIRED_FIELDS = [
   {name:'ClawbackState', type:'singleLineText'},
   {name:'ClawedInfo', type:'singleLineText'},
   {name:'CollectionsDetail', type:'singleLineText'},
+  {name:'LegalCompany', type:'singleLineText'},
   {name:'DateFunded',  type:'date', options:{dateFormat:{name:'iso'}}},
   {name:'Funded',      type:'number', options:{precision:2}},
   {name:'RTR',         type:'number', options:{precision:2}},
@@ -895,6 +897,7 @@ function fieldsToDeal(id, f) {
     notes:        f.Notes        || '',
     collections_state: f.CollectionsState || '',   // Beacon-owned — Master Sheet only displays it
     collections_detail: f.CollectionsDetail || '', // Beacon-owned — resume date / lowered detail, for the pill tooltip
+    legal_company: f.LegalCompany || '',           // Beacon-owned — collections firm handling the case
     clawback_state: f.ClawbackState || '',          // clawback lifecycle: '' | FORCED | CLAWED | DISMISSED
     clawed_info: f.ClawedInfo || ''                  // JSON {m,bc,kb} of the claw booking, for undo
   };
@@ -1712,9 +1715,10 @@ function renderDefaults(){
   document.querySelectorAll('#panel-defaults .sort-ind').forEach(s=>{ s.textContent=' ↕'; });
   tbody.innerHTML=defs.map(d=>{const pnl=d.pnl||0;return`<tr>
     <td style="color:var(--text3)">${fmtDate(d.date_funded)}</td>
-    <td style="font-weight:600">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}</td>
+    <td onclick="toggleContact(this,event)" data-contact="${hasContact(d)?encodeURIComponent(JSON.stringify({i:d.industry||'',s:d.state||'',n:d.owner_name||'',p:d.owner_phone||'',e:d.owner_email||''})):''}" style="font-weight:600;cursor:${hasContact(d)?'pointer':'default'}" title="${hasContact(d)?'Click for owner contact':''}">${d.frequency==='Weekly'?'<span class="wk-name">'+d.merchant+'</span>':d.merchant}${hasContact(d)?'<span style="opacity:.5;font-size:10px;margin-left:4px">📇</span>':''}</td>
     <td style="color:var(--text2)">${d.rep||'—'}</td>
     <td style="color:var(--text2)">${d.iso||'—'}</td>
+    <td style="color:${d.legal_company?'#ff6b61':'var(--text3)'};font-weight:${d.legal_company?'600':'400'};white-space:nowrap">${d.legal_company||'—'}</td>
     <td>${fmt$(d.funded)}</td><td>${fmt$(d.rtr)}</td><td>${fmt$(d.balance)}</td>
     <td>${(d.pct_paid*100).toFixed(1)}%</td><td style="white-space:nowrap">${d.term?(d.frequency==='Weekly'?'<span class="wk-name">'+d.term+' weeks</span>':d.term+' days'):'—'}</td>
     <td style="${nz(d.max_loss)?'color:var(--red)':''}">${fmt$(d.max_loss||0)}</td>

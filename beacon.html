@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v132 · live</span>
+    <span class="build-tag">v133 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1664,8 +1664,10 @@ async function beaconPreflight(){
   // ensure Deals.CollectionsDetail exists so we can hand the resume-date / lowered detail to the Master Sheet tooltip
   try{
     const dtc = meta.tables.find(x=>x.name==='Deals');
-    if(dtc && !(dtc.fields||[]).some(f=>f.name==='CollectionsDetail')){
-      await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables/'+dtc.id+'/fields', {method:'POST', body:{name:'CollectionsDetail', type:'singleLineText'}});
+    for (const fname of ['CollectionsDetail','LegalCompany']){
+      if(dtc && !(dtc.fields||[]).some(f=>f.name===fname)){
+        await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables/'+dtc.id+'/fields', {method:'POST', body:{name:fname, type:'singleLineText'}});
+      }
     }
   }catch(e){}
   const onPhoenix = BEACON_CFG.baseId === PHOENIX_BASE_ID;
@@ -1750,7 +1752,7 @@ function beaconReconstruct(raw, todayISO){
       hit_date:'', return_date:'', contacted_today:false, contact_time:'',
       notes:'', notes_log:[], resolution_type:'', resolution_date:'', resume_date:'',
       lowered_amount:0, original_freq:'', original_bounce_amt:0, original_return_code:'',
-      manual_freq:'', rep:f.Rep||'', iso:f.ISO||'', _freqField:f.Frequency||'', _collectionsState:f.CollectionsState||'',
+      manual_freq:'', rep:f.Rep||'', iso:f.ISO||'', _freqField:f.Frequency||'', _collectionsState:f.CollectionsState||'', _legalCompany:f.LegalCompany||'',
       clawback_state:f.ClawbackState||'', _bounceDates:[], _stopDates:[],
       owner_name:f.OwnerName||'', owner_phone:f.OwnerPhone||'', owner_email:f.OwnerEmail||''
     };
@@ -2255,20 +2257,27 @@ async function reconcileCollectionsStates(){
   try{
     const patches=[];
     for (const m of state){
+      const fields = {};
       if (m.resolution_type){
         const want = beaconCollectionsStateFor(m);
         if (want && want !== 'OK' && (m._collectionsState||'') !== want){
-          patches.push({id:m._rid, fields:{'CollectionsState':want, 'CollectionsDetail':beaconCollectionsDetailFor(m)}});
+          fields['CollectionsState'] = want;
+          fields['CollectionsDetail'] = beaconCollectionsDetailFor(m);
           m._collectionsState = want;  // avoid re-patching within this session
         }
       } else if ((m._collectionsState||'') === 'BOUNCING'){
         // Unresolved & tagged BOUNCING — drop the tag once a payment CLEARED strictly after the most recent bounce.
         const lastBounce = (m._bounceDates||[]).slice(-1)[0] || '';
         if (m.last_cleared && lastBounce && m.last_cleared > lastBounce){
-          patches.push({id:m._rid, fields:{'CollectionsState':'', 'CollectionsDetail':''}});
+          fields['CollectionsState'] = '';
+          fields['CollectionsDetail'] = '';
           m._collectionsState = '';
         }
       }
+      // Hand the legal company across to the Master Sheet (shown on its Defaults tab)
+      const _lc = ((typeof legalCases !== 'undefined' ? legalCases : []).find(x => x.lead_id === m.lead_id) || {}).legal_company || '';
+      if ((m._legalCompany || '') !== _lc){ fields['LegalCompany'] = _lc; m._legalCompany = _lc; }
+      if (Object.keys(fields).length) patches.push({id:m._rid, fields:fields});
     }
     if (patches.length) await atPatch('Deals', patches);
   }catch(e){ /* non-fatal — the Master Sheet just won't show the pill until next load */ }
