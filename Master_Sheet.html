@@ -139,10 +139,8 @@ tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--bg3)}
 tbody td{padding:11px 14px;vertical-align:middle}
-/* build 102: Monthly tab — Legal (col 14) + Clawback (col 15) align as one centered column: header, input boxes, and totals row all match */
-/* build 103: extra right padding pulls that whole column pair leftward so it sits closer to Finance Fees */
-#panel-monthly table th:nth-child(14),#panel-monthly table th:nth-child(15),
-#panel-monthly table td:nth-child(14),#panel-monthly table td:nth-child(15){text-align:center;padding-right:70px}
+/* build 105: Legal (col 14) + Clawback (col 15) follow the table's standard column convention —
+   left-aligned, normal 14px cell padding — so they space like every other column instead of floating right. */
 
 /* BADGES */
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
@@ -311,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Password is now remembered in this browser after one successful unlock (same behaviour as Beacon) — no re-prompt on refresh.">build 104</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly tab: Legal and Clawback now follow the table's standard column convention (left-aligned, normal padding, slimmer input) so they space like every other column.">build 105</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2527,8 +2525,8 @@ async function renderMonthly(){
     const style=r.isTotal?'font-weight:700;background:var(--bg3)':'';
     const manualCells=r.isTotal
       ? `<td style="${style}${nz(r.legal)?';color:var(--red)':''}">${fmt$(r.legal)}</td><td style="${style}${nz(r.clawback)?';color:#5eead4':''}">${fmt$(r.clawback)}</td>`
-      : `<td style="text-align:center"><input class="m-edit" type="text" inputmode="decimal" value="${r.legal?fmt$(r.legal):''}" placeholder="$0.00" style="width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${nz(r.legal)?'var(--red)':'var(--text)'};padding:4px 8px;font-size:12px;text-align:center" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Legal',(this.value||'').replace(/[^0-9.]/g,''))"></td>`+
-        `<td style="text-align:center"><input class="m-edit" type="text" inputmode="decimal" value="${r.clawback?fmt$(r.clawback):''}" placeholder="$0.00" style="width:100px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:12px;text-align:center" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Clawback',(this.value||'').replace(/[^0-9.]/g,''))"></td>`;
+      : `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.legal?fmt$(r.legal):''}" placeholder="$0.00" style="width:92px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${nz(r.legal)?'var(--red)':'var(--text)'};padding:4px 8px;font-size:12px;text-align:left" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Legal',(this.value||'').replace(/[^0-9.]/g,''))"></td>`+
+        `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.clawback?fmt$(r.clawback):''}" placeholder="$0.00" style="width:92px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:12px;text-align:left" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Clawback',(this.value||'').replace(/[^0-9.]/g,''))"></td>`;
     return `<tr>
       <td style="${style};white-space:nowrap">${r.label}</td>
       <td style="${style}">${r.tdf}</td><td style="${style}">${r.nw}</td><td style="${style}">${r.rf}</td>
