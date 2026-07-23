@@ -320,7 +320,7 @@
   .us-resolve-panel.shown { display: block; }
   .us-opt { display: block; width: 100%; text-align: left; background: var(--surface); border: 0.5px solid var(--border); padding: 7px 9px; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; margin-bottom: 4px; color: var(--text); }
   .us-opt:hover { background: var(--surface-2); }
-  .us-opt.legal { color: var(--sev-legal); font-weight: 600; }
+  .us-opt.legal { color: #FF6B61; font-weight: 600; }
   .us-date-row { margin-top: 8px; padding: 8px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 6px; display: none; }
   .us-date-row.shown { display: block; }
   .us-date-row label { display: block; font-size: 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
@@ -673,16 +673,16 @@
   table.matrix tbody tr:first-child { border-top: 0; }
   table.matrix tbody td { padding: 11px 14px; vertical-align: middle; }
   
-  tr.sev-broken { background: var(--sev-broken-bg); border-left-color: var(--sev-broken-bar); }
+  tr.sev-broken { border-left-color: var(--sev-broken-bar); }
   tr.sev-broken .merchant-name { font-weight: 800; color: var(--sev-broken); }
-  tr.sev-broken .balance-cell  { font-weight: 700; color: var(--sev-broken); }
+  tr.sev-broken .balance-cell  { font-weight: 700; }
   
   /* Broken-promise context strip — explains what was broken */
-  tr.broken-context-row { background: var(--sev-broken-bg); }
+  tr.broken-context-row { background: var(--surface-2); }
   tr.broken-context-row td { padding: 0 !important; border-top: 0; }
   .broken-context { 
     padding: 10px 16px 14px 16px; 
-    background: var(--sev-broken-bg);
+    background: var(--surface-2);
     border-left: 4px solid var(--sev-broken-bar);
     margin-bottom: 4px;
     font-size: 12px;
@@ -959,7 +959,7 @@
   .resolve-expand .resolve-menu { display: block; background: var(--surface); border: 0.5px solid var(--border); border-radius: 8px; padding: 8px; max-width: 360px; margin-left: auto; }
   .resolve-expand .resolve-menu button.menu-item { display: block; width: 100%; text-align: left; background: transparent; border: 0; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 5px; cursor: pointer; color: var(--text); }
   .resolve-expand .resolve-menu button.menu-item:hover { background: var(--surface-2); }
-  .resolve-expand .resolve-menu button.menu-item.legal-item { color: var(--sev-legal); font-weight: 600; }
+  .resolve-expand .resolve-menu button.menu-item.legal-item { color: #FF6B61; font-weight: 600; }
   .resolve-expand .resolve-menu .menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
   .resolve-expand .resolve-menu .date-row { padding: 8px 10px; display: none; }
   .resolve-expand .resolve-menu .date-row.shown { display: block; }
@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v129 · live</span>
+    <span class="build-tag">v130 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
