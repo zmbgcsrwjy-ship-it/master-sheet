@@ -139,6 +139,9 @@ tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:var(--bg3)}
 tbody td{padding:11px 14px;vertical-align:middle}
+/* build 102: Monthly tab — Legal (col 14) + Clawback (col 15) align as one centered column: header, input boxes, and totals row all match */
+#panel-monthly table th:nth-child(14),#panel-monthly table th:nth-child(15),
+#panel-monthly table td:nth-child(14),#panel-monthly table td:nth-child(15){text-align:center}
 
 /* BADGES */
 .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700}
@@ -307,7 +310,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly tab: Legal/Clawback input boxes centered in their cells.">build 101</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Monthly tab: Legal and Clawback now align as one centered column — header, input boxes, and totals row all match (was: only the boxes were centered against left-aligned headers/totals).">build 102</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
