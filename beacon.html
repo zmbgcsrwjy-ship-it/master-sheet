@@ -801,7 +801,8 @@
   .minfo-expand { background: var(--surface-2) !important; border-left: 3px solid var(--border-strong) !important; }
   .minfo-expand td { padding: 14px 18px !important; }
   .minfo-panel { display: grid; grid-template-columns: 1fr 1.3fr; gap: 28px; align-items: start; }
-  .minfo-note-editor { margin-bottom: 12px; }
+  .minfo-note-history { max-height: 148px; overflow-y: auto; padding-right: 8px; }
+  .minfo-note-editor { margin-top: 12px; }
   .minfo-note-editor .us-confirm { margin-top: 6px; }
   .minfo-panel .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 6px; }
   .minfo-panel .minfo-line { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 13px; color: var(--text); }
@@ -1236,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v128 · live</span>
+    <span class="build-tag">v129 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2358,6 +2359,7 @@ function merchantInfoInnerHtml(m){
   const todayEntry = (m.notes_log || []).find(e => e.date_iso === TODAY_ISO);
   const todayVal = todayEntry ? todayEntry.text : '';
   const editorHtml = '<div class="minfo-note-editor">' +
+    '<div class="us-notes-label">Today \u00b7 ' + fmtDate(TODAY_ISO) + '</div>' +
     '<textarea class="us-notes-ta notes-today-ta" data-field="notes" data-lead="' + m.lead_id + '" placeholder="Log today\'s outreach — what you said, what they said, what happens next">' + todayVal.replace(/</g,'&lt;') + '</textarea>' +
     '<button class="us-confirm" onclick="usConfirmNote(event,' + m.lead_id + ')">Confirm</button>' +
   '</div>';
@@ -2369,9 +2371,10 @@ function merchantInfoInnerHtml(m){
     });
   }
   entries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
-  const notesHtml = '<div class="minfo-section">Notes' + (legalCase ? ' <span style="color:#FF6B61;font-weight:600">· incl. legal history</span>' : '') + '</div>' + editorHtml + (entries.length
-    ? entries.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date) + (e.legal ? ' <span style="color:#FF6B61">· legal</span>' : '') + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('')
-    : '<div class="minfo-empty">No earlier notes.</div>');
+  const histHtml = entries.length
+    ? '<div class="minfo-note-history">' + entries.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date) + (e.legal ? ' <span style="color:#FF6B61">· legal</span>' : '') + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('') + '</div>'
+    : '<div class="minfo-empty">No earlier notes.</div>';
+  const notesHtml = '<div class="minfo-section">Notes' + (legalCase ? ' <span style="color:#FF6B61;font-weight:600">· incl. legal history</span>' : '') + '</div>' + histHtml + editorHtml;
   return '<div>' + contactHtml + '</div><div>' + notesHtml + '</div>';
 }
 function showResumeInfo(leadId, itemEl){
@@ -3722,9 +3725,35 @@ function usToggleNotes(ev, leadId) {
 
 function usConfirmNote(ev, leadId) {
   ev.stopPropagation();
-  // Note is auto-saved on input; just collapse the panel
+  const m = state.find(x => x.lead_id === leadId);
+  if (!m) return;
+  // Read straight off whichever editor this button belongs to (board dropdown, resume panel, or sidebar card)
+  const scope = ev.target.closest('.minfo-panel, .us-notes-panel, .sidebar-card, .watch-card') || document;
+  const ta = scope.querySelector('.notes-today-ta[data-lead="' + leadId + '"]')
+          || document.querySelector('.notes-today-ta[data-lead="' + leadId + '"]');
+  if (ta) {
+    const txt = ta.value;
+    if (!m.notes_log) m.notes_log = [];
+    const existing = m.notes_log.find(en => en.date_iso === TODAY_ISO);
+    if (existing) existing.text = txt;
+    else if (txt.trim()) m.notes_log.push({ date_iso: TODAY_ISO, text: txt });
+    if (!txt.trim() && existing) m.notes_log = m.notes_log.filter(en => en.date_iso !== TODAY_ISO);
+    m.notes = txt;
+  }
+  // This is what was missing — actually persist it to Airtable
+  beaconPushNote(m, TODAY_ISO, beaconNoteRidMap)
+    .then(() => showToast("\u2713 Note saved"))
+    .catch(beaconWriteErr);
+  // Collapse the sidebar card's panel if that's the context
   const panel = document.getElementById("us-notes-" + leadId);
   if (panel) panel.classList.remove("shown");
+  // Redraw any open info dropdown so the saved note is reflected and stays editable today
+  document.querySelectorAll('tr.minfo-expand[data-parent-id="' + leadId + '"] .minfo-panel, .minfo-expand-div[data-parent-id="' + leadId + '"] .minfo-panel')
+    .forEach(p => {
+      p.innerHTML = merchantInfoInnerHtml(m);
+      const fresh = p.querySelector('.notes-today-ta');
+      if (fresh) fresh.addEventListener('input', onFieldChange);
+    });
 }
 
 function usToggleResolve(ev, leadId) {
