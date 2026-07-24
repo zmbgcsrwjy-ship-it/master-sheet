@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v137 · live</span>
+    <span class="build-tag">v138 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1710,25 +1710,25 @@ function beaconClawTier(m){
   if(st==='CLAWED'||st==='DISMISSED') return null;
   if(st==='FORCED') return 'eligible';
   const funded=m.funded; if(!funded) return null;
-  // v135: the right to recover expires 30 days after funding. Past the window the deal drops off
-  // entirely — no chip, no closing-soon alert — because it can no longer be clawed. This mirrors
-  // the Master Sheet, which owns the rule; Beacon previously had no expiry and kept flagging
-  // aged-out deals forever, so its alert count ran ahead of the Master Sheet's.
-  const age=bDaysBetween(funded, bLocalToday());
+  // v138: the clawback window is 30 BUSINESS days, not calendar — matching the Master Sheet (build
+  // 112) and how the deal actually pulls (Mon–Fri). Reuses bizDaysBetween (defined lower down),
+  // which counts weekdays only, exclusive of funding day / inclusive of end. Past the window the
+  // deal drops off entirely (no chip, no closing-soon alert) because it can no longer be clawed.
+  const age=bizDaysBetween(funded, bLocalToday());
   if(age!=null && age>BCLAW_WINDOW) return null;
   const dates=m._bounceDates||[];
   const stops=m._stopDates||[];
-  // v88: a STOP PAYMENT (merchant blocked the ACH — a clear breach) within 30 days of funding is
+  // v88: a STOP PAYMENT (merchant blocked the ACH — a clear breach) within the window is
   // clawback-eligible on its own, no 4-bounce threshold needed.
-  if(stops.length){ const sd=bDaysBetween(funded, stops[0]); if(sd!=null && sd<=BCLAW_WINDOW) return 'eligible'; }
-  if(dates.length>=BCLAW_TRIGGER){ const dd=bDaysBetween(funded, dates[BCLAW_TRIGGER-1]); if(dd!=null&&dd<=BCLAW_WINDOW) return 'eligible'; }
+  if(stops.length){ const sd=bizDaysBetween(funded, stops[0]); if(sd!=null && sd<=BCLAW_WINDOW) return 'eligible'; }
+  if(dates.length>=BCLAW_TRIGGER){ const dd=bizDaysBetween(funded, dates[BCLAW_TRIGGER-1]); if(dd!=null&&dd<=BCLAW_WINDOW) return 'eligible'; }
   if(dates.length>=BCLAW_WARN_MIN && dates.length<BCLAW_TRIGGER && age!=null && age>=(BCLAW_WINDOW-BCLAW_WARN_DAYS) && age<=BCLAW_WINDOW) return 'warning';
   return null;
 }
 function beaconClawTag(m){
   const t=beaconClawTier(m);
-  if(t==='eligible') return '<span class="claw-chip" title="Clawback eligible — a 4th bounce OR a stop payment within 30 days of funding. Recover the commission from '+(m.rep||'the rep')+', then mark it clawed on the Master Sheet.">\u23ea Clawback</span>';
-  if(t==='warning'){ const n=Math.max(0, BCLAW_WINDOW-(bDaysBetween(m.funded,bLocalToday())||BCLAW_WINDOW)); return '<span class="claw-chip-warn" title="Window closing — '+n+' day'+(n!==1?'s':'')+' left. If it hits a 4th bounce before the cutoff, the commission becomes clawback-eligible.">\u23f3 '+n+'d</span>'; }
+  if(t==='eligible') return '<span class="claw-chip" title="Clawback eligible — a 4th bounce OR a stop payment within 30 business days of funding. Recover the commission from '+(m.rep||'the rep')+', then mark it clawed on the Master Sheet.">\u23ea Clawback</span>';
+  if(t==='warning'){ const n=Math.max(0, BCLAW_WINDOW-(bizDaysBetween(m.funded,bLocalToday())||BCLAW_WINDOW)); return '<span class="claw-chip-warn" title="Window closing — '+n+' business day'+(n!==1?'s':'')+' left. If it hits a 4th bounce before the cutoff, the commission becomes clawback-eligible.">\u23f3 '+n+'d</span>'; }
   return '';
 }
 
@@ -3293,7 +3293,7 @@ function renderSidebar() {
     for (const m of state) {
       const t = beaconClawTier(m);
       if (t !== 'eligible' && t !== 'warning') continue;
-      const dl = Math.max(0, BCLAW_WINDOW - (bDaysBetween(m.funded, bLocalToday()) || BCLAW_WINDOW));
+      const dl = Math.max(0, BCLAW_WINDOW - (bizDaysBetween(m.funded, bLocalToday()) || BCLAW_WINDOW));
       if (dl <= BCLAW_WARN_DAYS) closing++;
     }
     if (closing > 0) {

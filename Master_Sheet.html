@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="A scheduled resume now reads SUSPENDED &middot; 7/14 in gold instead of RESUME SCHED in green — the deal is not pulling, and the date is on the pill. New RESUME NORM pill for a deal you spoke to that is paying again; it retires once the next payment clears. Clawback window uses your local date instead of UTC. Beacon (v137) expires clawbacks at 30 days the same way the Master Sheet does.">build 111</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Clawback window is now 30 BUSINESS days, not calendar — matching how the deal pulls (Mon–Fri). The warning and the &quot;Nd left&quot; countdown are in business days too. Scheduled resume reads SUSPENDED &middot; date in gold. RESUME NORM pill for a spoke-to deal that is paying again, retiring once the next payment clears.">build 112</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -318,7 +318,7 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="nav-item" id="nav-renewal" onclick="setView('renewal')">🔁 REFI eligible <span class="nav-badge" id="renewal-badge" style="background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)">0</span></div>
         <div class="nav-item" id="nav-pif" onclick="setView('pif')">💰 PIF <span class="nav-badge" id="pif-badge" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)">0</span></div>
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
-        <div class="nav-item" id="nav-clawback" onclick="setView('clawback')">⏪ Clawback <span class="nav-badge" id="clawback-badge" title="Deals whose commission is clawback-eligible (4th bounce within 30 days of funding)" style="background:rgba(45,212,191,.15);color:#5eead4;border:1px solid rgba(45,212,191,.45)">0</span></div>
+        <div class="nav-item" id="nav-clawback" onclick="setView('clawback')">⏪ Clawback <span class="nav-badge" id="clawback-badge" title="Deals whose commission is clawback-eligible (4th bounce within 30 business days of funding)" style="background:rgba(45,212,191,.15);color:#5eead4;border:1px solid rgba(45,212,191,.45)">0</span></div>
         <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
         <div class="nav-item" id="nav-pnl" onclick="setView('pnl')">🧮 PNL</div>
         <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
@@ -482,7 +482,7 @@ select.badge:hover{filter:brightness(1.2)}
         </div>
 
         <div class="panel" id="panel-clawback" style="display:none">
-          <div class="panel-header"><h3>Clawback eligible</h3><span style="font-size:12px;color:var(--text3)">Deals whose commission can be clawed back — 4th bounce within 30 days of funding. Mark <b style="color:#5eead4">Clawed</b> to book the commission into this month's Clawback (flows to PNL, 50/50).</span></div>
+          <div class="panel-header"><h3>Clawback eligible</h3><span style="font-size:12px;color:var(--text3)">Deals whose commission can be clawed back — 4th bounce within 30 business days of funding. Mark <b style="color:#5eead4">Clawed</b> to book the commission into this month's Clawback (flows to PNL, 50/50).</span></div>
           <div class="table-wrap"><table><thead><tr>
             <th>Date Funded</th><th>Merchant</th><th>Rep</th><th>ISO</th><th>Commission at risk</th><th>Bounces</th><th>Code</th><th>Status</th><th>Days Left</th><th>Actions</th>
           </tr></thead><tbody id="tbody-clawback"></tbody></table></div>
@@ -947,7 +947,7 @@ function bounceBadges(d){
 }
 
 // ─── CLAWBACK (build 62) ─────────────────────────────────
-// A commission is clawback-eligible when a deal hits its 4th bounce WITHIN 30 days of funding
+// A commission is clawback-eligible when a deal hits its 4th bounce WITHIN 30 business days of funding
 // (3 bounces = still working it; the 4th = there's a problem). 2–3 bounces in the last 5 days of
 // that window get a softer "window closing" warning. Beacon and Master Sheet compute this the same
 // way; Master Sheet owns the resolution (CLAWED/DISMISSED/FORCED) written to the deal.
@@ -956,6 +956,20 @@ const CLAW_WINDOW=30, CLAW_TRIGGER=4, CLAW_WARN_MIN=1, CLAW_WARN_DAYS=7;
 // window read a day ahead every evening and could age a deal out one day early. Beacon's
 // bLocalToday() has always been local — both apps now compute the window off the same day.
 function msTodayYMD(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// build 112: the clawback window is 30 BUSINESS days, not calendar. Business days match how the
+// deal actually pulls (Mon–Fri), so a deal that funds early in the month gets its full ~6 weeks of
+// pull attempts inside the window rather than being cut short by weekends. bizDaysBetweenYMD counts
+// weekdays only, exclusive of the funding day and inclusive of the end date. The warning and the
+// "Nd left" countdown are in business days too, so every number on the tag means the same unit.
+function bizDaysBetweenYMD(a,b){
+  if(!a||!b) return null;
+  const [y1,m1,d1]=a.split('-').map(Number), [y2,m2,d2]=b.split('-').map(Number);
+  let cur=new Date(y1,m1-1,d1); const end=new Date(y2,m2-1,d2);
+  if(cur>end){ const r=bizDaysBetweenYMD(b,a); return r==null?null:-r; }
+  let n=0;
+  while(cur<end){ cur.setDate(cur.getDate()+1); const dow=cur.getDay(); if(dow!==0&&dow!==6) n++; }
+  return n;
+}
 function daysBetweenYMD(a,b){ if(!a||!b) return null; const d=(new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000; return Math.round(d); }
 // returns 'eligible' | 'warning' | null
 function clawbackTier(d){
@@ -963,22 +977,21 @@ function clawbackTier(d){
   if(st==='CLAWED'||st==='DISMISSED') return null;   // resolved — no tag
   if(st==='FORCED') return 'eligible';               // manually promoted (stays eligible regardless of age)
   const funded=d.date_funded; if(!funded) return null;
-  const ageToday=daysBetweenYMD(funded, msTodayYMD());
-  if(ageToday!=null && ageToday>CLAW_WINDOW) return null;  // 30-day window closed — no longer eligible, drops off the tab
+  const ageToday=bizDaysBetweenYMD(funded, msTodayYMD());
+  if(ageToday!=null && ageToday>CLAW_WINDOW) return null;  // 30-business-day window closed — no longer eligible, drops off the tab
   const e=bounceByLead[d.lead_id];
   const dates=(e&&e.dates)?e.dates:[];
   const stops=(e&&e.stopDates)?e.stopDates:[];
-  // v76: a STOP PAYMENT within 30 days of funding = eligible on its own (merchant blocked the ACH — clear breach).
-  if(stops.length){ const sd=daysBetweenYMD(funded, stops[0]); if(sd!=null && sd<=CLAW_WINDOW) return 'eligible'; }
+  // v76: a STOP PAYMENT within the window = eligible on its own (merchant blocked the ACH — clear breach).
+  if(stops.length){ const sd=bizDaysBetweenYMD(funded, stops[0]); if(sd!=null && sd<=CLAW_WINDOW) return 'eligible'; }
   if(dates.length>=CLAW_TRIGGER){
-    const dd=daysBetweenYMD(funded, dates[CLAW_TRIGGER-1]);
+    const dd=bizDaysBetweenYMD(funded, dates[CLAW_TRIGGER-1]);
     if(dd!=null && dd<=CLAW_WINDOW) return 'eligible';
   }
-  const age=daysBetweenYMD(funded, msTodayYMD());
-  if(dates.length>=CLAW_WARN_MIN && dates.length<CLAW_TRIGGER && age!=null && age>=(CLAW_WINDOW-CLAW_WARN_DAYS) && age<=CLAW_WINDOW) return 'warning';
+  if(dates.length>=CLAW_WARN_MIN && dates.length<CLAW_TRIGGER && ageToday!=null && ageToday>=(CLAW_WINDOW-CLAW_WARN_DAYS) && ageToday<=CLAW_WINDOW) return 'warning';
   return null;
 }
-function clawDaysLeft(d){ const age=daysBetweenYMD(d.date_funded, msTodayYMD()); return Math.max(0, CLAW_WINDOW-(age==null?CLAW_WINDOW:age)); }
+function clawDaysLeft(d){ const age=bizDaysBetweenYMD(d.date_funded, msTodayYMD()); return Math.max(0, CLAW_WINDOW-(age==null?CLAW_WINDOW:age)); }
 function clawClosingSoon(){ return deals.filter(d=>{ const t=clawbackTier(d); return (t==='eligible'||t==='warning') && clawDaysLeft(d)<=CLAW_WARN_DAYS; }).length; }
 // One rule for deal-name colour, used by every tab: a co-funded (participation) deal reads peach,
 // a weekly deal reads purple. Purple stays reserved for weekly only.
@@ -990,7 +1003,7 @@ function dealNameHtml(d){
 function clawbackTag(d){
   if((d.clawback_state||'').toUpperCase()==='CLAWED') return `<span class="claw-tag claw-tag-done" title="Commission clawed back — booked into that month's Clawback (flows to PNL, 50/50).">✓ Clawed</span>`;
   const t=clawbackTier(d);
-  if(t==='eligible') return `<span class="claw-tag" title="Clawback eligible — a 4th bounce OR a stop payment within 30 days of funding. ${fmt$(d.comm_amount||0)} commission recoverable from ${esc0(d.rep)||'the rep'}.">⏪ Clawback</span>`;
+  if(t==='eligible') return `<span class="claw-tag" title="Clawback eligible — a 4th bounce OR a stop payment within 30 business days of funding. ${fmt$(d.comm_amount||0)} commission recoverable from ${esc0(d.rep)||'the rep'}.">⏪ Clawback</span>`;
   if(t==='warning'){ const n=clawDaysLeft(d); return `<span class="claw-tag-warn" title="Window closing — ${n} day${n!==1?'s':''} left. 2–3 bounces so far; if it hits a 4th before the cutoff, the commission becomes clawback-eligible.">⏳ ${n}d to claw</span>`; }
   return '';
 }
