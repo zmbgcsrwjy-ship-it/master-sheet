@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v138 · live</span>
+    <span class="build-tag">v139 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3670,9 +3670,11 @@ function renderUnresolvedStops() {
         renderSidebarNotesEditor(m, "stop") +
       '</div>' +
       '<div class="us-resolve-panel" id="us-panel-' + m.lead_id + '">' +
-        '<button class="us-opt legal" onclick="usOpenLegal(event,' + m.lead_id + ')">Send to legal / collections…</button>' +
-        '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'paused\')">Resume payment…</button>' +
+        // v139: legal moves to the bottom (last resort), matching the board-row order. STOP cards
+        // keep their reduced 3-option set (no "Spoke to") by design; only legal's position moved.
         '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'lowered\')">Lowered payment…</button>' +
+        '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'paused\')">Resume payment…</button>' +
+        '<button class="us-opt legal" onclick="usOpenLegal(event,' + m.lead_id + ')">Send to legal / collections…</button>' +
         '<div class="us-date-row" id="us-date-row-' + m.lead_id + '">' +
           '<label id="us-date-label-' + m.lead_id + '">Resume date</label>' +
           '<div class="us-mini-cal" id="us-mini-cal-' + m.lead_id + '"></div>' +
@@ -3738,9 +3740,11 @@ function renderUnresolvedWeeklies() {
         renderSidebarNotesEditor(m, "weekly") +
       '</div>' +
       '<div class="us-resolve-panel" id="us-panel-' + m.lead_id + '">' +
-        '<button class="us-opt legal" onclick="usOpenLegal(event,' + m.lead_id + ')">Send to legal / collections…</button>' +
-        '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'paused\')">Resume payment…</button>' +
+        // v139: legal moves to the bottom (last resort), matching the board-row order. This card's
+        // reduced option set (no "Spoke to") is intentional and unchanged; only legal's position moved.
         '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'lowered\')">Lowered payment…</button>' +
+        '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'paused\')">Resume payment…</button>' +
+        '<button class="us-opt legal" onclick="usOpenLegal(event,' + m.lead_id + ')">Send to legal / collections…</button>' +
         '<div class="us-date-row" id="us-date-row-' + m.lead_id + '">' +
           '<label id="us-date-label-' + m.lead_id + '">Resume date</label>' +
           '<div class="us-mini-cal" id="us-mini-cal-' + m.lead_id + '"></div>' +
@@ -3850,10 +3854,13 @@ function sidebarActionBlock(m){
     '</div>'+
     '<div class="us-notes-panel" id="us-notes-'+m.lead_id+'">'+ renderSidebarNotesEditor(m, "active") +'</div>'+
     '<div class="us-resolve-panel" id="us-panel-'+m.lead_id+'">'+
+      // v139: match the board-row resolve order (spoke → lowered → resume → legal). Legal moves to
+      // the bottom as the last resort instead of sitting second from the top. Wording and classes
+      // unchanged; only the sequence differs so both menus read the same.
       '<button class="us-opt" onclick="usSpoke(event,'+m.lead_id+')">Spoke to merchant</button>'+
-      '<button class="us-opt legal" onclick="usOpenLegal(event,'+m.lead_id+')">Send to legal / collections…</button>'+
-      '<button class="us-opt" onclick="usShowDate(event,'+m.lead_id+',\'paused\')">Resume payment…</button>'+
       '<button class="us-opt" onclick="usShowDate(event,'+m.lead_id+',\'lowered\')">Lowered payment…</button>'+
+      '<button class="us-opt" onclick="usShowDate(event,'+m.lead_id+',\'paused\')">Resume payment…</button>'+
+      '<button class="us-opt legal" onclick="usOpenLegal(event,'+m.lead_id+')">Send to legal / collections…</button>'+
       '<div class="us-date-row" id="us-date-row-'+m.lead_id+'">'+
         '<label id="us-date-label-'+m.lead_id+'">Resume date</label>'+
         '<div class="us-mini-cal" id="us-mini-cal-'+m.lead_id+'"></div>'+
