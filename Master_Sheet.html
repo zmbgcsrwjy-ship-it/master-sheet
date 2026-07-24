@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="New RESUME NORM pill: a deal you spoke to and that is paying again now shows the tag instead of going blank, so you can still see it bounced. Clawback window uses your local date instead of UTC. Beacon (v136) expires clawbacks at 30 days the same way the Master Sheet does.">build 110</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="A scheduled resume now reads SUSPENDED &middot; 7/14 in gold instead of RESUME SCHED in green — the deal is not pulling, and the date is on the pill. New RESUME NORM pill for a deal you spoke to that is paying again; it retires once the next payment clears. Clawback window uses your local date instead of UTC. Beacon (v137) expires clawbacks at 30 days the same way the Master Sheet does.">build 111</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1476,14 +1476,22 @@ function csChip(d){
   let col;
   if(s==='LEGAL') col='#6b7885';                                  // slate — legal (handled); matches Beacon
   else if(s==='BOUNCING') col = hasStop ? '#e5534b' : '#539bf5';  // red if a stop payment, else blue
-  else if(s==='SUSPENDED') col='#d4a72c';                         // gold
-  else if(s==='RESUME SCHEDULED') col='#3fb950';                  // green — resuming
+  // build 111: a suspend and a scheduled resume are the same thing in the book — the deal isn't
+  // pulling right now. Beacon requires a resume date on every suspend, so RESUME SCHEDULED is the
+  // one you actually see; bare SUSPENDED only shows on a legacy record with no date. Both read
+  // SUSPENDED in gold. Gold, not green: green says "healthy and paying", which is the opposite.
+  else if(s==='SUSPENDED'||s==='RESUME SCHEDULED') col='#d4a72c'; // gold — not collecting
   else if(s==='RESUME NORMAL') col='#2ea043';                     // deeper green — bounced, spoke to, payment staying on
   else if(s==='LOWERED') col='#2dd4bf';                           // teal — lowered
   else col='#888';
   const detail = d.collections_detail || '';
-  const tip = 'Collections (Beacon): ' + s + (detail ? ' — ' + detail : '') + (s==='BOUNCING'&&hasStop?' (stop payment)':'');
-  const label = s==='RESUME SCHEDULED'?'RESUME SCHED':s==='RESUME NORMAL'?'RESUME NORM':s;
+  // Beacon writes the detail as "Resume 7/14"; lift the date onto the pill so the part you act on
+  // is visible without hovering. Falls back to a bare SUSPENDED if the detail is missing/reshaped.
+  const resumeOn = s==='RESUME SCHEDULED' ? ((detail.match(/^Resume\s+(.+)$/)||[])[1]||'') : '';
+  const label = s==='RESUME SCHEDULED' ? ('SUSPENDED'+(resumeOn?' · '+resumeOn:''))
+              : s==='RESUME NORMAL' ? 'RESUME NORM' : s;
+  const tipState = s==='RESUME SCHEDULED' ? 'SUSPENDED' : s;
+  const tip = 'Collections (Beacon): ' + tipState + (detail ? ' — ' + detail : '') + (s==='BOUNCING'&&hasStop?' (stop payment)':'');
   const txt = s==='LEGAL' ? '#ff6b61' : '#fff';   // legal reads in red on its slate pill so it stands out
   return `<span title="${tip}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:${txt};background:${col};vertical-align:middle;white-space:nowrap">${label}</span>`;
 }
