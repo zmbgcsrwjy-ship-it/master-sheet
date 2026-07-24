@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v140 · live</span>
+    <span class="build-tag">v141 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1718,16 +1718,22 @@ function beaconClawTier(m){
   if(age!=null && age>BCLAW_WINDOW) return null;
   const dates=m._bounceDates||[];
   const stops=m._stopDates||[];
+  // v141: WEEKLY deals claw on the FIRST bounce, not the 4th — mirrors the Master Sheet (build 113).
+  // A weekly deal pulls once a week, so one missed pull is proportionally as bad as ~4 missed daily
+  // pulls; waiting for a 4th would eat the whole window. Daily deals keep the 4-bounce trigger. The
+  // stop-payment path and the 30-biz-day window are unchanged.
+  const trigger = isWeeklyDeal(m) ? 1 : BCLAW_TRIGGER;
   // v88: a STOP PAYMENT (merchant blocked the ACH — a clear breach) within the window is
-  // clawback-eligible on its own, no 4-bounce threshold needed.
+  // clawback-eligible on its own, no bounce threshold needed.
   if(stops.length){ const sd=bizDaysBetween(funded, stops[0]); if(sd!=null && sd<=BCLAW_WINDOW) return 'eligible'; }
-  if(dates.length>=BCLAW_TRIGGER){ const dd=bizDaysBetween(funded, dates[BCLAW_TRIGGER-1]); if(dd!=null&&dd<=BCLAW_WINDOW) return 'eligible'; }
-  if(dates.length>=BCLAW_WARN_MIN && dates.length<BCLAW_TRIGGER && age!=null && age>=(BCLAW_WINDOW-BCLAW_WARN_DAYS) && age<=BCLAW_WINDOW) return 'warning';
+  if(dates.length>=trigger){ const dd=bizDaysBetween(funded, dates[trigger-1]); if(dd!=null&&dd<=BCLAW_WINDOW) return 'eligible'; }
+  // Warning tier only applies to multi-bounce (daily) deals; weekly deals go straight to eligible.
+  if(trigger>1 && dates.length>=BCLAW_WARN_MIN && dates.length<trigger && age!=null && age>=(BCLAW_WINDOW-BCLAW_WARN_DAYS) && age<=BCLAW_WINDOW) return 'warning';
   return null;
 }
 function beaconClawTag(m){
   const t=beaconClawTier(m);
-  if(t==='eligible') return '<span class="claw-chip" title="Clawback eligible — a 4th bounce OR a stop payment within 30 business days of funding. Recover the commission from '+(m.rep||'the rep')+', then mark it clawed on the Master Sheet.">\u23ea Clawback</span>';
+  if(t==='eligible'){ const wk=isWeeklyDeal(m); return '<span class="claw-chip" title="Clawback eligible — '+(wk?'a weekly deal that bounced within 30 business days of funding':'a 4th bounce OR a stop payment within 30 business days of funding')+'. Recover the commission from '+(m.rep||'the rep')+', then mark it clawed on the Master Sheet.">\u23ea Clawback</span>'; }
   if(t==='warning'){ const n=Math.max(0, BCLAW_WINDOW-(bizDaysBetween(m.funded,bLocalToday())||BCLAW_WINDOW)); return '<span class="claw-chip-warn" title="Window closing — '+n+' business day'+(n!==1?'s':'')+' left. If it hits a 4th bounce before the cutoff, the commission becomes clawback-eligible.">\u23f3 '+n+'d</span>'; }
   return '';
 }
