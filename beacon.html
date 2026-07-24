@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v139 · live</span>
+    <span class="build-tag">v140 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1518,7 +1518,7 @@
       <div><label>Owner name<span class="req">*</span></label><input type="text" id="legal-form-owner" placeholder="Jane Smith" /></div>
       <div><label>Phone</label><input type="text" id="legal-form-phone" placeholder="(555) 123-4567" /></div>
       <div class="full"><label>Email</label><input type="email" id="legal-form-email" placeholder="owner@business.com" /></div>
-      <div><label>Legal / collections co.</label><input type="text" id="legal-form-company" placeholder="Top Line" value="Top Line" /></div>
+      <div><label>Legal / collections co.</label><input type="text" id="legal-form-company" placeholder="Top Line" /></div>
       <div><label>Target processors</label><input type="text" id="legal-form-targets" placeholder="Stripe, PayPal, Square" /></div>
     </div>
     <div class="legal-form-actions">
@@ -5197,7 +5197,7 @@ function openLegalForm(leadId) {
   document.getElementById("legal-form-owner").value = m.owner_name || "";
   document.getElementById("legal-form-phone").value = bxFmtPhone(m.owner_phone || "");
   document.getElementById("legal-form-email").value = m.owner_email || "";
-  document.getElementById("legal-form-company").value = "Top Line";
+  document.getElementById("legal-form-company").value = "";  // v140: no Top Line default — leave blank, "Top Line" stays as the greyed placeholder
   document.getElementById("legal-form-targets").value = "";
   document.getElementById("legal-form-overlay").classList.add("shown");
   document.querySelectorAll(".resolve-menu.shown").forEach(el => el.classList.remove("shown"));
@@ -5301,7 +5301,7 @@ function submitLegalForm() {
     owner_name: owner,
     phone: document.getElementById("legal-form-phone").value.trim(),
     email: document.getElementById("legal-form-email").value.trim(),
-    legal_company: document.getElementById("legal-form-company").value.trim() || "Top Line",
+    legal_company: document.getElementById("legal-form-company").value.trim(),  // v140: save exactly what's typed — blank stays blank, no Top Line fallback
     balance_at_send: m.balance,
     pct_paid_at_send: m.pct_paid,
     current_balance: m.balance,
