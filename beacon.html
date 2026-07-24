@@ -1237,7 +1237,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v134 · live</span>
+    <span class="build-tag">v137 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1710,13 +1710,18 @@ function beaconClawTier(m){
   if(st==='CLAWED'||st==='DISMISSED') return null;
   if(st==='FORCED') return 'eligible';
   const funded=m.funded; if(!funded) return null;
+  // v135: the right to recover expires 30 days after funding. Past the window the deal drops off
+  // entirely — no chip, no closing-soon alert — because it can no longer be clawed. This mirrors
+  // the Master Sheet, which owns the rule; Beacon previously had no expiry and kept flagging
+  // aged-out deals forever, so its alert count ran ahead of the Master Sheet's.
+  const age=bDaysBetween(funded, bLocalToday());
+  if(age!=null && age>BCLAW_WINDOW) return null;
   const dates=m._bounceDates||[];
   const stops=m._stopDates||[];
   // v88: a STOP PAYMENT (merchant blocked the ACH — a clear breach) within 30 days of funding is
   // clawback-eligible on its own, no 4-bounce threshold needed.
   if(stops.length){ const sd=bDaysBetween(funded, stops[0]); if(sd!=null && sd<=BCLAW_WINDOW) return 'eligible'; }
   if(dates.length>=BCLAW_TRIGGER){ const dd=bDaysBetween(funded, dates[BCLAW_TRIGGER-1]); if(dd!=null&&dd<=BCLAW_WINDOW) return 'eligible'; }
-  const age=bDaysBetween(funded, bLocalToday());
   if(dates.length>=BCLAW_WARN_MIN && dates.length<BCLAW_TRIGGER && age!=null && age>=(BCLAW_WINDOW-BCLAW_WARN_DAYS) && age<=BCLAW_WINDOW) return 'warning';
   return null;
 }
@@ -2036,12 +2041,25 @@ function beaconCollectionsStateFor(m){
   if (m.resolution_type==='legal') return 'LEGAL';
   if (m.resolution_type==='paused') return m.resume_date ? 'RESUME SCHEDULED' : 'SUSPENDED';
   if (m.resolution_type==='lowered') return 'LOWERED';
-  if (m.resolution_type==='spoke') return 'OK';
+  if (m.resolution_type==='spoke'){
+    // v137: "spoke to — resuming as normal" shows RESUME NORMAL on the Master Sheet so a deal that
+    // stumbled stays visible instead of going blank. It is a "waiting to see" tag, not a permanent
+    // scar, and it retires on real evidence:
+    //   • bounced again since we spoke, and not recovered → the promise broke → back to BOUNCING
+    //   • a payment CLEARED since we spoke              → it genuinely resumed → tag expires (OK)
+    // Strictly-after comparisons throughout, matching the BOUNCING auto-clear convention below.
+    const lastBounce=(m._bounceDates||[]).slice(-1)[0]||'';
+    const cleared=m.last_cleared||'';
+    if (lastBounce && m.resolution_date && lastBounce > m.resolution_date && !(cleared && cleared > lastBounce)) return 'BOUNCING';
+    if (cleared && m.resolution_date && cleared > m.resolution_date) return 'OK';
+    return 'RESUME NORMAL';
+  }
   return m.bounced_today ? 'BOUNCING' : 'OK';
 }
 function beaconCollectionsDetailFor(m){
   if (m.resolution_type==='paused' && m.resume_date){ const d=m.resume_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Resume '+md; }
   if (m.resolution_type==='lowered' && m.lowered_amount) return 'Lowered to $'+Number(m.lowered_amount).toLocaleString()+'/day';
+  if (m.resolution_type==='spoke' && m.resolution_date){ const d=m.resolution_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Spoke to '+md+' — paying as normal'; }
   return '';
 }
 async function beaconPushResolution(m, todayISO){
@@ -2267,6 +2285,13 @@ async function reconcileCollectionsStates(){
           fields['CollectionsState'] = want;
           fields['CollectionsDetail'] = beaconCollectionsDetailFor(m);
           m._collectionsState = want;  // avoid re-patching within this session
+        } else if (want === 'OK' && (m._collectionsState||'') === 'RESUME NORMAL'){
+          // v137: the spoke-to tag has done its job — a payment cleared after we spoke, so the deal
+          // really did resume. Retire it. Without this the reconcile skips every 'OK' result and the
+          // tag would sit on the Master Sheet forever.
+          fields['CollectionsState'] = '';
+          fields['CollectionsDetail'] = '';
+          m._collectionsState = '';
         }
       } else if ((m._collectionsState||'') === 'BOUNCING'){
         // Unresolved & tagged BOUNCING — drop the tag once a payment CLEARED strictly after the most recent bounce.
