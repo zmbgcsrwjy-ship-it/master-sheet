@@ -944,6 +944,19 @@
     font-size: 11px;
   }
   .note-prior-text { color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  /* v143: prior-note edit/delete — head row holds the date + hover-revealed icons, then the text/editor below. */
+  .note-prior-head { display: flex; align-items: center; gap: 6px; }
+  .note-prior-item .np-actions { margin-left: auto; display: inline-flex; gap: 2px; opacity: 0; transition: opacity 0.12s; }
+  .note-prior-item:hover .np-actions { opacity: 1; }
+  .note-prior-item .np-actions button { background: transparent; border: none; cursor: pointer; color: var(--text-3); font-size: 11px; padding: 1px 4px; border-radius: 3px; line-height: 1; }
+  .note-prior-item .np-actions .np-edit:hover { color: var(--text); background: var(--surface-2); }
+  .note-prior-item .np-actions .np-del:hover { color: var(--sev-stop); background: var(--sev-stop-bg); }
+  .np-edit-ta { width: 100%; min-height: 48px; font: inherit; font-size: 11px; padding: 6px 8px; border: 0.5px solid var(--border-strong); border-radius: 5px; background: var(--surface); color: var(--text); resize: vertical; box-sizing: border-box; margin-top: 3px; }
+  .np-edit-ta:focus { outline: none; border-color: var(--text); }
+  .np-edit-row { display: flex; gap: 6px; margin-top: 5px; }
+  .np-edit-row button { font: inherit; font-size: 10.5px; font-weight: 600; padding: 3px 11px; border-radius: 5px; cursor: pointer; border: 0.5px solid var(--border-strong); }
+  .np-edit-row .np-save { background: var(--text); color: var(--surface); border-color: var(--text); }
+  .np-edit-row .np-cancel { background: var(--surface); color: var(--text-2); }
   .us-notes-label { font-size: 10px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
   .expand-field { display: flex; flex-direction: column; gap: 6px; }
   
@@ -1142,6 +1155,21 @@
   .timeline-add button { background: var(--text); color: var(--surface); border: 0; padding: 7px 12px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px; align-self: flex-end; }
   .timeline-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
   .timeline-entry { padding: 8px 10px; background: var(--surface); border: 0.5px solid var(--border); border-radius: 6px; font-size: 12px; }
+  /* v143: per-entry edit/delete — icons sit on the right of the date row, revealed on hover. */
+  .timeline-entry { position: relative; }
+  .timeline-entry .entry-date { display: flex; align-items: center; gap: 6px; }
+  .timeline-entry .tl-actions { margin-left: auto; display: inline-flex; gap: 2px; opacity: 0; transition: opacity 0.12s; }
+  .timeline-entry:hover .tl-actions { opacity: 1; }
+  .timeline-entry .tl-actions button { background: transparent; border: none; cursor: pointer; color: var(--text-3); font-size: 12px; padding: 1px 4px; border-radius: 3px; line-height: 1; }
+  .timeline-entry .tl-actions .tl-edit:hover { color: var(--text); background: var(--surface-2); }
+  .timeline-entry .tl-actions .tl-del:hover { color: var(--sev-stop); background: var(--sev-stop-bg); }
+  .timeline-entry .tl-text { margin-top: 2px; }
+  .timeline-entry .tl-edit-ta { width: 100%; min-height: 52px; font: inherit; font-size: 12px; padding: 6px 8px; border: 0.5px solid var(--border-strong); border-radius: 5px; background: var(--surface-2); color: var(--text); resize: vertical; box-sizing: border-box; margin-top: 4px; }
+  .timeline-entry .tl-edit-ta:focus { outline: none; border-color: var(--text); }
+  .timeline-entry .tl-edit-row { display: flex; gap: 6px; margin-top: 5px; }
+  .timeline-entry .tl-edit-row button { font: inherit; font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 5px; cursor: pointer; border: 0.5px solid var(--border-strong); }
+  .timeline-entry .tl-edit-row .tl-save { background: var(--text); color: var(--surface); border-color: var(--text); }
+  .timeline-entry .tl-edit-row .tl-cancel { background: var(--surface); color: var(--text-2); }
   .timeline-entry .entry-date { font-size: 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; font-weight: 600; }
   .timeline-entry.notify { background: var(--sev-legal-tint); border-left: 3px solid var(--sev-legal-bar); }
   .timeline-entry.notify .entry-date { color: var(--sev-legal); display: flex; align-items: center; gap: 6px; }
@@ -1240,7 +1268,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v142 · live</span>
+    <span class="build-tag">v144 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1650,6 +1678,22 @@ async function atPatch(table, recs){
     out.push(...d.records);
   }
   return out;
+}
+// v143: delete records by id (Airtable takes ids as repeated records[] query params, max 10/call).
+async function atDelete(table, ids){
+  const clean = (ids||[]).filter(Boolean);
+  for (let i=0;i<clean.length;i+=10){
+    const q = clean.slice(i,i+10).map(id=>'records[]='+encodeURIComponent(id)).join('&');
+    await atFetch('/'+BEACON_CFG.baseId+'/'+encodeURIComponent(table)+'?'+q, {method:'DELETE'});
+  }
+}
+// v143: delete today's (or any day's) saved NOTE row for a deal, and forget its rid mapping so a
+// later re-add creates a fresh row instead of patching a deleted one. Safe to call when nothing was
+// ever saved — it just resolves. Used by confirmNote (cleared textarea) and note deletion.
+async function beaconDeleteNote(m, dayISO, noteRidMap){
+  const mapKey = m.lead_id+'|'+dayISO;
+  const rid = noteRidMap && noteRidMap[mapKey];
+  if (rid){ try{ await atDelete('Actions',[rid]); }catch(e){ /* already gone is fine */ } delete noteRidMap[mapKey]; }
 }
 
 // ---------- PREFLIGHT (contract §5.3/5.4: field-ID manifest, loud stop on drift) ----------
@@ -2463,14 +2507,15 @@ function merchantInfoInnerHtml(m){
     '<textarea class="us-notes-ta notes-today-ta" data-field="notes" data-lead="' + m.lead_id + '" placeholder="Log today\'s outreach — what you said, what they said, what happens next">' + todayVal.replace(/</g,'&lt;') + '</textarea>' +
     '<button class="us-confirm" onclick="usConfirmNote(event,' + m.lead_id + ')">Confirm</button>' +
   '</div>';
-  const entries = (m.notes_log || []).filter(e => e.text && e.text.trim() && e.date_iso !== TODAY_ISO).map(e => ({ date: e.date_iso, text: e.text, legal: false }));
+  const entries = (m.notes_log || []).filter(e => e.text && e.text.trim() && e.date_iso !== TODAY_ISO).map(e => ({ date: e.date_iso, ts: e.logged_at || (e.date_iso||''), text: e.text, legal: false }));
   if (legalCase && Array.isArray(legalCase.updates)) {
     legalCase.updates.forEach(u => {
       const t = [u.note, u.contact ? '→ ' + u.contact : '', u.method ? '(' + u.method + ')' : '', u.bounce_code ? '· ' + u.bounce_code : ''].filter(Boolean).join(' ');
-      if (t.trim()) entries.push({ date: u.date, text: t.trim(), legal: true });
+      if (t.trim()) entries.push({ date: u.date, ts: u.logged_at || (u.date||''), text: t.trim(), legal: true });
     });
   }
-  entries.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  // v144: sort by full timestamp so same-day entries order newest-first, not just by day.
+  entries.sort((a,b) => String(b.ts||'').localeCompare(String(a.ts||'')));
   const histHtml = entries.length
     ? '<div class="minfo-note-history">' + entries.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date) + (e.legal ? ' <span style="color:#FF6B61">· legal</span>' : '') + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('') + '</div>'
     : '<div class="minfo-empty">No earlier notes.</div>';
@@ -3851,7 +3896,7 @@ function usConfirmNote(ev, leadId) {
     if (!m.notes_log) m.notes_log = [];
     const existing = m.notes_log.find(en => en.date_iso === TODAY_ISO);
     if (existing) existing.text = txt;
-    else if (txt.trim()) m.notes_log.push({ date_iso: TODAY_ISO, text: txt });
+    else if (txt.trim()) m.notes_log.push({ date_iso: TODAY_ISO, text: txt, logged_at: new Date().toISOString() });
     if (!txt.trim() && existing) m.notes_log = m.notes_log.filter(en => en.date_iso !== TODAY_ISO);
     m.notes = txt;
   }
@@ -4661,8 +4706,16 @@ function renderNotesEditor(m) {
   
   let priorHtml = '';
   if (prior.length > 0) {
-    const items = prior.slice().reverse().map(e => 
-      '<div class="note-prior-item"><span class="note-prior-date">' + fmtDate(e.date_iso) + '</span><span class="note-prior-text">' + (e.text || '').replace(/</g, '&lt;') + '</span></div>'
+    const items = prior.slice().sort((a,b)=>String(b.date_iso||'').localeCompare(String(a.date_iso||''))).map(e => 
+      '<div class="note-prior-item" data-npkey="' + e.date_iso + '" data-lead="' + m.lead_id + '">' +
+        '<div class="note-prior-head"><span class="note-prior-date">' + fmtDate(e.date_iso) + '</span>' +
+          '<span class="np-actions">' +
+            '<button class="np-edit" title="Edit" onclick="npEditNote(' + m.lead_id + ',\'' + e.date_iso + '\')">\u270e</button>' +
+            '<button class="np-del" title="Delete" onclick="npDeleteNote(' + m.lead_id + ',\'' + e.date_iso + '\')">\ud83d\uddd1</button>' +
+          '</span>' +
+        '</div>' +
+        '<span class="note-prior-text">' + (e.text || '').replace(/</g, '&lt;') + '</span>' +
+      '</div>'
     ).join('');
     priorHtml = 
       '<div class="note-prior-toggle" onclick="toggleNotePrior(' + m.lead_id + ')">' +
@@ -4686,6 +4739,58 @@ function toggleNotePrior(leadId) {
   const isHidden = list.style.display === 'none';
   list.style.display = isHidden ? 'block' : 'none';
   if (chev) chev.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
+// v143: edit / delete a PRIOR note in the daily-collections editors (main table + sidebar cards).
+// Operates on the merchant's notes_log and persists to Airtable, then redraws whatever panel is open.
+function npFindNoteItem(leadId, dateIso){
+  return document.querySelector('.note-prior-item[data-npkey="' + dateIso + '"][data-lead="' + leadId + '"]');
+}
+function npRedrawOpenPanels(m){
+  // Redraw any open merchant-info panel and any open sidebar note editor so history reflects the change.
+  document.querySelectorAll('tr.minfo-expand[data-parent-id="' + m.lead_id + '"] .minfo-panel, .minfo-expand-div[data-parent-id="' + m.lead_id + '"] .minfo-panel')
+    .forEach(p => { p.innerHTML = merchantInfoInnerHtml(m); const fresh = p.querySelector('.notes-today-ta'); if (fresh) fresh.addEventListener('input', onFieldChange); });
+  // Main-table expand row (renderNotesEditor)
+  const rowExp = document.querySelector('tr.row-expand[data-parent-id="' + m.lead_id + '"] .expand-field');
+  if (rowExp){ rowExp.innerHTML = renderNotesEditor(m); rowExp.querySelectorAll('[data-field]').forEach(inp => inp.addEventListener('input', onFieldChange)); }
+}
+function npEditNote(leadId, dateIso){
+  const m = state.find(x => x.lead_id === leadId); if (!m) return;
+  const item = npFindNoteItem(leadId, dateIso); if (!item) return;
+  const entry = (m.notes_log||[]).find(e => e.date_iso === dateIso); if (!entry) return;
+  const textEl = item.querySelector('.note-prior-text'); if (!textEl) return;
+  const acts = item.querySelector('.np-actions'); if (acts) acts.style.visibility = 'hidden';
+  textEl.innerHTML =
+    '<textarea class="np-edit-ta">' + escapeHtml(entry.text || '') + '</textarea>' +
+    '<div class="np-edit-row">' +
+      '<button class="np-save" onclick="npSaveNote(' + leadId + ',\'' + dateIso + '\')">Save</button>' +
+      '<button class="np-cancel" onclick="npRedrawFromCancel(' + leadId + ')">Cancel</button>' +
+    '</div>';
+  const ta = textEl.querySelector('.np-edit-ta'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+}
+function npRedrawFromCancel(leadId){ const m = state.find(x => x.lead_id === leadId); if (m) npRedrawOpenPanels(m); }
+function npSaveNote(leadId, dateIso){
+  const m = state.find(x => x.lead_id === leadId); if (!m) return;
+  const item = npFindNoteItem(leadId, dateIso);
+  const ta = item && item.querySelector('.np-edit-ta'); if (!ta) return;
+  const txt = ta.value.trim();
+  const entry = (m.notes_log||[]).find(e => e.date_iso === dateIso);
+  if (entry){
+    if (txt){ entry.text = txt; if (dateIso === TODAY_ISO) m.notes = txt; }
+    else { m.notes_log = m.notes_log.filter(e => e.date_iso !== dateIso); if (dateIso === TODAY_ISO) m.notes = ''; }
+  }
+  (txt ? beaconPushNote(m, dateIso, beaconNoteRidMap) : beaconDeleteNote(m, dateIso, beaconNoteRidMap)).catch(beaconWriteErr);
+  showToast("\u2713 Saved");
+  npRedrawOpenPanels(m);
+}
+function npDeleteNote(leadId, dateIso){
+  const m = state.find(x => x.lead_id === leadId); if (!m) return;
+  if (!confirm('Delete this note? This cannot be undone.')) return;
+  m.notes_log = (m.notes_log||[]).filter(e => e.date_iso !== dateIso);
+  if (dateIso === TODAY_ISO) m.notes = '';
+  beaconDeleteNote(m, dateIso, beaconNoteRidMap).catch(beaconWriteErr);
+  showToast("Deleted");
+  npRedrawOpenPanels(m);
 }
 
 // === PAST-DATE NOTE VIEWING ===
@@ -4744,8 +4849,8 @@ function togglePastNotes(leadId, dateIso) {
     if (!hasToday) notesByDate.set(TODAY_ISO, live.notes);
   }
   
-  // Sort by date ascending (oldest first)
-  const sortedEntries = Array.from(notesByDate.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  // v144: newest first, matching every other note surface ("most recent on top").
+  const sortedEntries = Array.from(notesByDate.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   
   let entriesHtml;
   if (sortedEntries.length === 0) {
@@ -4785,8 +4890,16 @@ function renderSidebarNotesEditor(m, kind) {
   
   let priorHtml = '';
   if (prior.length > 0) {
-    const items = prior.slice().reverse().map(e => 
-      '<div class="note-prior-item"><span class="note-prior-date">' + fmtDate(e.date_iso) + '</span><span class="note-prior-text">' + (e.text || '').replace(/</g, '&lt;') + '</span></div>'
+    const items = prior.slice().sort((a,b)=>String(b.date_iso||'').localeCompare(String(a.date_iso||''))).map(e => 
+      '<div class="note-prior-item" data-npkey="' + e.date_iso + '" data-lead="' + m.lead_id + '">' +
+        '<div class="note-prior-head"><span class="note-prior-date">' + fmtDate(e.date_iso) + '</span>' +
+          '<span class="np-actions">' +
+            '<button class="np-edit" title="Edit" onclick="npEditNote(' + m.lead_id + ',\'' + e.date_iso + '\')">\u270e</button>' +
+            '<button class="np-del" title="Delete" onclick="npDeleteNote(' + m.lead_id + ',\'' + e.date_iso + '\')">\ud83d\uddd1</button>' +
+          '</span>' +
+        '</div>' +
+        '<span class="note-prior-text">' + (e.text || '').replace(/</g, '&lt;') + '</span>' +
+      '</div>'
     ).join('');
     priorHtml = 
       '<div class="note-prior-toggle" onclick="toggleNotePrior(' + m.lead_id + ')">' +
@@ -4804,9 +4917,30 @@ function renderSidebarNotesEditor(m, kind) {
 }
 
 function confirmNote(leadId) {
-  { const _m = state.find(x => x.lead_id === leadId); if (_m) beaconPushNote(_m, TODAY_ISO, beaconNoteRidMap).catch(beaconWriteErr); }
-  // Note auto-saves on each keystroke via onFieldChange. Confirm just closes the panel
-  // (explicitly — never goes through toggleExpand, so it can't accidentally re-open).
+  const m = state.find(x => x.lead_id === leadId);
+  if (!m) return;
+  // v143: read the textarea value at confirm time rather than trusting that onFieldChange fired on
+  // every keystroke. Previously confirm just re-pushed whatever was already in notes_log — so a fast
+  // paste, autofill, or a re-render that dropped the input listener meant today's entry was never
+  // created, beaconPushNote returned early, and the note silently vanished when the panel closed.
+  const ta = document.querySelector('.notes-today-ta[data-lead="' + leadId + '"]');
+  if (ta) {
+    const txt = ta.value;
+    if (!m.notes_log) m.notes_log = [];
+    const existing = m.notes_log.find(en => en.date_iso === TODAY_ISO);
+    if (existing) existing.text = txt;
+    else if (txt.trim()) m.notes_log.push({ date_iso: TODAY_ISO, text: txt, logged_at: new Date().toISOString() });
+    if (!txt.trim() && existing) m.notes_log = m.notes_log.filter(en => en.date_iso !== TODAY_ISO);
+    m.notes = txt;
+  }
+  const _entry = (m.notes_log || []).find(en => en.date_iso === TODAY_ISO);
+  const _hasText = !!(_entry && String(_entry.text).trim());
+  // Persist: push if there's text, or delete today's saved note if it was cleared.
+  const done = _hasText
+    ? beaconPushNote(m, TODAY_ISO, beaconNoteRidMap)
+    : beaconDeleteNote(m, TODAY_ISO, beaconNoteRidMap);
+  done.then(() => showToast(_hasText ? "\u2713 Note saved" : "Note cleared")).catch(beaconWriteErr);
+  // Close the panel explicitly (never via toggleExpand, so it can't accidentally re-open).
   const existing = document.querySelector('tr.row-expand[data-parent-id="' + leadId + '"]');
   if (existing) existing.remove();
   const parent = document.querySelector('tr[data-lead-id="' + leadId + '"]:not(.row-expand)');
@@ -4814,9 +4948,6 @@ function confirmNote(leadId) {
     const btn = parent.querySelector(".row-btn");
     if (btn) btn.classList.remove("expanded");
   }
-  const m = state.find(x => x.lead_id === leadId);
-  const hasNote = m && hasAnyNote(m);
-  showToast(hasNote ? "Note saved" : "Note cleared");
 }
 
 function onFieldChange(e) {
@@ -4833,7 +4964,7 @@ function onFieldChange(e) {
     if (existing) {
       existing.text = newText;
     } else if (newText.trim()) {
-      m.notes_log.push({ date_iso: today, text: newText });
+      m.notes_log.push({ date_iso: today, text: newText, logged_at: new Date().toISOString() });
     }
     // Drop today's entry if user cleared the textarea
     if (!newText.trim() && existing) {
@@ -5679,28 +5810,58 @@ function toggleCaseDetail(leadId) {
   detail.className = "case-detail";
   detail.dataset.parentId = leadId;
   const _lm = state.find(x => x.lead_id === leadId);
-  const _tl = (c.updates || []).map(u => ({ u: u, date: u.date }));
-  if (_lm && Array.isArray(_lm.notes_log)) _lm.notes_log.filter(e => e.text && e.text.trim()).forEach(e => _tl.push({ note: e, date: e.date_iso }));
-  _tl.sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  // v143: legacy updates saved before logged_at existed can share a date (two entries on 7/27),
+  // which would collide as timeline keys. Backfill a stable, unique logged_at once so edit/delete
+  // can target the exact entry. Deterministic per position so it's stable across reopens.
+  let _backfilled = false;
+  (c.updates || []).forEach((u, i) => { if (!u.logged_at){ u.logged_at = (u.date || '1970-01-01') + 'T00:00:' + String(i).padStart(2,'0') + '.000Z'; _backfilled = true; } });
+  if (_backfilled) persistLegalCases();
+  const _tl = (c.updates || []).map(u => ({ u: u, date: u.date, ts: u.logged_at || (u.date||'') }));
+  if (_lm && Array.isArray(_lm.notes_log)) _lm.notes_log.filter(e => e.text && e.text.trim()).forEach(e => _tl.push({ note: e, date: e.date_iso, ts: e.logged_at || (e.date_iso||'') }));
+  // v144: sort by full timestamp (logged_at), not just the day, so two entries saved on the SAME day
+  // still come out newest-on-top. Falls back to the date string for legacy entries without a ts.
+  _tl.sort((a,b) => String(b.ts||'').localeCompare(String(a.ts||'')));
   const timelineHtml = (_tl.length > 0)
     ? _tl.map(it => {
         if (it.note) {
-          return '<div class="timeline-entry"><div class="entry-date">' + fmtDate(it.date) + ' <span style="color:var(--text-3)">· note</span></div>' + escapeHtml(it.note.text || '') + '</div>';
+          // v143: daily note in the legal timeline — editable/deletable in place. Keyed by date_iso.
+          const nk = 'note|' + it.note.date_iso;
+          return '<div class="timeline-entry" data-tlkey="' + nk + '" data-lead="' + leadId + '">' +
+              '<div class="entry-date">' + fmtDate(it.date) + ' <span style="color:var(--text-3)">· note</span>' +
+                '<span class="tl-actions"><button class="tl-edit" title="Edit" onclick="tlEditEntry(' + leadId + ',\'' + nk + '\')">✎</button>' +
+                '<button class="tl-del" title="Delete" onclick="tlDeleteEntry(' + leadId + ',\'' + nk + '\')">🗑</button></span>' +
+              '</div>' +
+              '<div class="tl-text">' + escapeHtml(it.note.text || '') + '</div>' +
+            '</div>';
         }
         const u = it.u;
         if (u.type === "notify") {
+          // Notifications are structured records (contact/method/code) — the free-text note is the
+          // editable part; delete removes the whole notification entry.
+          const uk = 'upd|' + (u.logged_at || u.date);
           const noteHtml = u.note ? '<div class="entry-note">' + escapeHtml(u.note) + '</div>' : '';
           const codeName = u.bounce_code ? rcodeName(u.bounce_code) : "";
           const codeChip = u.bounce_code 
             ? '<span class="entry-code-chip" title="' + u.bounce_code + (codeName ? ' — ' + codeName : '') + '">' + u.bounce_code + (codeName ? ': ' + codeName : '') + '</span>'
             : '';
-          return '<div class="timeline-entry notify">' +
-            '<div class="entry-date">⚖ Notified ' + fmtDate(u.date) + codeChip + '</div>' +
+          return '<div class="timeline-entry notify" data-tlkey="' + uk + '" data-lead="' + leadId + '">' +
+            '<div class="entry-date">⚖ Notified ' + fmtDate(u.date) + codeChip +
+              '<span class="tl-actions"><button class="tl-edit" title="Edit note" onclick="tlEditEntry(' + leadId + ',\'' + uk + '\')">✎</button>' +
+              '<button class="tl-del" title="Delete" onclick="tlDeleteEntry(' + leadId + ',\'' + uk + '\')">🗑</button></span>' +
+            '</div>' +
             '<div class="entry-body"><strong>' + escapeHtml(u.contact || '(unspecified)') + '</strong> · ' + escapeHtml(u.method || '') + '</div>' +
-            noteHtml +
+            '<div class="tl-text">' + noteHtml + '</div>' +
           '</div>';
         }
-        return '<div class="timeline-entry"><div class="entry-date">' + fmtDate(u.date) + '</div>' + escapeHtml(u.text || '') + '</div>';
+        // Plain typed update — fully editable/deletable.
+        const uk = 'upd|' + (u.logged_at || u.date);
+        return '<div class="timeline-entry" data-tlkey="' + uk + '" data-lead="' + leadId + '">' +
+            '<div class="entry-date">' + fmtDate(u.date) +
+              '<span class="tl-actions"><button class="tl-edit" title="Edit" onclick="tlEditEntry(' + leadId + ',\'' + uk + '\')">✎</button>' +
+              '<button class="tl-del" title="Delete" onclick="tlDeleteEntry(' + leadId + ',\'' + uk + '\')">🗑</button></span>' +
+            '</div>' +
+            '<div class="tl-text">' + escapeHtml(u.text || '') + '</div>' +
+          '</div>';
       }).join("")
     : '<div class="timeline-empty">No updates logged yet — add the first below.</div>';
   detail.innerHTML = '<td colspan="9"><div class="case-detail-grid">' +
@@ -5756,7 +5917,7 @@ function addTimelineEntry(leadId) {
   const text = ta.value.trim();
   if (!text) { showToast("Enter an update first"); ta.focus(); return; }
   if (!c.updates) c.updates = [];
-  c.updates.push({ date: TODAY_ISO, text: text });
+  c.updates.push({ date: TODAY_ISO, text: text, logged_at: new Date().toISOString() });
   persistLegalCases();
   // Close & reopen detail to refresh
   toggleCaseDetail(leadId);
@@ -5764,6 +5925,73 @@ function addTimelineEntry(leadId) {
   renderLegalCases();
   showToast("Update logged");
 }
+
+// v143: inline edit + confirmed delete for timeline entries (legal updates and merchant notes).
+// Key format: 'upd|<logged_at>' for a legal case update, 'note|<date_iso>' for a daily note.
+function tlResolve(leadId, key){
+  const bar = key.indexOf('|'); const kind = key.slice(0,bar); const id = key.slice(bar+1);
+  const c = legalCases.find(x => x.lead_id === leadId);
+  const m = state.find(x => x.lead_id === leadId);
+  if (kind === 'upd'){ const u = c && (c.updates||[]).find(x => (x.logged_at||x.date) === id); return {kind, c, m, u}; }
+  if (kind === 'note'){ const n = m && (m.notes_log||[]).find(x => x.date_iso === id); return {kind, c, m, n, id}; }
+  return {kind:null};
+}
+function tlEditEntry(leadId, key){
+  const el = document.querySelector('.timeline-entry[data-tlkey="' + key + '"][data-lead="' + leadId + '"]');
+  if (!el) return;
+  const r = tlResolve(leadId, key);
+  const cur = r.kind==='upd' ? (r.u ? (r.u.type==='notify' ? (r.u.note||'') : (r.u.text||'')) : '')
+            : r.kind==='note' ? (r.n ? (r.n.text||'') : '') : '';
+  const textEl = el.querySelector('.tl-text');
+  if (!textEl) return;
+  // Swap the text for an editable box with Save / Cancel. Store the key on the box.
+  textEl.innerHTML =
+    '<textarea class="tl-edit-ta">' + escapeHtml(cur) + '</textarea>' +
+    '<div class="tl-edit-row">' +
+      '<button class="tl-save" onclick="tlSaveEntry(' + leadId + ',\'' + key + '\')">Save</button>' +
+      '<button class="tl-cancel" onclick="reopenCaseDetail(' + leadId + ')">Cancel</button>' +
+    '</div>';
+  const ta = textEl.querySelector('.tl-edit-ta'); if (ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  // Hide the edit/delete icons while editing this row
+  const acts = el.querySelector('.tl-actions'); if (acts) acts.style.visibility = 'hidden';
+}
+function tlSaveEntry(leadId, key){
+  const el = document.querySelector('.timeline-entry[data-tlkey="' + key + '"][data-lead="' + leadId + '"]');
+  const ta = el && el.querySelector('.tl-edit-ta'); if (!ta) return;
+  const txt = ta.value.trim();
+  const r = tlResolve(leadId, key);
+  if (r.kind === 'upd' && r.u){
+    if (r.u.type === 'notify') r.u.note = txt; else r.u.text = txt;
+    persistLegalCases();
+  } else if (r.kind === 'note' && r.m){
+    if (!r.n){ /* nothing */ }
+    else if (txt){ r.n.text = txt; }
+    else { r.m.notes_log = r.m.notes_log.filter(x => x.date_iso !== r.id); }
+    if (r.id === TODAY_ISO) r.m.notes = txt;
+    // Persist the note: patch/create if there's text, delete the row if cleared.
+    (txt ? beaconPushNote(r.m, r.id, beaconNoteRidMap) : beaconDeleteNote(r.m, r.id, beaconNoteRidMap))
+      .catch(beaconWriteErr);
+  }
+  showToast("\u2713 Saved");
+  reopenCaseDetail(leadId);
+}
+function tlDeleteEntry(leadId, key){
+  const r = tlResolve(leadId, key);
+  const label = r.kind==='note' ? 'this note' : 'this update';
+  if (!confirm('Delete ' + label + '? This cannot be undone.')) return;
+  if (r.kind === 'upd' && r.c){
+    r.c.updates = (r.c.updates||[]).filter(x => (x.logged_at||x.date) !== key.slice(4));
+    persistLegalCases();
+  } else if (r.kind === 'note' && r.m){
+    r.m.notes_log = (r.m.notes_log||[]).filter(x => x.date_iso !== r.id);
+    if (r.id === TODAY_ISO) r.m.notes = '';
+    beaconDeleteNote(r.m, r.id, beaconNoteRidMap).catch(beaconWriteErr);
+  }
+  showToast("Deleted");
+  reopenCaseDetail(leadId);
+}
+// Close+reopen the case detail so the timeline redraws from current data.
+function reopenCaseDetail(leadId){ toggleCaseDetail(leadId); toggleCaseDetail(leadId); }
 
 // ===== Sidebar Sent-to-Legal section (X button closes case as PIF) =====
 function closeLegalFromSidebar(leadId, ev) {
