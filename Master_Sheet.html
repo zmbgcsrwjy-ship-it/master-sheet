@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Weekly deals now become clawback-eligible on the FIRST bounce within the 30-business-day window (a daily deal still needs a 4th bounce or a stop payment) — a single missed weekly pull is as serious as ~4 missed daily pulls. Clawback window is 30 business days. RESUME NORM pill and gold SUSPENDED &middot; date pill.">build 113</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Account-problem and authorization/stop return codes (R02/R03/R04/R09/R11/R16/R20 + R05/R07/R08/R10/R29) now alert like a stop across both apps, not as a regular bounce — R03 &quot;No Account&quot; means the account info on docs is wrong. R01 stays a normal bounce. Weekly deals clawback on the first bounce; window is 30 business days.">build 114</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -905,7 +905,16 @@ function fieldsToDeal(id, f) {
 
 // Bounce history per deal (lead_id -> {codes:Set, worst, count}). Read-only; Beacon owns Bounces.
 // Lets the underwriter see prior payment trouble before refinancing.
-const STOP_RCODES = ['R02','R05','R07','R08','R10','R16','R29'];
+// build 114: severe ACH return codes — mirrors Beacon (v142). A severe return means the money isn't
+// coming through this account: either the merchant blocked us (STOP) or the account itself is
+// bad/wrong (ACCOUNT — on our deals usually wrong account info on docs). Both drive stop-level
+// treatment and clawback stop-eligibility. R01 (insufficient funds) is intentionally NOT severe —
+// that's the ordinary daily bounce. This set MUST stay identical to Beacon's so clawback eligibility
+// matches across both apps.
+const RC_ACCOUNT_CODES = ['R02','R03','R04','R09','R11','R20'];
+const RC_STOP_CODES    = ['R05','R07','R08','R10','R16','R29'];
+const STOP_RCODES = RC_ACCOUNT_CODES.concat(RC_STOP_CODES);
+function rcSeverity(code){ const rc=String(code||'').toUpperCase().trim(); if(RC_STOP_CODES.includes(rc)) return 'stop'; if(RC_ACCOUNT_CODES.includes(rc)) return 'account'; return ''; }
 let bounceByLead = {};
 async function loadBounceSummary(){
   bounceByLead = {};
@@ -938,7 +947,12 @@ function bounceBadges(d){
   if(e && e.hasStop){
     const stopCodes=[...e.codes].filter(c=>STOP_RCODES.includes(c));
     const label = stopCodes.length ? stopCodes.join('/') : 'STOP';
-    out += `<span class="bbadge bbadge-stop" title="Had a stop-payment / hard return (${label}) — review before refinancing">⛔ ${label}</span>`;
+    // build 114: distinguish an account/doc error (our side) from a true merchant stop in the tooltip.
+    const kinds=new Set(stopCodes.map(rcSeverity));
+    const why = kinds.has('account') && !kinds.has('stop') ? 'account/doc error — verify the account info on docs'
+              : kinds.has('account') && kinds.has('stop') ? 'stop + account error — merchant blocked us and/or account info is wrong'
+              : 'stop-payment / hard return — merchant blocked the debit';
+    out += `<span class="bbadge bbadge-stop" title="Severe return (${label}) — ${why}. Review before refinancing.">⛔ ${label}</span>`;
   } else if(e && e.count>0){
     out += `<span class="bbadge bbadge-bnc" title="${e.count} prior bounce${e.count!==1?'s':''} on record">⚠ ${e.count} bnc</span>`;
   }

@@ -836,6 +836,9 @@
   
   .code-chip { display: inline-block; padding: 2px 7px; border-radius: 4px; background: var(--sev-stop-bg); color: var(--sev-stop); font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.03em; }
   .code-chip.epm { background: #EFEAE0; color: #5B3A0B; }
+  /* v142: account errors are as severe as a stop but signal OUR-SIDE doc issue — same red fill, dashed edge so they read as "different reason". */
+  .code-chip.acct { border: 1px dashed var(--sev-stop); }
+  .code-chip.plain { background: var(--surface-2); color: var(--text-2); font-weight: 600; }
   .streak-chip { display: inline-block; padding: 2px 7px; border-radius: 4px; background: #FBEAEA; color: #B7261C; font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.02em; }
   .weekly-chip { display: inline-block; padding: 3px 9px; border-radius: 4px; background: #FBEAEA; color: #B7261C; font-size: 13px; font-weight: 800; margin-right: 8px; letter-spacing: 0.02em; }
   .inflight-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--good-bg); color: var(--good); font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.03em; border: 0.5px solid var(--good-bar); }
@@ -1237,7 +1240,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v141 · live</span>
+    <span class="build-tag">v142 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1471,21 +1474,21 @@
     <button class="close-btn" onclick="toggleRcodePanel()" title="Close">×</button>
   </div>
   <div class="rcode-panel-body">
-    <div class="rcode-group-label">Account problems</div>
-    <div class="rcode-row severe"><span class="rc-code">R01</span><span class="rc-def">Insufficient Funds</span></div>
+    <div class="rcode-group-label">Account problems — alert like a stop</div>
+    <div class="rcode-row"><span class="rc-code">R01</span><span class="rc-def">Insufficient Funds <em style="color:var(--text-3)">— normal bounce</em></span></div>
     <div class="rcode-row severe"><span class="rc-code">R02</span><span class="rc-def">Account Closed</span></div>
-    <div class="rcode-row severe"><span class="rc-code">R03</span><span class="rc-def">No Account / Unable to Locate Account</span></div>
-    <div class="rcode-row severe"><span class="rc-code">R04</span><span class="rc-def">Invalid Account Number</span></div>
+    <div class="rcode-row severe"><span class="rc-code">R03</span><span class="rc-def">No Account / Unable to Locate — check docs</span></div>
+    <div class="rcode-row severe"><span class="rc-code">R04</span><span class="rc-def">Invalid Account Number — check docs</span></div>
     <div class="rcode-row severe"><span class="rc-code">R09</span><span class="rc-def">Uncollected Funds</span></div>
+    <div class="rcode-row severe"><span class="rc-code">R11</span><span class="rc-def">Entry Not per Terms of Authorization</span></div>
     <div class="rcode-row severe"><span class="rc-code">R16</span><span class="rc-def">Account Frozen</span></div>
     <div class="rcode-row severe"><span class="rc-code">R20</span><span class="rc-def">Non-Transaction Account</span></div>
 
-    <div class="rcode-group-label">Authorization / Stops</div>
+    <div class="rcode-group-label">Authorization / Stops — alert like a stop</div>
     <div class="rcode-row severe"><span class="rc-code">R05</span><span class="rc-def">Unauthorized Debit to Consumer Account Using Corporate SEC Code</span></div>
     <div class="rcode-row severe"><span class="rc-code">R07</span><span class="rc-def">Authorization Revoked by Customer</span></div>
     <div class="rcode-row severe"><span class="rc-code">R08</span><span class="rc-def">Payment Stopped</span></div>
     <div class="rcode-row severe"><span class="rc-code">R10</span><span class="rc-def">Customer Advises Originator Not Known and/or Not Authorized to Debit Account</span></div>
-    <div class="rcode-row severe"><span class="rc-code">R11</span><span class="rc-def">Customer Advises Entry Not in Accordance with Terms of Authorization</span></div>
     <div class="rcode-row severe"><span class="rc-code">R29</span><span class="rc-def">Corporate Customer Advises Not Authorized</span></div>
 
     <div class="rcode-group-label">Routing / Bank</div>
@@ -1696,7 +1699,41 @@ function bLocalToday(){
   if (BEACON_CFG.today) return BEACON_CFG.today;
   const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
+// v142: severe ACH return codes. A "severe" return means the money is not coming through this
+// account at all — either the merchant blocked us (a true STOP) or the account itself is bad/wrong
+// (an ACCOUNT error, which on our deals usually means the account info on docs is wrong on OUR end).
+// Both must be alerted like a stop, NOT a regular bounce. R01 (insufficient funds) is deliberately
+// excluded — that's the ordinary "merchant was short today" bounce.
+//   • ACCOUNT group  — the account can't be debited as entered (bad/closed/frozen/wrong number)
+//   • STOP group     — the merchant or bank revoked/blocked authorization
+// Detection previously keyed off the Pinnacle "Severity" field only (bSevClass), so any severe code
+// Pinnacle didn't pre-tag as STOP slipped through as a plain bounce. rcodeSeverity() closes that by
+// classifying off the CODE, and every path now takes the worse of (code severity, Pinnacle severity).
+const RC_ACCOUNT_CODES = ['R02','R03','R04','R09','R11','R20'];   // account can't be debited as entered
+const RC_STOP_CODES    = ['R05','R07','R08','R10','R16','R29'];   // merchant/bank blocked or revoked auth
+// Kept for back-compat with existing call sites; now the union of both severe groups.
+const _STOP_CODES_ALL = RC_ACCOUNT_CODES.concat(RC_STOP_CODES);
+// Returns 'account' | 'stop' | '' for a raw return code.
+function rcodeSeverity(code){
+  const rc=String(code||'').toUpperCase().trim();
+  if(RC_STOP_CODES.indexOf(rc)>=0) return 'stop';
+  if(RC_ACCOUNT_CODES.indexOf(rc)>=0) return 'account';
+  return '';
+}
+// True when a code should get stop-level (severe) treatment on the board.
+function rcodeIsSevere(code){ return rcodeSeverity(code)!==''; }
+// Short human tag for WHY it's severe, e.g. "R03 · No Account — check account info on docs".
+function rcodeSevereLabel(code){
+  const rc=String(code||'').toUpperCase().trim();
+  const kind=rcodeSeverity(rc); if(!kind) return '';
+  const nm=(typeof rcodeName==='function' ? rcodeName(rc) : '') || rc;
+  return kind==='account' ? (rc+' · '+nm+' — check account info on docs')
+                          : (rc+' · '+nm+' — merchant stopped/blocked payment');
+}
 function bSevClass(sev){ return sev==='STOP'?'stop':sev==='CONSEC'?'consecutive':sev==='NEW'?'new':'none'; }
+// v142: severity that considers BOTH the Pinnacle Severity field AND the return code. A severe code
+// (account error or stop) forces 'stop'-class styling even if Pinnacle tagged the row NEW/CONSEC.
+function bSevClassFor(sev, code){ return rcodeIsSevere(code) ? 'stop' : bSevClass(sev); }
 function bGroupOrder(sevClass){ return sevClass==='stop'?2:sevClass==='consecutive'?3:sevClass==='new'?4:99; }
 function bDisp(iso){ const [y,m,d]=iso.split('-').map(Number); const dt=new Date(y,m-1,d);
   return dt.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).replace(',',''); }
@@ -1782,17 +1819,19 @@ function beaconReconstruct(raw, todayISO){
   const dates = Object.keys(byDate).sort();
 
   // v88: per-deal bounce dates (4th-bounce clawback) + stop-payment dates (stop = immediate clawback)
-  const _STOP_CODES=['R02','R05','R07','R08','R10','R16','R29'];
+  // v142: "stop" here means any SEVERE return (account error or merchant stop), not just the old
+  // 7-code list — an R03/R04/etc. is as fatal to collection as a merchant stop.
   for (const r of raw.bounces){ const f=r.fields||{}; const dt=(f.Date||'').slice(0,10); const rid=(f.Deal&&f.Deal[0])||null; const m=rid&&dealsById[rid];
-    if(dt&&m){ m._bounceDates.push(dt); const rc=(f['Return Code']||'').toUpperCase().trim(); if(_STOP_CODES.indexOf(rc)>=0 || (f.Severity||'').toUpperCase()==='STOP') m._stopDates.push(dt); } }
+    if(dt&&m){ m._bounceDates.push(dt); const rc=(f['Return Code']||'').toUpperCase().trim(); if(rcodeIsSevere(rc) || (f.Severity||'').toUpperCase()==='STOP') m._stopDates.push(dt); } }
   merchants.forEach(m=>{ m._bounceDates.sort(); m._stopDates.sort(); });
 
   // ---- today's bounce state onto merchants ----
   for (const r of (byDate[today]||[])){
     const f=r.fields||{}; const rid=(f.Deal&&f.Deal[0])||null; const m=rid&&dealsById[rid]; if(!m) continue;
-    const sev=bSevClass(f.Severity);
+    const sev=bSevClassFor(f.Severity, f['Return Code']);
     m.bounced_today=true; m.bounce_amt=Number(f.Amount)||0; m.bounce_type=(sev==='stop'?'stop':'bounce');
     m.return_code=f['Return Code']||''; m.freq=m._freqField||'Daily';
+    m.severe_reason=rcodeSevereLabel(f['Return Code']);   // v142: '' unless account-error/stop; drives the labeled alert
     m.streak_len=Number(f['Consecutive Count'])||0; m.sev_class=sev; m.group_order=bGroupOrder(sev);
     m.bucket='BOUNCED'; m.hit_date=f['Hit Date']||''; m.return_date=f['Return Date']||'';
   }
@@ -1805,7 +1844,7 @@ function beaconReconstruct(raw, todayISO){
     if (d > today) continue;
     for (const r of byDate[d]){
       const f=r.fields||{}; const rid=(f.Deal&&f.Deal[0])||null; if(!rid) continue;
-      if (bSevClass(f.Severity)==='stop'){
+      if (bSevClassFor(f.Severity, f['Return Code'])==='stop'){
         stopByDeal[rid] = { date:d, code:f['Return Code']||'', amt:Number(f.Amount)||0,
           hit:f['Hit Date']||'', ret:f['Return Date']||'' };
       }
@@ -1883,7 +1922,7 @@ function beaconReconstruct(raw, todayISO){
   for (const d of dates){
     const events = byDate[d].map(r=>{
       const f=r.fields||{}; const rid=(f.Deal&&f.Deal[0]); const m=(rid&&dealsById[rid])||{};
-      const sev=bSevClass(f.Severity);
+      const sev=bSevClassFor(f.Severity, f['Return Code']);
       // v99: a stop on a HANDLED deal (has a resolution — sent to legal, suspended, etc.) that's later
       // than the deal's FIRST stop is the same ongoing stop being re-listed. Flag it so the calendar /
       // stop counts don't keep marking it as a new stop. The original (first) stop still shows.
@@ -1895,7 +1934,7 @@ function beaconReconstruct(raw, todayISO){
       const _weekly = m.lead_id ? isWeeklyDeal(m) : false;   // weekly-FREQUENCY deal (by origFreq), not the event tag
       return { lead_id:m.lead_id||0, name:m.name||String(f.Bounce||'').split(' — ')[0],
         bounce_amt:Number(f.Amount)||0, bounce_type:(sev==='stop'?'stop':'bounce'), _carriedStop:_carriedStop, _weekly:_weekly,
-        return_code:f['Return Code']||'', sev_class:sev, group_order:bGroupOrder(sev), severity_rank:100,
+        return_code:f['Return Code']||'', severe_reason:rcodeSevereLabel(f['Return Code']), sev_class:sev, group_order:bGroupOrder(sev), severity_rank:100,
         streak_len:Number(f['Consecutive Count'])||0, status:m.status||'', balance:m.balance||0,
         pct_paid:m.pct_paid||0, freq:m._freqField||'Daily', mtd_bounces:0,
         days_delinq:Number(f['Consecutive Count'])||0, last_pull:'', rep:m.rep||'',
@@ -2807,11 +2846,19 @@ function collectMerchantBounces(m, weeklyOnly) {
 }
 
 function codeChip(returnCode, bounceType) {
-  if (returnCode && ["R02","R05","R07","R08","R10","R16","R29"].includes(returnCode)) {
-    const name = rcodeName(returnCode);
-    return '<span class="code-chip" title="' + returnCode + (name ? ' — ' + name : '') + '">' + returnCode + '</span>';
+  const rc = String(returnCode||'').toUpperCase().trim();
+  const kind = rcodeSeverity(rc);   // 'account' | 'stop' | ''
+  if (kind) {
+    const name = rcodeName(rc);
+    // v142: account-errors (R03 etc.) render on the same severe red chip as merchant stops, but the
+    // hover names the actual problem and — for account errors — points at the fix (docs on our end).
+    const why = kind==='account' ? ' — check account info on docs (our end)' : ' — merchant stopped/blocked payment';
+    const cls = kind==='account' ? 'code-chip acct' : 'code-chip';
+    return '<span class="' + cls + '" title="' + rc + (name ? ' — ' + name : '') + why + '">' + rc + '</span>';
   }
   if (bounceType === "Expected Payment Missing") return '<span class="code-chip epm" title="EPM — Expected Payment Missing">EPM</span>';
+  // Any other non-severe code still shows as a plain chip so you can see what it was.
+  if (rc) { const name = rcodeName(rc); return '<span class="code-chip plain" title="' + rc + (name ? ' — ' + name : '') + '">' + rc + '</span>'; }
   return '';
 }
 // Reporting-lag badge: subtle clock icon next to hit date when the bounce was
@@ -3485,7 +3532,10 @@ function renderUpcomingPanel() {
 // resolve menu (Spoke / Lowered / Suspend / Legal).
 // =============================================================
 
-const STOP_RCODES = ["R02","R05","R07","R08","R10","R16","R29"];
+// v142: unified with the sync-side severe set — account errors (R03 etc.) count as severe here too,
+// so the history/calendar stop-vs-regular split matches the board. Union of account + stop groups.
+const STOP_RCODES = (typeof _STOP_CODES_ALL!=='undefined') ? _STOP_CODES_ALL.slice()
+  : ["R02","R03","R04","R09","R11","R20","R05","R07","R08","R10","R16","R29"];
 
 // Short human-readable name for each ACH return code — used in sidebar/UI labels.
 // Keep names short (1-3 words) so they fit in tight contexts. Full descriptions live in the floating reference panel.
