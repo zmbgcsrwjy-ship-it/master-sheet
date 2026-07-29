@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="CRM import now stores the EXACT figures from the export — our actual funded slice (whole dollars), RTR with cents, factor exact to the decimal, and on-book book% at full precision — instead of grossing up and multiplying back, which was throwing book funded off by a cent or two. Book % audit reconciles book funded against funded × book%.">build 119</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="New Reconcile from export (sidebar): upload the current CRM export and it fixes existing deals whose funded / payback / factor / book funded drifted under the old grossed-up import — rewrites only the funding-math fields on matched deals after you confirm, using the exact figures. Status, balances, notes, collections untouched.">build 120</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -325,7 +325,8 @@ select.badge:hover{filter:brightness(1.2)}
       </div>
       <div class="sidebar-bottom">
         <div class="sidebar-chip" id="sync-info">⏱ Not synced yet</div>
-        <div class="sidebar-chip" onclick="runBookPctAudit()" title="Find participation/club deals whose Book % was stored as a rounded repeating decimal (e.g. 13.33 instead of 13.3333), which threw the book funded amount off by cents. One-time check.">🔍 Book % audit</div>
+        <div class="sidebar-chip" onclick="document.getElementById('reconcile-file').click()" title="Fix existing deals whose funded / payback / factor / book funded are off from the old grossed-up import. Upload the current CRM export — it rewrites only the funding-math fields on matched deals, after you confirm, using the exact figures from the export.">🔧 Reconcile from export</div>
+        <input type="file" id="reconcile-file" accept=".csv" style="display:none" onchange="reconcileFromExport(this.files[0]); this.value='';">
         <div class="sidebar-chip" onclick="updateCredentials()">🔑 Credentials active ✓</div>
       </div>
     </div>
@@ -537,14 +538,15 @@ select.badge:hover{filter:brightness(1.2)}
   </div>
 </div>
 
-<!-- BOOK % AUDIT MODAL (build 118) -->
+<!-- RECONCILE FROM EXPORT MODAL (build 120) -->
 <div id="audit-modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeAuditModal()">
-  <div class="modal" style="max-width:640px" onclick="event.stopPropagation()">
-    <div class="modal-title">🔍 Book % audit</div>
-    <div class="modal-sub" id="audit-sub">Deals whose Book % was stored as a rounded repeating decimal — the book funded amount is off by cents until the % is re-entered with full precision.</div>
-    <div id="audit-body" style="max-height:52vh;overflow:auto;margin:10px 0"></div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeAuditModal()">Close</button>
+  <div class="modal" style="max-width:720px" onclick="event.stopPropagation()">
+    <div class="modal-title">🔧 Reconcile from export</div>
+    <div class="modal-sub" id="audit-sub">Comparing the deals on your book to the export and correcting funded / payback / factor / book funded where they drifted.</div>
+    <div id="audit-body" style="max-height:50vh;overflow:auto;margin:10px 0"></div>
+    <div class="modal-footer" id="audit-footer">
+      <button class="btn" onclick="closeAuditModal()">Cancel</button>
+      <button class="btn btn-green" id="audit-apply" style="display:none" onclick="applyReconcile()">Fix these deals</button>
     </div>
   </div>
 </div>
@@ -1244,50 +1246,106 @@ function hideLoading() { document.getElementById('loading-overlay').style.displa
 // build 29: CRM import + daily sync use a drop-zone modal
 function openCrmModal(){ var i=document.getElementById('crm-file'); if(i)i.value=''; var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); document.getElementById('crm-modal-bg').style.display='flex'; }
 function closeCrmModal(){ var m=document.getElementById('crm-modal-bg'); if(m)m.style.display='none'; }
-// build 119: one-time audit — flags deals whose stored numbers don't reconcile after the exact-value
-// importer change. Two checks: (1) book funded should equal funded × book%/100 to the penny;
-// (2) funded should be a whole dollar (we never fund under a dollar). Either failing means the deal
-// was imported by the OLD grossed-up path and should be re-imported / re-entered to correct it.
-function closeAuditModal(){ const m=document.getElementById('audit-modal-bg'); if(m)m.style.display='none'; }
-function runBookPctAudit(){
-  const suspect=[];
+// build 120: Reconcile from export — fixes existing deals whose funding math drifted under the old
+// grossed-up importer. Reads the CURRENT CRM export, matches on-book deals by Lead ID, recomputes the
+// exact figures (funded slice whole $, RTR cents, factor exact, on-book book% full precision, book
+// funded = funded × book%/100, commission), and patches ONLY those funding-math fields after you
+// confirm. It never touches status, balance/paid, collections, clawback, notes, or dates — those are
+// owned by the daily sync and Beacon. Read-only until you press "Fix these deals".
+let _reconcilePlan = null;
+function closeAuditModal(){ const m=document.getElementById('audit-modal-bg'); if(m)m.style.display='none'; _reconcilePlan=null; }
+async function reconcileFromExport(file){
+  if(!file) return;
+  let rows, C, money;
+  try{
+    const text = await file.text();
+    const wb = XLSX.read(text, {type:'string'});
+    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false});
+    const h = rows[0].map(x=>String(x||'').trim().toLowerCase());
+    const ci = n=>h.findIndex(x=>x===n);
+    C = {lead:ci('lead id'), merch:ci('merchant'), bookpct:ci('book %'), dealpct:ci('deal %'),
+         ffee:ci('funding fee'), ofee:ci('origination fee'), comm:ci('commission'),
+         funded:ci('funded'), purch:ci('purchased')};
+    if(C.lead<0||C.merch<0||C.funded<0||C.purch<0){ showNotice('That does not look like the CRM deals export — headers not recognized.','error'); return; }
+    money = s=>parseFloat(String(s==null?'':s).replace(/[$,]/g,''))||0;
+  }catch(e){ showNotice('Could not read that file — is it the CRM .csv export?','error'); return; }
+
+  // Index export rows by Lead ID
+  const exportByLead=new Map();
+  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r||!r[C.merch]) continue; const L=String(r[C.lead]||'').trim(); if(L&&!exportByLead.has(L)) exportByLead.set(L,r); }
+
+  const changes=[], unmatched=[];
   for(const d of deals){
-    const funded=d.funded||0, bp=d.book_pct;
-    if(bp==null) continue;
-    const expectBookFunded=Math.round(funded*bp/100*100)/100;
-    const haveBookFunded=Math.round((d.book_funded||0)*100)/100;
-    const bfOff=Math.round((haveBookFunded-expectBookFunded)*100)/100;
-    const fundedCents=Math.round(funded*100)%100;   // non-zero => funded carries cents
-    const bad = Math.abs(bfOff)>=0.005 || fundedCents!==0;
-    if(bad){
-      suspect.push({ id:d._id, merchant:d.merchant, funded, bp,
-                     have:haveBookFunded, expect:expectBookFunded, off:bfOff,
-                     fundedCents:fundedCents!==0 });
-    }
+    const L=String(d.lead_id||'').trim(); if(!L) continue;
+    const r=exportByLead.get(L); if(!r) continue;   // only deals present in this export
+    let csvBook=money(r[C.bookpct]); if(!csvBook) csvBook=100; if(csvBook<=1.5) csvBook*=100; if(csvBook>100) csvBook=100;
+    const funded=Math.round(money(r[C.funded]));
+    const rtr=Math.round(money(r[C.purch])*100)/100;
+    const factor=funded? Math.round(rtr/funded*10000)/10000 : 0;
+    const bookpct=csvBook;
+    const bookFunded=Math.round(funded*bookpct/100*100)/100;
+    const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
+    const comm=money(r[C.comm]);
+    const ml=calcML(funded,bookpct,fees,comm);
+    // What's stored now vs what it should be
+    const cur={funded:d.funded||0, rtr:d.rtr||0, factor:d.factor||0, bookpct:d.book_pct||0, bookFunded:d.book_funded||0, comm:d.comm_amount||0};
+    const drift = Math.abs(cur.funded-funded)>=0.005 || Math.abs(cur.rtr-rtr)>=0.005 ||
+                  Math.abs(cur.factor-factor)>=0.0005 || Math.abs(cur.bookFunded-bookFunded)>=0.005 ||
+                  Math.abs(cur.bookpct-bookpct)>=0.0005 || Math.abs(cur.comm-comm)>=0.005;
+    if(!drift) continue;
+    const fields={ Funded:funded, RTR:rtr, Factor:factor, BookPct:bookpct, BookFunded:bookFunded,
+                   DDFee:ffee, OrigFee:ofee, BankFees:fees, CommAmount:comm,
+                   CommPct: funded? Math.round(comm/funded*10000)/100 : 0, MaxLoss:ml };
+    changes.push({ id:d._id, merchant:d.merchant, cur, next:{funded,rtr,factor,bookpct,bookFunded,comm}, fields });
   }
-  suspect.sort((a,b)=>Math.abs(b.off)-Math.abs(a.off));
-  const sub=document.getElementById('audit-sub'), body=document.getElementById('audit-body');
-  if(!suspect.length){
-    sub.textContent='Everything reconciles — book funded matches funded × book % on every deal, and all funded amounts are whole dollars.';
-    body.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3)">✓ Nothing to fix.</div>';
-  } else {
-    sub.textContent=suspect.length+' deal'+(suspect.length!==1?'s':'')+" don't reconcile — re-import the CSV (or re-enter) to correct them. New imports are already exact.";
-    body.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+  changes.sort((a,b)=>Math.abs((b.cur.bookFunded-b.next.bookFunded))-Math.abs((a.cur.bookFunded-a.next.bookFunded)));
+
+  const sub=document.getElementById('audit-sub'), body=document.getElementById('audit-body'), apply=document.getElementById('audit-apply');
+  if(!changes.length){
+    sub.textContent='Everything already matches the export — nothing to reconcile.';
+    body.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3)">✓ All deals are exact.</div>';
+    apply.style.display='none'; _reconcilePlan=null;
+  }else{
+    sub.textContent=changes.length+' deal'+(changes.length!==1?'s':'')+' will be corrected from the export. Review the changes, then press "Fix these deals". Only funding math changes — status, balances, notes, and collections are untouched.';
+    body.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11.5px">'+
       '<thead><tr style="text-align:left;color:var(--text3)">'+
-      '<th style="padding:6px 8px">Merchant</th><th style="padding:6px 8px">Funded</th>'+
-      '<th style="padding:6px 8px">Book %</th><th style="padding:6px 8px">Book funded</th>'+
-      '<th style="padding:6px 8px">Should be</th><th style="padding:6px 8px">Issue</th><th></th></tr></thead><tbody>'+
-      suspect.map(s=>'<tr style="border-top:0.5px solid var(--border)">'+
-        '<td style="padding:6px 8px;font-weight:600">'+esc0(s.merchant)+'</td>'+
-        '<td style="padding:6px 8px;color:'+(s.fundedCents?'#f0883e':'var(--text2)')+'">'+fmt$(s.funded)+'</td>'+
-        '<td style="padding:6px 8px;color:var(--text2)">'+(s.bp!=null?(+s.bp).toFixed(4).replace(/\.?0+$/,'')+'%':'—')+'</td>'+
-        '<td style="padding:6px 8px;color:var(--text2)">'+fmt$(s.have)+'</td>'+
-        '<td style="padding:6px 8px;color:#5eead4">'+fmt$(s.expect)+'</td>'+
-        '<td style="padding:6px 8px;color:#f0883e">'+(Math.abs(s.off)>=0.005?('off '+(s.off>0?'+':'')+fmt$(s.off)):'')+(s.fundedCents?(Math.abs(s.off)>=0.005?', ':'')+'has cents':'')+'</td>'+
-        '<td style="padding:6px 8px"><button class="btn" style="padding:3px 10px;font-size:11px" onclick="closeAuditModal();openModal(deals.find(x=>x._id===\''+s.id+'\'))">Fix</button></td>'+
-      '</tr>').join('')+'</tbody></table>';
+      '<th style="padding:5px 7px">Merchant</th><th style="padding:5px 7px">Funded</th>'+
+      '<th style="padding:5px 7px">Factor</th><th style="padding:5px 7px">Book %</th>'+
+      '<th style="padding:5px 7px">Book funded</th></tr></thead><tbody>'+
+      changes.map(c=>{
+        const chg=(a,b,fmt)=>a===b?fmt(b):('<span style="color:var(--text3);text-decoration:line-through">'+fmt(a)+'</span> <span style="color:#5eead4">'+fmt(b)+'</span>');
+        const pct=v=>(+v).toFixed(4).replace(/\.?0+$/,'')+'%';
+        return '<tr style="border-top:0.5px solid var(--border)">'+
+          '<td style="padding:5px 7px;font-weight:600">'+esc0(c.merchant)+'</td>'+
+          '<td style="padding:5px 7px">'+chg(c.cur.funded,c.next.funded,fmt$)+'</td>'+
+          '<td style="padding:5px 7px">'+chg(c.cur.factor,c.next.factor,v=>(+v).toFixed(4).replace(/\.?0+$/,''))+'</td>'+
+          '<td style="padding:5px 7px">'+chg(c.cur.bookpct,c.next.bookpct,pct)+'</td>'+
+          '<td style="padding:5px 7px">'+chg(c.cur.bookFunded,c.next.bookFunded,fmt$)+'</td>'+
+        '</tr>';
+      }).join('')+'</tbody></table>';
+    apply.style.display='';
+    _reconcilePlan=changes;
   }
   document.getElementById('audit-modal-bg').style.display='flex';
+}
+async function applyReconcile(){
+  if(!_reconcilePlan || !_reconcilePlan.length){ closeAuditModal(); return; }
+  const plan=_reconcilePlan;
+  const apply=document.getElementById('audit-apply'); apply.disabled=true; apply.textContent='Fixing…';
+  try{
+    for(let i=0;i<plan.length;i+=10){
+      const batch=plan.slice(i,i+10).map(c=>({id:c.id, fields:c.fields}));
+      await atFetch('PATCH','',{records:batch, typecast:true});
+    }
+    // Update the in-memory deals so the UI reflects the fix immediately, then recompute derived values.
+    for(const c of plan){ const d=deals.find(x=>x._id===c.id); if(d){ d.funded=c.next.funded; d.rtr=c.next.rtr; d.factor=c.next.factor; d.book_pct=c.next.bookpct; d.book_funded=c.next.bookFunded; d.comm_amount=c.next.comm; } }
+    closeAuditModal();
+    showNotice('Reconciled '+plan.length+' deal'+(plan.length!==1?'s':'')+' from the export. Refreshing…','success',5000);
+    if(typeof loadDeals==='function') await loadDeals(); else if(typeof render==='function') render();
+  }catch(e){
+    apply.disabled=false; apply.textContent='Fix these deals';
+    showNotice('Could not write the fixes: '+(e&&e.message?e.message:e),'error',8000);
+  }
 }
 function handleCrmDrop(e){ e.preventDefault(); var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return; if(!(f.name||'').toLowerCase().endsWith('.csv')){ showNotice('CRM import expects a .csv file.','error'); return; } closeCrmModal(); importCrmExport(f); }
 function openDailyModal(){ var i=document.getElementById('daily-input'); if(i)i.value=''; var z=document.getElementById('daily-zone'); if(z)z.classList.remove('drag'); document.getElementById('daily-modal-bg').style.display='flex'; }
