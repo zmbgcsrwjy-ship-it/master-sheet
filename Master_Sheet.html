@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="All Deals shows Book % as a whole number (13%) to keep the column compact, while the full precision (13.3333) is kept under the hood for every calculation. Book % holds 4 decimals so club/participation deals no longer round the book funded amount off by cents.">build 117</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="New Book % audit (sidebar) flags participation/club deals whose Book % was stored as a rounded repeating decimal (13.33 vs 13.3333), which threw book funded off by cents — jump to each and re-enter the % to fix. All Deals shows Book % as a whole number; full precision kept for the math.">build 118</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -325,6 +325,7 @@ select.badge:hover{filter:brightness(1.2)}
       </div>
       <div class="sidebar-bottom">
         <div class="sidebar-chip" id="sync-info">⏱ Not synced yet</div>
+        <div class="sidebar-chip" onclick="runBookPctAudit()" title="Find participation/club deals whose Book % was stored as a rounded repeating decimal (e.g. 13.33 instead of 13.3333), which threw the book funded amount off by cents. One-time check.">🔍 Book % audit</div>
         <div class="sidebar-chip" onclick="updateCredentials()">🔑 Credentials active ✓</div>
       </div>
     </div>
@@ -533,6 +534,18 @@ select.badge:hover{filter:brightness(1.2)}
       <span>XLSX files only</span>
     </div>
     <div class="modal-footer"><button class="btn" onclick="closeDailyModal()">Cancel</button></div>
+  </div>
+</div>
+
+<!-- BOOK % AUDIT MODAL (build 118) -->
+<div id="audit-modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeAuditModal()">
+  <div class="modal" style="max-width:640px" onclick="event.stopPropagation()">
+    <div class="modal-title">🔍 Book % audit</div>
+    <div class="modal-sub" id="audit-sub">Deals whose Book % was stored as a rounded repeating decimal — the book funded amount is off by cents until the % is re-entered with full precision.</div>
+    <div id="audit-body" style="max-height:52vh;overflow:auto;margin:10px 0"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAuditModal()">Close</button>
+    </div>
   </div>
 </div>
 
@@ -1226,6 +1239,55 @@ function hideLoading() { document.getElementById('loading-overlay').style.displa
 // build 29: CRM import + daily sync use a drop-zone modal
 function openCrmModal(){ var i=document.getElementById('crm-file'); if(i)i.value=''; var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); document.getElementById('crm-modal-bg').style.display='flex'; }
 function closeCrmModal(){ var m=document.getElementById('crm-modal-bg'); if(m)m.style.display='none'; }
+// build 118: one-time audit — flags participation deals whose Book % was stored as a rounded
+// repeating decimal (e.g. 13.33 instead of 13.3333), which is what threw book funded off by cents.
+// Read-only: it lists them and lets you jump to each to re-enter the % at full precision.
+function bookPctExactSuggestion(P){
+  // nearest simple fraction a/b (b<=24) that rounds to P at 2dp but isn't exactly P -> the true share
+  let best=null;
+  for(let b=3;b<=24;b++){ for(let a=1;a<b;a++){ const pct=a/b*100;
+    if(Math.round(pct*100)/100===Math.round(P*100)/100 && Math.abs(pct-P)>1e-6){ const err=Math.abs(pct-P); if(!best||err<best.err) best={a,b,pct,err}; }
+  }}
+  return best;
+}
+function closeAuditModal(){ const m=document.getElementById('audit-modal-bg'); if(m)m.style.display='none'; }
+function runBookPctAudit(){
+  const suspect=[];
+  for(const d of deals){
+    const P=d.book_pct;
+    if(P==null || P>=100) continue;                 // 100% = whole deal, never a rounded share
+    // Already stored with >2 decimals? Then it's been fixed / imported precisely — skip.
+    if(Math.round(P*100)/100 !== P) continue;
+    const s=bookPctExactSuggestion(P);
+    if(!s) continue;                                 // clean fraction (50, 25, 18.75...) — fine
+    const correctFunded=Math.round((d.funded||0)*s.pct/100*100)/100;
+    const off=Math.round(((d.book_funded||0)-correctFunded)*100)/100;
+    suspect.push({ id:d._id, merchant:d.merchant, lead:d.lead_id, pct:P, exact:s.pct,
+                   frac:s.a+'/'+s.b, bookFunded:d.book_funded||0, correctFunded, off });
+  }
+  suspect.sort((a,b)=>Math.abs(b.off)-Math.abs(a.off));
+  const sub=document.getElementById('audit-sub'), body=document.getElementById('audit-body');
+  if(!suspect.length){
+    sub.textContent='No affected deals — every participation deal has a clean Book %.';
+    body.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3)">✓ Nothing to fix.</div>';
+  } else {
+    sub.textContent=suspect.length+' deal'+(suspect.length!==1?'s':'')+' stored with a rounded Book %. Re-enter the % shown to fix the book funded amount. (New deals are already correct.)';
+    body.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+      '<thead><tr style="text-align:left;color:var(--text3)">'+
+      '<th style="padding:6px 8px">Merchant</th><th style="padding:6px 8px">Stored %</th>'+
+      '<th style="padding:6px 8px">Should be</th><th style="padding:6px 8px">Book funded</th>'+
+      '<th style="padding:6px 8px">Off by</th><th></th></tr></thead><tbody>'+
+      suspect.map(s=>'<tr style="border-top:0.5px solid var(--border)">'+
+        '<td style="padding:6px 8px;font-weight:600">'+esc0(s.merchant)+'</td>'+
+        '<td style="padding:6px 8px;color:var(--text2)">'+s.pct+'%</td>'+
+        '<td style="padding:6px 8px;color:#5eead4">'+s.exact.toFixed(4)+'% <span style="color:var(--text3)">('+s.frac+')</span></td>'+
+        '<td style="padding:6px 8px;color:var(--text2)">'+fmt$(s.bookFunded)+'</td>'+
+        '<td style="padding:6px 8px;color:'+(Math.abs(s.off)>=0.005?'#f0883e':'var(--text3)')+'">'+(s.off>0?'+':'')+fmt$(s.off).replace('$','$')+'</td>'+
+        '<td style="padding:6px 8px"><button class="btn" style="padding:3px 10px;font-size:11px" onclick="closeAuditModal();openModal(deals.find(x=>x._id===\''+s.id+'\'))">Fix</button></td>'+
+      '</tr>').join('')+'</tbody></table>';
+  }
+  document.getElementById('audit-modal-bg').style.display='flex';
+}
 function handleCrmDrop(e){ e.preventDefault(); var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return; if(!(f.name||'').toLowerCase().endsWith('.csv')){ showNotice('CRM import expects a .csv file.','error'); return; } closeCrmModal(); importCrmExport(f); }
 function openDailyModal(){ var i=document.getElementById('daily-input'); if(i)i.value=''; var z=document.getElementById('daily-zone'); if(z)z.classList.remove('drag'); document.getElementById('daily-modal-bg').style.display='flex'; }
 function closeDailyModal(){ var m=document.getElementById('daily-modal-bg'); if(m)m.style.display='none'; }
