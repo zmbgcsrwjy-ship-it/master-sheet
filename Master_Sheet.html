@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Account-problem and authorization/stop return codes (R02/R03/R04/R09/R11/R16/R20 + R05/R07/R08/R10/R29) now alert like a stop across both apps, not as a regular bounce — R03 &quot;No Account&quot; means the account info on docs is wrong. R01 stays a normal bounce. Weekly deals clawback on the first bounce; window is 30 business days.">build 114</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="All Deals shows Book % as a whole number (13%) to keep the column compact, while the full precision (13.3333) is kept under the hood for every calculation. Book % holds 4 decimals so club/participation deals no longer round the book funded amount off by cents.">build 117</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -560,7 +560,7 @@ select.badge:hover{filter:brightness(1.2)}
       <div class="form-row"><label>Origination Fee ($)</label><input id="fi-origfee" type="number" oninput="sumFees()"></div>
       <div class="form-row"><label>Bank Fees — combined <small style="color:var(--text3)">(auto when split above)</small></label><input id="fi-bankfees" type="number" oninput="autoCalc()"></div>
       <div class="form-section">Participation</div>
-      <div class="form-row"><label>Book % <span id="bp-lock" onclick="toggleBookLock()" style="cursor:pointer" title="Locked at 100 — click to unlock for participation deals">🔒</span></label><input id="fi-bookpct" type="number" value="100" max="100" min="0" readonly style="opacity:.6" oninput="capBookPct();autoCalc()"></div>
+      <div class="form-row"><label>Book % <span id="bp-lock" onclick="toggleBookLock()" style="cursor:pointer" title="Locked at 100 — click to unlock for participation deals">🔒</span></label><input id="fi-bookpct" type="number" value="100" max="100" min="0" step="0.0001" readonly style="opacity:.6" oninput="capBookPct();autoCalc()"></div>
       <div class="form-row"><label>Book funded ($) <small style="color:var(--text3)">auto</small></label><input id="fi-bookamt" readonly></div>
       <div class="form-section">Rep / ISO</div>
       <div class="form-row"><label>Rep</label><input id="fi-rep" type="text"></div>
@@ -754,7 +754,7 @@ const REQUIRED_FIELDS = [
   {name:'Term',        type:'number', options:{precision:0}},
   {name:'DailyPayment',type:'number', options:{precision:2}},
   {name:'BankFees',    type:'number', options:{precision:2}},
-  {name:'BookPct',     type:'number', options:{precision:2}},
+  {name:'BookPct',     type:'number', options:{precision:4}},   // build 115: 4dp so thirds/sixths/sevenths (13.3333%) don't round to 13.33 and throw book $ off by cents
   {name:'BookFunded',  type:'number', options:{precision:2}},
   {name:'Rep',         type:'singleLineText'},
   {name:'ISO',         type:'singleLineText'},
@@ -1130,7 +1130,8 @@ async function importCrmExport(file){
       let csvBook = money(r[C.bookpct])||100; if(csvBook<=1.5) csvBook*=100; if(csvBook>100) csvBook=100;
       const scale = dealPct>0 ? 100/dealPct : 1;
       const funded=money(r[C.funded])*scale, rtr=money(r[C.purch])*scale; // total deal
-      let bookpct = Math.round(dealPct*csvBook/100*100)/100; if(bookpct>100) bookpct=100; // our on-book share of the whole deal
+      const fundedSlice=money(r[C.funded]);   // our reported slice, BEFORE gross-up
+      let bookpct = Math.round(dealPct*csvBook/100*10000)/10000; if(bookpct>100) bookpct=100; // build 115: our on-book share of the whole deal, kept to 4dp (was 2dp — that rounding was throwing book $ off by cents on thirds like 13.3333%)
       const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
       const comm=money(r[C.comm])*scale; // total-deal commission (book_comm re-derives our slice)
       const ml=calcML(funded,bookpct,fees,comm);
@@ -1146,7 +1147,7 @@ async function importCrmExport(file){
       }
       const fields={Merchant:merchant, LeadID:String(r[C.lead]||'').trim(), DateFunded:r._df, ...(lcFieldOk&&r._lc?{LastCleared:r._lc}:{}),
         Funded:funded, RTR:rtr, Factor:funded? Math.round(rtr/funded*1000)/1000 : 0,
-        DDFee:ffee, OrigFee:ofee, BankFees:fees, BookPct:bookpct, BookFunded:funded*bookpct/100,
+        DDFee:ffee, OrigFee:ofee, BankFees:fees, BookPct:bookpct, BookFunded:Math.round(fundedSlice*csvBook/100*100)/100,
         CommPct:funded? Math.round(comm/funded*10000)/100 : 0, CommAmount:comm, Kickback:0,
         MaxLoss:ml, Balance:rtr, PctPaid:0, PNL:calcPNL(rtr,rtr,bookpct,ml),
         Status:status, DealType:dealtype, PrevLeadID:prev,
@@ -1343,7 +1344,7 @@ async function saveDeal() {
     funded:f,rtr,factor:parseFloat(document.getElementById('fi-factor').value)||0,
     term:parseInt(document.getElementById('fi-term').value)||0,
     daily_payment:parseFloat(document.getElementById('fi-daily').value)||0,
-    bank_fees:fees,book_pct:bp,book_funded:f*bp/100,
+    bank_fees:fees,book_pct:bp,book_funded:Math.round(f*bp/100*100)/100,
     rep:document.getElementById('fi-rep').value.trim(),
     iso:document.getElementById('fi-iso').value.trim(),
     comm_pct:cp,comm_amount:comm,
@@ -1684,7 +1685,7 @@ function renderTable(){
       <td style="font-weight:600">${fmt$(d.funded)}</td>
       <td style="color:var(--text2)">${fmt$(d.rtr)}</td>
       <td style="color:var(--text2)">${d.factor||'—'}</td>
-      <td style="color:var(--text2)">${d.book_pct!=null?d.book_pct.toFixed(0)+'%':'—'}</td>
+      <td style="color:var(--text2)">${d.book_pct!=null?d.book_pct.toFixed(0)+'%':'—'}</td>   <!-- build 117: display as a whole number (13%) to keep the column compact; the stored value keeps full precision (13.3333) for all the math -->
       <td style="color:var(--text2)">${fmt$(d.book_funded)}</td>
       <td style="color:var(--text2)">${fmt$(d.book_payback)}</td>
       <td style="color:var(--text2)">${fmt$(d.spread)}</td>
