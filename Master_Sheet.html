@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="New Reconcile from export (sidebar): upload the current CRM export and it fixes existing deals whose funded / payback / factor / book funded drifted under the old grossed-up import — rewrites only the funding-math fields on matched deals after you confirm, using the exact figures. Status, balances, notes, collections untouched.">build 120</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Fixed the book math to match the funding email: Funded shows the WHOLE deal size, book funded is our book amount after syndication (slice × book%), and the combined book % is stored at full precision so nothing drifts by a cent. Reconcile from export corrects existing deals to this — funded stays the whole deal, only the drifted book % / book funded are fixed.">build 121</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1138,22 +1138,25 @@ async function importCrmExport(file){
     let added=0, refis=0;
     for(const r of newRows){
       const merchant=String(r[C.merch]).trim().toUpperCase();
-      // build 119: read the EXACT figures the export reports and stop reconstructing them through
-      // percentages. The Pinnacle export already gives our actual slice at full precision:
-      //   • Funded    = our funded dollars (always whole — we never fund under a dollar)
-      //   • Purchased = our RTR / payback (may carry cents)
-      //   • book %    = how much of our slice sits on our book (rest syndicated out), full precision
-      // book funded / payback / comm are then just (slice × book%/100), which lands clean to the
-      // penny. The OLD path grossed the slice up to the whole deal (÷ deal%) then multiplied back
-      // down (× a combined %), and every round-trip lost a cent — that was the .01/.50 drift.
+      // build 121: the CORRECT model, matching the funding email.
+      //   deal %  = our book's share of the WHOLE deal (25k of a 35k deal = 71.43%)
+      //   book %  = how much of OUR slice we keep after syndicating some out (kept 20k of 25k = 80%)
+      // So:  Funded (shown) = the WHOLE deal size = our slice ÷ deal%.  Our book amount = slice × book%.
+      // book_pct STORED is the combined share of the whole deal (deal% × book%/100 = 57.14% here),
+      // kept at FULL precision so book funded / payback / comm derive to the exact penny. Rounding
+      // that combined % to 2dp was the ONLY bug (it threw book funded off by a cent or two). Funded
+      // being the whole deal was always right — builds 119/120 wrongly shrank it to the slice.
+      let dealPct = C.dealpct>=0 ? money(r[C.dealpct]) : 100; if(!dealPct) dealPct=100; if(dealPct<=1.5) dealPct*=100; if(dealPct>100) dealPct=100;
       let csvBook = money(r[C.bookpct]); if(!csvBook) csvBook=100; if(csvBook<=1.5) csvBook*=100; if(csvBook>100) csvBook=100;
-      const funded=Math.round(money(r[C.funded]));            // our slice, whole dollars
-      const rtr=Math.round(money(r[C.purch])*100)/100;        // our RTR, exact cents
-      const factor=funded? Math.round(rtr/funded*10000)/10000 : 0;  // exact to the decimal (e.g. 1.499)
-      const bookpct=csvBook;                                  // on-book share — exact, no combining
-      const bookFunded=Math.round(funded*bookpct/100*100)/100;
+      const scale = dealPct>0 ? 100/dealPct : 1;
+      const ourFunded=money(r[C.funded]), ourPurch=money(r[C.purch]), ourComm=money(r[C.comm]);
+      const funded=Math.round(ourFunded*scale);               // WHOLE deal size, whole dollars
+      const rtr=Math.round(ourPurch*scale*100)/100;           // whole deal RTR
+      const factor=ourFunded? Math.round(ourPurch/ourFunded*10000)/10000 : 0;  // exact to the decimal (1.499)
+      const bookpct=dealPct*csvBook/100;                      // our combined share of the whole deal — FULL precision
+      const bookFunded=Math.round(ourFunded*csvBook/100*100)/100;  // our book amount, exact from the slice
       const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
-      const comm=money(r[C.comm]);                            // our slice commission, as reported
+      const comm=Math.round(ourComm*scale*100)/100;           // whole-deal commission (book_comm derives our share)
       const ml=calcML(funded,bookpct,fees,comm);
       // Refi detection with date cross-check (build 39): bind to the most-recent prior that
       // PRE-DATES this deal, by date funded — never just newest-by-name, which can cross a chain.
@@ -1278,14 +1281,17 @@ async function reconcileFromExport(file){
   for(const d of deals){
     const L=String(d.lead_id||'').trim(); if(!L) continue;
     const r=exportByLead.get(L); if(!r) continue;   // only deals present in this export
+    let dealPct = C.dealpct>=0 ? money(r[C.dealpct]) : 100; if(!dealPct) dealPct=100; if(dealPct<=1.5) dealPct*=100; if(dealPct>100) dealPct=100;
     let csvBook=money(r[C.bookpct]); if(!csvBook) csvBook=100; if(csvBook<=1.5) csvBook*=100; if(csvBook>100) csvBook=100;
-    const funded=Math.round(money(r[C.funded]));
-    const rtr=Math.round(money(r[C.purch])*100)/100;
-    const factor=funded? Math.round(rtr/funded*10000)/10000 : 0;
-    const bookpct=csvBook;
-    const bookFunded=Math.round(funded*bookpct/100*100)/100;
+    const scale = dealPct>0 ? 100/dealPct : 1;
+    const ourFunded=money(r[C.funded]), ourPurch=money(r[C.purch]), ourComm=money(r[C.comm]);
+    const funded=Math.round(ourFunded*scale);               // whole deal size
+    const rtr=Math.round(ourPurch*scale*100)/100;           // whole deal RTR
+    const factor=ourFunded? Math.round(ourPurch/ourFunded*10000)/10000 : 0;
+    const bookpct=dealPct*csvBook/100;                      // combined, full precision
+    const bookFunded=Math.round(ourFunded*csvBook/100*100)/100;
     const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
-    const comm=money(r[C.comm]);
+    const comm=Math.round(ourComm*scale*100)/100;
     const ml=calcML(funded,bookpct,fees,comm);
     // What's stored now vs what it should be
     const cur={funded:d.funded||0, rtr:d.rtr||0, factor:d.factor||0, bookpct:d.book_pct||0, bookFunded:d.book_funded||0, comm:d.comm_amount||0};
