@@ -309,7 +309,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="New Book % audit (sidebar) flags participation/club deals whose Book % was stored as a rounded repeating decimal (13.33 vs 13.3333), which threw book funded off by cents — jump to each and re-enter the % to fix. All Deals shows Book % as a whole number; full precision kept for the math.">build 118</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="CRM import now stores the EXACT figures from the export — our actual funded slice (whole dollars), RTR with cents, factor exact to the decimal, and on-book book% at full precision — instead of grossing up and multiplying back, which was throwing book funded off by a cent or two. Book % audit reconciles book funded against funded × book%.">build 119</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -767,7 +767,7 @@ const REQUIRED_FIELDS = [
   {name:'Term',        type:'number', options:{precision:0}},
   {name:'DailyPayment',type:'number', options:{precision:2}},
   {name:'BankFees',    type:'number', options:{precision:2}},
-  {name:'BookPct',     type:'number', options:{precision:4}},   // build 115: 4dp so thirds/sixths/sevenths (13.3333%) don't round to 13.33 and throw book $ off by cents
+  {name:'BookPct',     type:'number', options:{precision:8}},   // build 119: 8dp so on-book shares like 76.923077% or 66.666667% store exactly; book funded comes straight from the export now, but the % still drives payback/comm/PNL
   {name:'BookFunded',  type:'number', options:{precision:2}},
   {name:'Rep',         type:'singleLineText'},
   {name:'ISO',         type:'singleLineText'},
@@ -1136,17 +1136,22 @@ async function importCrmExport(file){
     let added=0, refis=0;
     for(const r of newRows){
       const merchant=String(r[C.merch]).trim().toUpperCase();
-      // deal % = our participation share of the WHOLE deal (e.g. 18.75% = our $15k of an $80k deal).
-      // The export reports our SLICE in Funded/Purchased/Commission, so gross them up to the full
-      // deal and let book % carry our share. deal % 100 (we're the whole deal) → no change.
-      let dealPct = C.dealpct>=0 ? money(r[C.dealpct]) : 100; if(!dealPct) dealPct=100; if(dealPct<=1.5) dealPct*=100; if(dealPct>100) dealPct=100;
-      let csvBook = money(r[C.bookpct])||100; if(csvBook<=1.5) csvBook*=100; if(csvBook>100) csvBook=100;
-      const scale = dealPct>0 ? 100/dealPct : 1;
-      const funded=money(r[C.funded])*scale, rtr=money(r[C.purch])*scale; // total deal
-      const fundedSlice=money(r[C.funded]);   // our reported slice, BEFORE gross-up
-      let bookpct = Math.round(dealPct*csvBook/100*10000)/10000; if(bookpct>100) bookpct=100; // build 115: our on-book share of the whole deal, kept to 4dp (was 2dp — that rounding was throwing book $ off by cents on thirds like 13.3333%)
+      // build 119: read the EXACT figures the export reports and stop reconstructing them through
+      // percentages. The Pinnacle export already gives our actual slice at full precision:
+      //   • Funded    = our funded dollars (always whole — we never fund under a dollar)
+      //   • Purchased = our RTR / payback (may carry cents)
+      //   • book %    = how much of our slice sits on our book (rest syndicated out), full precision
+      // book funded / payback / comm are then just (slice × book%/100), which lands clean to the
+      // penny. The OLD path grossed the slice up to the whole deal (÷ deal%) then multiplied back
+      // down (× a combined %), and every round-trip lost a cent — that was the .01/.50 drift.
+      let csvBook = money(r[C.bookpct]); if(!csvBook) csvBook=100; if(csvBook<=1.5) csvBook*=100; if(csvBook>100) csvBook=100;
+      const funded=Math.round(money(r[C.funded]));            // our slice, whole dollars
+      const rtr=Math.round(money(r[C.purch])*100)/100;        // our RTR, exact cents
+      const factor=funded? Math.round(rtr/funded*10000)/10000 : 0;  // exact to the decimal (e.g. 1.499)
+      const bookpct=csvBook;                                  // on-book share — exact, no combining
+      const bookFunded=Math.round(funded*bookpct/100*100)/100;
       const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
-      const comm=money(r[C.comm])*scale; // total-deal commission (book_comm re-derives our slice)
+      const comm=money(r[C.comm]);                            // our slice commission, as reported
       const ml=calcML(funded,bookpct,fees,comm);
       // Refi detection with date cross-check (build 39): bind to the most-recent prior that
       // PRE-DATES this deal, by date funded — never just newest-by-name, which can cross a chain.
@@ -1159,8 +1164,8 @@ async function importCrmExport(file){
         prior=validPriors[0]; status='ACTIVE'; dealtype='REFI'; prev=prior.lead_id||'';
       }
       const fields={Merchant:merchant, LeadID:String(r[C.lead]||'').trim(), DateFunded:r._df, ...(lcFieldOk&&r._lc?{LastCleared:r._lc}:{}),
-        Funded:funded, RTR:rtr, Factor:funded? Math.round(rtr/funded*1000)/1000 : 0,
-        DDFee:ffee, OrigFee:ofee, BankFees:fees, BookPct:bookpct, BookFunded:Math.round(fundedSlice*csvBook/100*100)/100,
+        Funded:funded, RTR:rtr, Factor:factor,
+        DDFee:ffee, OrigFee:ofee, BankFees:fees, BookPct:bookpct, BookFunded:bookFunded,
         CommPct:funded? Math.round(comm/funded*10000)/100 : 0, CommAmount:comm, Kickback:0,
         MaxLoss:ml, Balance:rtr, PctPaid:0, PNL:calcPNL(rtr,rtr,bookpct,ml),
         Status:status, DealType:dealtype, PrevLeadID:prev,
@@ -1239,50 +1244,46 @@ function hideLoading() { document.getElementById('loading-overlay').style.displa
 // build 29: CRM import + daily sync use a drop-zone modal
 function openCrmModal(){ var i=document.getElementById('crm-file'); if(i)i.value=''; var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); document.getElementById('crm-modal-bg').style.display='flex'; }
 function closeCrmModal(){ var m=document.getElementById('crm-modal-bg'); if(m)m.style.display='none'; }
-// build 118: one-time audit — flags participation deals whose Book % was stored as a rounded
-// repeating decimal (e.g. 13.33 instead of 13.3333), which is what threw book funded off by cents.
-// Read-only: it lists them and lets you jump to each to re-enter the % at full precision.
-function bookPctExactSuggestion(P){
-  // nearest simple fraction a/b (b<=24) that rounds to P at 2dp but isn't exactly P -> the true share
-  let best=null;
-  for(let b=3;b<=24;b++){ for(let a=1;a<b;a++){ const pct=a/b*100;
-    if(Math.round(pct*100)/100===Math.round(P*100)/100 && Math.abs(pct-P)>1e-6){ const err=Math.abs(pct-P); if(!best||err<best.err) best={a,b,pct,err}; }
-  }}
-  return best;
-}
+// build 119: one-time audit — flags deals whose stored numbers don't reconcile after the exact-value
+// importer change. Two checks: (1) book funded should equal funded × book%/100 to the penny;
+// (2) funded should be a whole dollar (we never fund under a dollar). Either failing means the deal
+// was imported by the OLD grossed-up path and should be re-imported / re-entered to correct it.
 function closeAuditModal(){ const m=document.getElementById('audit-modal-bg'); if(m)m.style.display='none'; }
 function runBookPctAudit(){
   const suspect=[];
   for(const d of deals){
-    const P=d.book_pct;
-    if(P==null || P>=100) continue;                 // 100% = whole deal, never a rounded share
-    // Already stored with >2 decimals? Then it's been fixed / imported precisely — skip.
-    if(Math.round(P*100)/100 !== P) continue;
-    const s=bookPctExactSuggestion(P);
-    if(!s) continue;                                 // clean fraction (50, 25, 18.75...) — fine
-    const correctFunded=Math.round((d.funded||0)*s.pct/100*100)/100;
-    const off=Math.round(((d.book_funded||0)-correctFunded)*100)/100;
-    suspect.push({ id:d._id, merchant:d.merchant, lead:d.lead_id, pct:P, exact:s.pct,
-                   frac:s.a+'/'+s.b, bookFunded:d.book_funded||0, correctFunded, off });
+    const funded=d.funded||0, bp=d.book_pct;
+    if(bp==null) continue;
+    const expectBookFunded=Math.round(funded*bp/100*100)/100;
+    const haveBookFunded=Math.round((d.book_funded||0)*100)/100;
+    const bfOff=Math.round((haveBookFunded-expectBookFunded)*100)/100;
+    const fundedCents=Math.round(funded*100)%100;   // non-zero => funded carries cents
+    const bad = Math.abs(bfOff)>=0.005 || fundedCents!==0;
+    if(bad){
+      suspect.push({ id:d._id, merchant:d.merchant, funded, bp,
+                     have:haveBookFunded, expect:expectBookFunded, off:bfOff,
+                     fundedCents:fundedCents!==0 });
+    }
   }
   suspect.sort((a,b)=>Math.abs(b.off)-Math.abs(a.off));
   const sub=document.getElementById('audit-sub'), body=document.getElementById('audit-body');
   if(!suspect.length){
-    sub.textContent='No affected deals — every participation deal has a clean Book %.';
+    sub.textContent='Everything reconciles — book funded matches funded × book % on every deal, and all funded amounts are whole dollars.';
     body.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3)">✓ Nothing to fix.</div>';
   } else {
-    sub.textContent=suspect.length+' deal'+(suspect.length!==1?'s':'')+' stored with a rounded Book %. Re-enter the % shown to fix the book funded amount. (New deals are already correct.)';
+    sub.textContent=suspect.length+' deal'+(suspect.length!==1?'s':'')+" don't reconcile — re-import the CSV (or re-enter) to correct them. New imports are already exact.";
     body.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px">'+
       '<thead><tr style="text-align:left;color:var(--text3)">'+
-      '<th style="padding:6px 8px">Merchant</th><th style="padding:6px 8px">Stored %</th>'+
-      '<th style="padding:6px 8px">Should be</th><th style="padding:6px 8px">Book funded</th>'+
-      '<th style="padding:6px 8px">Off by</th><th></th></tr></thead><tbody>'+
+      '<th style="padding:6px 8px">Merchant</th><th style="padding:6px 8px">Funded</th>'+
+      '<th style="padding:6px 8px">Book %</th><th style="padding:6px 8px">Book funded</th>'+
+      '<th style="padding:6px 8px">Should be</th><th style="padding:6px 8px">Issue</th><th></th></tr></thead><tbody>'+
       suspect.map(s=>'<tr style="border-top:0.5px solid var(--border)">'+
         '<td style="padding:6px 8px;font-weight:600">'+esc0(s.merchant)+'</td>'+
-        '<td style="padding:6px 8px;color:var(--text2)">'+s.pct+'%</td>'+
-        '<td style="padding:6px 8px;color:#5eead4">'+s.exact.toFixed(4)+'% <span style="color:var(--text3)">('+s.frac+')</span></td>'+
-        '<td style="padding:6px 8px;color:var(--text2)">'+fmt$(s.bookFunded)+'</td>'+
-        '<td style="padding:6px 8px;color:'+(Math.abs(s.off)>=0.005?'#f0883e':'var(--text3)')+'">'+(s.off>0?'+':'')+fmt$(s.off).replace('$','$')+'</td>'+
+        '<td style="padding:6px 8px;color:'+(s.fundedCents?'#f0883e':'var(--text2)')+'">'+fmt$(s.funded)+'</td>'+
+        '<td style="padding:6px 8px;color:var(--text2)">'+(s.bp!=null?(+s.bp).toFixed(4).replace(/\.?0+$/,'')+'%':'—')+'</td>'+
+        '<td style="padding:6px 8px;color:var(--text2)">'+fmt$(s.have)+'</td>'+
+        '<td style="padding:6px 8px;color:#5eead4">'+fmt$(s.expect)+'</td>'+
+        '<td style="padding:6px 8px;color:#f0883e">'+(Math.abs(s.off)>=0.005?('off '+(s.off>0?'+':'')+fmt$(s.off)):'')+(s.fundedCents?(Math.abs(s.off)>=0.005?', ':'')+'has cents':'')+'</td>'+
         '<td style="padding:6px 8px"><button class="btn" style="padding:3px 10px;font-size:11px" onclick="closeAuditModal();openModal(deals.find(x=>x._id===\''+s.id+'\'))">Fix</button></td>'+
       '</tr>').join('')+'</tbody></table>';
   }
