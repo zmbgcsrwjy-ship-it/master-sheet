@@ -958,6 +958,12 @@
   .np-edit-row .np-save { background: var(--text); color: var(--surface); border-color: var(--text); }
   .np-edit-row .np-cancel { background: var(--surface); color: var(--text-2); }
   .us-notes-label { font-size: 10px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  /* v145: locked (saved) today-note view — read-only text with an Edit affordance, so Confirm visibly locks it in. */
+  .note-locked-tag { color: #3fb950; font-weight: 600; text-transform: none; letter-spacing: 0; margin-left: 4px; }
+  .us-note-locked { display: flex; align-items: flex-start; gap: 8px; background: var(--surface-2); border: 0.5px solid var(--border); border-left: 2px solid #3fb950; border-radius: 5px; padding: 7px 9px; }
+  .us-note-locked-text { flex: 1; font-size: 11px; color: var(--text); white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+  .us-note-edit { flex: none; background: transparent; border: 0; color: var(--text-3); font-size: 11px; cursor: pointer; padding: 1px 6px; border-radius: 4px; }
+  .us-note-edit:hover { color: var(--text); background: var(--surface-3); }
   .expand-field { display: flex; flex-direction: column; gap: 6px; }
   
   button.row-btn { background: var(--surface); border: 0.5px solid var(--border-strong); font: inherit; font-size: 12px; padding: 5px 10px; border-radius: 6px; cursor: pointer; color: var(--text-2); }
@@ -1268,7 +1274,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v144 · live</span>
+    <span class="build-tag">v145 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2502,10 +2508,20 @@ function merchantInfoInnerHtml(m){
   // Notes — a live editor for today plus the joined history (deal notes + legal case)
   const todayEntry = (m.notes_log || []).find(e => e.date_iso === TODAY_ISO);
   const todayVal = todayEntry ? todayEntry.text : '';
+  // v145: once today's note is saved it shows LOCKED (read-only text + ✎ Edit) instead of an open
+  // box that looks unsaved. Editing swaps back to the textarea; Confirm re-locks it. An unsaved /
+  // empty note shows the editor straight away. m._noteEditing forces the editor open after ✎.
+  const locked = !!(todayEntry && todayEntry.text && todayEntry.text.trim()) && !m._noteEditing;
   const editorHtml = '<div class="minfo-note-editor">' +
-    '<div class="us-notes-label">Today \u00b7 ' + fmtDate(TODAY_ISO) + '</div>' +
-    '<textarea class="us-notes-ta notes-today-ta" data-field="notes" data-lead="' + m.lead_id + '" placeholder="Log today\'s outreach — what you said, what they said, what happens next">' + todayVal.replace(/</g,'&lt;') + '</textarea>' +
-    '<button class="us-confirm" onclick="usConfirmNote(event,' + m.lead_id + ')">Confirm</button>' +
+    '<div class="us-notes-label">Today \u00b7 ' + fmtDate(TODAY_ISO) + (locked ? ' <span class="note-locked-tag">\u2713 saved</span>' : '') + '</div>' +
+    ( locked
+      ? '<div class="us-note-locked" data-lead="' + m.lead_id + '">' +
+          '<div class="us-note-locked-text">' + todayVal.replace(/</g,'&lt;') + '</div>' +
+          '<button class="us-note-edit" onclick="usEditTodayNote(event,' + m.lead_id + ')">\u270e Edit</button>' +
+        '</div>'
+      : '<textarea class="us-notes-ta notes-today-ta" data-field="notes" data-lead="' + m.lead_id + '" placeholder="Log today\'s outreach — what you said, what they said, what happens next">' + todayVal.replace(/</g,'&lt;') + '</textarea>' +
+        '<button class="us-confirm" onclick="usConfirmNote(event,' + m.lead_id + ')">Confirm</button>'
+    ) +
   '</div>';
   const entries = (m.notes_log || []).filter(e => e.text && e.text.trim() && e.date_iso !== TODAY_ISO).map(e => ({ date: e.date_iso, ts: e.logged_at || (e.date_iso||''), text: e.text, legal: false }));
   if (legalCase && Array.isArray(legalCase.updates)) {
@@ -2530,6 +2546,7 @@ function showResumeInfo(leadId, itemEl){
   document.querySelectorAll('.minfo-open').forEach(el => el.classList.remove('minfo-open'));
   if (isOpen) return;
   const m = state.find(x => x.lead_id === leadId); if(!m) return;
+  m._noteEditing = false;   // v145: a saved note opens locked (read-only), not in the editor
   const panel = document.createElement('div');
   panel.className = 'minfo-expand-div';
   panel.dataset.parentId = leadId;
@@ -2547,6 +2564,7 @@ function showMerchantInfo(leadId){
   const parent = document.querySelector('tr[data-lead-id="' + leadId + '"]:not(.row-expand):not(.minfo-expand)');
   if (!parent) return;
   const m = state.find(x => x.lead_id === leadId); if(!m) return;
+  m._noteEditing = false;   // v145: a saved note opens locked (read-only), not in the editor
   const colspan = parent.children.length;
   const exp = document.createElement('tr');
   exp.className = 'minfo-expand';
@@ -3900,6 +3918,7 @@ function usConfirmNote(ev, leadId) {
     if (!txt.trim() && existing) m.notes_log = m.notes_log.filter(en => en.date_iso !== TODAY_ISO);
     m.notes = txt;
   }
+  m._noteEditing = false;   // v145: leave edit mode so the note re-locks (read-only) after saving
   // This is what was missing — actually persist it to Airtable
   beaconPushNote(m, TODAY_ISO, beaconNoteRidMap)
     .then(() => showToast("\u2713 Note saved"))
@@ -3914,6 +3933,28 @@ function usConfirmNote(ev, leadId) {
       const fresh = p.querySelector('.notes-today-ta');
       if (fresh) fresh.addEventListener('input', onFieldChange);
     });
+}
+
+// v145: unlock today's saved note back into an editable box (from the ✎ Edit on the locked view).
+function usEditTodayNote(ev, leadId) {
+  if (ev) ev.stopPropagation();
+  const m = state.find(x => x.lead_id === leadId);
+  if (!m) return;
+  m._noteEditing = true;
+  // Redraw the editor in place: replace the locked block with the freshly-rendered editor.
+  const locked = ev && ev.target && ev.target.closest('.minfo-note-editor');
+  if (locked) {
+    const fresh = document.createElement('div');
+    fresh.innerHTML = merchantInfoInnerHtml(m);
+    const newEditor = fresh.querySelector('.minfo-note-editor');
+    if (newEditor) locked.replaceWith(newEditor);
+  } else {
+    // Fallback: redraw any open info dropdown for this deal
+    document.querySelectorAll('tr.minfo-expand[data-parent-id="' + leadId + '"] .minfo-panel, .minfo-expand-div[data-parent-id="' + leadId + '"] .minfo-panel')
+      .forEach(p => { p.innerHTML = merchantInfoInnerHtml(m); });
+  }
+  const ta = document.querySelector('.notes-today-ta[data-lead="' + leadId + '"]');
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); ta.addEventListener('input', onFieldChange); }
 }
 
 function usToggleResolve(ev, leadId) {
