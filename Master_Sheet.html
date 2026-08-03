@@ -162,6 +162,51 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .claw-tag-warn{display:inline-flex;align-items:center;gap:3px;font-size:10px;padding:2px 6px;border-radius:3px;background:transparent;color:#7fded0;border:1px dashed rgba(45,212,191,.55);margin-left:6px;vertical-align:middle;font-weight:600}
 .claw-tag-done{background:var(--green-bg)!important;color:var(--green)!important;border:1px solid var(--green-border)!important}
 .pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
+/* ─── Month Outlook (build 122) ─────────────────────────── */
+#panel-outlook{padding:4px 2px 40px}
+.ol-intro{color:var(--text2);font-size:12.5px;line-height:1.5;max-width:760px;margin:2px 4px 20px}
+.ol-intro b{color:var(--text)}
+.ol-months{display:flex;flex-direction:column;gap:14px}
+.ol-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;border-left:4px solid var(--border2)}
+.ol-card.good{border-left-color:var(--green)}
+.ol-card.tight{border-left-color:var(--amber)}
+.ol-card.bad{border-left-color:var(--red)}
+.ol-head{display:flex;align-items:center;gap:18px;padding:16px 20px;cursor:pointer;user-select:none}
+.ol-head:hover{background:var(--bg3)}
+.ol-month{font-size:16px;font-weight:700;letter-spacing:.01em;min-width:150px}
+.ol-month .ol-caret{color:var(--text3);font-size:12px;margin-right:8px;display:inline-block;transition:transform .15s}
+.ol-card.open .ol-caret{transform:rotate(90deg)}
+.ol-verdict{margin-left:auto;text-align:right}
+.ol-verdict-num{font-size:22px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.ol-verdict-num.good{color:var(--green)}.ol-verdict-num.tight{color:var(--amber)}.ol-verdict-num.bad{color:var(--red)}
+.ol-verdict-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);margin-top:2px}
+/* the three-number spine: expected − losses = outlook */
+.ol-spine{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ol-chip{display:flex;flex-direction:column;gap:1px;padding:6px 12px;background:var(--bg3);border-radius:8px;min-width:104px}
+.ol-chip .n{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.ol-chip .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3)}
+.ol-chip.loss .n{color:var(--red)}
+.ol-op{font-size:16px;color:var(--text3);font-weight:600}
+.ol-detail{border-top:1px solid var(--border);padding:0;display:none}
+.ol-card.open .ol-detail{display:block}
+.ol-split{display:grid;grid-template-columns:1fr 1fr;gap:0}
+@media(max-width:900px){.ol-split{grid-template-columns:1fr}}
+.ol-col{padding:14px 20px}
+.ol-col+.ol-col{border-left:1px solid var(--border)}
+@media(max-width:900px){.ol-col+.ol-col{border-left:0;border-top:1px solid var(--border)}}
+.ol-col-h{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);font-weight:700;margin-bottom:10px;display:flex;justify-content:space-between}
+.ol-line{display:flex;align-items:baseline;gap:8px;padding:4px 0;font-size:12.5px;border-bottom:1px solid var(--bg3)}
+.ol-line:last-child{border-bottom:0}
+.ol-line .nm{color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ol-line .tag{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:4px;font-weight:700;flex:none}
+.ol-line .tag.legal{background:var(--bg4);color:#9db0c9}
+.ol-line .tag.default{background:var(--red-bg);color:var(--red)}
+.ol-line .tag.big{background:var(--green-bg);color:var(--green)}
+.ol-line .v{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;flex:none}
+.ol-line .v.pos{color:var(--green)}.ol-line .v.neg{color:var(--red)}
+.ol-empty-col{color:var(--text3);font-size:12px;font-style:italic;padding:6px 0}
+.ol-foot{padding:12px 20px;background:var(--bg);border-top:1px solid var(--border);font-size:11.5px;color:var(--text2);display:flex;gap:18px;flex-wrap:wrap}
+.ol-foot b{color:var(--text)}
 .wk-name{color:var(--wk-purple);font-weight:700}
 
 /* EMPTY */
@@ -309,7 +354,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Fixed the book math to match the funding email: Funded shows the WHOLE deal size, book funded is our book amount after syndication (slice × book%), and the combined book % is stored at full precision so nothing drifts by a cent. Reconcile from export corrects existing deals to this — funded stays the whole deal, only the drifted book % / book funded are fixed.">build 121</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="New Outlook tab: a month-by-month profitability read — expected profit from the deals still paying, minus the deals written off (default/legal), giving each cohort a green/amber/red verdict so you can see early whether a month lands positive. Analysis only; All deals has the per-deal detail.">build 122</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -320,6 +365,7 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
         <div class="nav-item" id="nav-clawback" onclick="setView('clawback')">⏪ Clawback <span class="nav-badge" id="clawback-badge" title="Deals whose commission is clawback-eligible (4th bounce within 30 business days of funding)" style="background:rgba(45,212,191,.15);color:#5eead4;border:1px solid rgba(45,212,191,.45)">0</span></div>
         <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
+        <div class="nav-item" id="nav-outlook" onclick="setView('outlook')">📈 Outlook</div>
         <div class="nav-item" id="nav-pnl" onclick="setView('pnl')">🧮 PNL</div>
         <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
       </div>
@@ -415,6 +461,11 @@ select.badge:hover{filter:brightness(1.2)}
             </table>
           </div>
           <div id="monthly-empty" class="empty-state" style="display:none"><div class="icon">📅</div><h3>No funded deals yet</h3><p>Monthly totals appear as deals land.</p></div>
+        </div>
+
+        <div class="panel" id="panel-outlook" style="display:none">
+          <div id="outlook-body"></div>
+          <div id="outlook-empty" class="empty-state" style="display:none"><div class="icon">📈</div><h3>No funded deals yet</h3><p>Month outlook appears as cohorts build up.</p></div>
         </div>
 
         <div class="panel" id="panel-pnl" style="display:none">
@@ -1753,9 +1804,9 @@ async function handleDailyReport(input) {
 // ─── VIEWS ───────────────────────────────────────────────
 function setView(v){
   currentView=v;
-  ['book','allocator','renewal','pif','defaults','clawback','monthly','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
-  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',clawback:'Clawback eligible',monthly:'Monthly totals',pnl:'PNL'}[v];
-  if(v==='allocator') renderAllocator(); if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='clawback') renderClawback(); if(v==='monthly') renderMonthly(); if(v==='pnl') renderPnl();
+  ['book','allocator','renewal','pif','defaults','clawback','monthly','outlook','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
+  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',clawback:'Clawback eligible',monthly:'Monthly totals',outlook:'Month outlook',pnl:'PNL'}[v];
+  if(v==='allocator') renderAllocator(); if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='clawback') renderClawback(); if(v==='monthly') renderMonthly(); if(v==='outlook') renderOutlook(); if(v==='pnl') renderPnl();
 }
 
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
@@ -2655,6 +2706,92 @@ async function closeOutMonth(){
 }
 
 // One source of truth for monthly math — used by BOTH the Monthly view and the Excel export.
+// ─── Month Outlook (build 122) ──────────────────────────────────────────────
+// A cohort-level profitability read for each funding month. For every month:
+//   • deals we've written off (DEFAULT or sent to LEGAL) — that money is treated as gone; the
+//     realized loss is each deal's Max Loss.
+//   • deals still paying — their expected upside is book_profit (spread − book comm + bank fees),
+//     i.e. what the month earns IF those deals pay out as booked.
+// Month outlook = expected profit from payers − written-off losses. Positive = good month,
+// near zero = tight, negative = the losers are outrunning the winners.
+function renderOutlook(){
+  const body=document.getElementById('outlook-body'), empty=document.getElementById('outlook-empty');
+  const groups={};
+  deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
+  const months=Object.keys(groups).sort().reverse();
+  if(!months.length){ body.innerHTML=''; empty.style.display=''; return; }
+  empty.style.display='none';
+
+  const isWrittenOff=d=> d.status==='DEFAULT' || (d.collections_state||'').toUpperCase()==='LEGAL';
+  const lossOf=d=> Math.max(0, d.max_loss||0);
+  const upsideOf=d=> (d.book_profit||0);
+
+  const intro='<div class="ol-intro">Each month reads: <b>expected profit from the deals still paying</b> minus <b>the deals we\u2019ve written off</b> (defaulted or sent to legal \u2014 that money is treated as gone). The result is the month\u2019s outlook: is it landing green, or are the losers outrunning the winners? A single strong deal can absorb several bad ones. This is the at-a-glance read \u2014 <b>All deals</b> has the deal-by-deal detail.</div>';
+
+  const cards=months.map((ym,idx)=>{
+    const ds=groups[ym];
+    const losers=ds.filter(isWrittenOff);
+    const payers=ds.filter(d=>!isWrittenOff(d));
+    const expected=payers.reduce((s,d)=>s+upsideOf(d),0);
+    const losses=losers.reduce((s,d)=>s+lossOf(d),0);
+    const outlook=expected-losses;
+    const band = outlook>2000 ? 'good' : outlook>=0 ? 'tight' : 'bad';
+    const bandLbl = band==='good'?'On track':band==='tight'?'Tight':'At risk';
+    const topWinner = payers.slice().sort((a,b)=>upsideOf(b)-upsideOf(a))[0];
+    const bigWinnerFlag = d=> topWinner && d===topWinner && upsideOf(d)>0 && losses>0 && upsideOf(d) >= losses*0.5;
+
+    const payerLines = payers.length
+      ? payers.slice().sort((a,b)=>upsideOf(b)-upsideOf(a)).map(d=>{
+          const v=upsideOf(d);
+          const big=bigWinnerFlag(d)?'<span class="tag big">absorbs losses</span>':'';
+          return `<div class="ol-line"><span class="nm">${esc0(d.merchant)}</span>${big}<span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
+        }).join('')
+      : '<div class="ol-empty-col">No deals still paying this month.</div>';
+
+    const loserLines = losers.length
+      ? losers.slice().sort((a,b)=>lossOf(b)-lossOf(a)).map(d=>{
+          const tag = (d.collections_state||'').toUpperCase()==='LEGAL' ? '<span class="tag legal">legal</span>' : '<span class="tag default">default</span>';
+          return `<div class="ol-line"><span class="nm">${esc0(d.merchant)}</span>${tag}<span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
+        }).join('')
+      : '<div class="ol-empty-col">Nothing written off \u2014 clean month so far.</div>';
+
+    return `<div class="ol-card ${band} ${idx===0?'open':''}">
+      <div class="ol-head" onclick="this.parentElement.classList.toggle('open')">
+        <div class="ol-month"><span class="ol-caret">\u25b8</span>${monthLabelFull(ym)}</div>
+        <div class="ol-spine">
+          <div class="ol-chip"><span class="n pnl-pos">${fmt$(expected)}</span><span class="k">Expected \u00b7 ${payers.length} paying</span></div>
+          <span class="ol-op">\u2212</span>
+          <div class="ol-chip loss"><span class="n">${fmt$(losses)}</span><span class="k">Written off \u00b7 ${losers.length}</span></div>
+        </div>
+        <div class="ol-verdict">
+          <div class="ol-verdict-num ${band}">${fmt$(outlook)}</div>
+          <div class="ol-verdict-lbl">${bandLbl}</div>
+        </div>
+      </div>
+      <div class="ol-detail">
+        <div class="ol-split">
+          <div class="ol-col">
+            <div class="ol-col-h"><span>Still paying</span><span class="pnl-pos">${fmt$(expected)}</span></div>
+            ${payerLines}
+          </div>
+          <div class="ol-col">
+            <div class="ol-col-h"><span>Written off</span><span class="pnl-neg">-${fmt$(losses)}</span></div>
+            ${loserLines}
+          </div>
+        </div>
+        <div class="ol-foot">
+          <span><b>${ds.length}</b> deals funded</span>
+          <span><b>${payers.length}</b> still paying</span>
+          <span><b>${losers.length}</b> written off</span>
+          <span>Outlook if payers pay out: <b class="${outlook>=0?'pnl-pos':'pnl-neg'}">${fmt$(outlook)}</b></span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  body.innerHTML=intro+'<div class="ol-months">'+cards+'</div>';
+}
+
 async function computeMonthlyRows(){
   try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
   const groups={};
