@@ -213,6 +213,69 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .ol-empty-col{color:var(--text3);font-size:12px;font-style:italic;padding:6px 0}
 .ol-foot{padding:12px 20px;background:var(--bg);border-top:1px solid var(--border);font-size:11.5px;color:var(--text2);display:flex;gap:18px;flex-wrap:wrap}
 .ol-foot b{color:var(--text)}
+/* ─── Portfolio Review (build 125) ──────────────────────── */
+.rv-toolbar{display:flex;align-items:center;justify-content:space-between;margin:0 2px 16px;gap:12px}
+.rv-toolbar-l{display:flex;align-items:center;gap:12px}
+.rv-asof{font-size:11px;color:var(--text3)}
+#review-body{padding:0 2px 40px;max-width:1180px}
+.rv-hero{background:linear-gradient(135deg,var(--bg2),var(--bg3));border:1px solid var(--border);border-radius:14px;padding:22px 26px;margin-bottom:18px;display:flex;align-items:center;gap:28px;flex-wrap:wrap}
+.rv-grade{display:flex;flex-direction:column;align-items:center;justify-content:center;width:104px;height:104px;border-radius:50%;flex:none;border:3px solid}
+.rv-grade .g{font-size:42px;font-weight:800;line-height:1}
+.rv-grade .gl{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-top:2px}
+.rv-hero-txt{flex:1;min-width:280px}
+.rv-hero-txt h2{font-size:19px;font-weight:800;margin:0 0 6px}
+.rv-hero-txt p{font-size:13px;color:var(--text2);line-height:1.5;margin:0}
+.rv-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+@media(max-width:820px){.rv-kpis{grid-template-columns:repeat(2,1fr)}}
+.rv-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:13px 15px}
+.rv-kpi .k{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:5px}
+.rv-kpi .v{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05}
+.rv-kpi .s{font-size:11px;color:var(--text2);margin-top:3px}
+.rv-sec{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;break-inside:avoid}
+.rv-sec-h{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+.rv-sec-h .n{font-size:15px;font-weight:700}
+.rv-sec-h .sub{font-size:11.5px;color:var(--text3)}
+.rv-sec-lead{font-size:12.5px;color:var(--text2);line-height:1.5;margin:8px 0 14px}
+.rv-two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media(max-width:820px){.rv-two{grid-template-columns:1fr}}
+.rv-table{width:100%;border-collapse:collapse;font-size:12px}
+.rv-table th{text-align:left;color:var(--text3);font-weight:600;padding:5px 8px;border-bottom:1px solid var(--border);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em}
+.rv-table td{padding:6px 8px;border-bottom:1px solid var(--bg3);font-variant-numeric:tabular-nums}
+.rv-table td.nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.rv-table tr:last-child td{border-bottom:0}
+.rv-bar-track{background:var(--bg4);border-radius:4px;height:8px;overflow:hidden;min-width:60px}
+.rv-bar-fill{height:100%;border-radius:4px}
+.rv-findings{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:9px}
+.rv-find{display:flex;gap:11px;padding:11px 13px;border-radius:9px;font-size:12.5px;line-height:1.45;border-left:3px solid}
+.rv-find .fi{flex:none;font-size:15px;line-height:1.2}
+.rv-find.good{background:rgba(55,198,111,.08);border-left-color:var(--green)}
+.rv-find.warn{background:rgba(245,158,11,.08);border-left-color:var(--amber)}
+.rv-find.bad{background:rgba(248,113,113,.08);border-left-color:var(--red)}
+.rv-find.info{background:var(--bg3);border-left-color:var(--border2)}
+.rv-find b{color:var(--text)}
+.rv-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text2);margin-top:10px}
+.rv-legend span{display:inline-flex;align-items:center;gap:5px}
+.rv-dot{width:9px;height:9px;border-radius:2px;display:inline-block}
+.rv-donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.rv-pos{color:var(--green);font-weight:700}.rv-neg{color:var(--red);font-weight:700}.rv-amb{color:var(--amber);font-weight:700}
+.rv-mini{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.rv-print-head{display:none}
+@media print{
+  body{background:#fff}
+  .sidebar,.topbar,.no-print,#app>.topbar{display:none!important}
+  .main,#app{margin:0;padding:0;width:100%}
+  #panel-review{display:block!important}
+  .panel:not(#panel-review){display:none!important}
+  #review-body{max-width:none;color:#111}
+  .rv-sec,.rv-kpi,.rv-hero{background:#fff!important;border:1px solid #ccc!important;box-shadow:none;break-inside:avoid}
+  .rv-hero{background:#f7f7f5!important}
+  .rv-sec-h .n,.rv-kpi .v,.rv-hero-txt h2,.rv-table td{color:#111!important}
+  .rv-sec-h .sub,.rv-kpi .k,.rv-sec-lead,.rv-hero-txt p,.rv-table th{color:#555!important}
+  .rv-print-head{display:block;margin-bottom:16px;border-bottom:2px solid #111;padding-bottom:8px}
+  .rv-print-head h1{font-size:20px;margin:0}
+  .rv-print-head .d{font-size:11px;color:#555}
+  .rv-two{grid-template-columns:1fr 1fr}
+}
 .wk-name{color:var(--wk-purple);font-weight:700}
 
 /* EMPTY */
@@ -360,7 +423,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook cards are more compact — smaller row font and tighter padding so more months fit without scrolling — with the full month name restored. Tight band 0–10k, accordion months, cascading absorbs-losses tag, and paid-off / refi / collections tags on each deal.">build 124</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="New Portfolio review (sidebar, under Outlook): a live book-wide analysis — graded book health, industry concentration, ISO/source quality, collection curve, and honest findings with charts. Renders in-browser and exports to PDF. Analysis only; computed live from your deals.">build 125</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -376,6 +439,7 @@ select.badge:hover{filter:brightness(1.2)}
       </div>
       <div class="sidebar-nav-bottom">
         <div class="nav-item nav-outlook-bottom" id="nav-outlook" onclick="setView('outlook')">📈 Outlook <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:500">month analysis</span></div>
+        <div class="nav-item nav-review-bottom" id="nav-review" onclick="setView('review')">🩺 Portfolio review <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:500">book analysis</span></div>
       </div>
       <div class="sidebar-bottom">
         <div class="sidebar-chip" id="sync-info">⏱ Not synced yet</div>
@@ -474,6 +538,15 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="panel" id="panel-outlook" style="display:none">
           <div id="outlook-body"></div>
           <div id="outlook-empty" class="empty-state" style="display:none"><div class="icon">📈</div><h3>No funded deals yet</h3><p>Month outlook appears as cohorts build up.</p></div>
+        </div>
+
+        <div class="panel" id="panel-review" style="display:none">
+          <div class="rv-toolbar no-print">
+            <div class="rv-toolbar-l"><button class="btn btn-blue" onclick="renderReview()">↻ Re-run analysis</button><span id="rv-asof" class="rv-asof"></span></div>
+            <button class="btn" onclick="exportReviewPdf()">⬇ Export PDF</button>
+          </div>
+          <div id="review-body"></div>
+          <div id="review-empty" class="empty-state" style="display:none"><div class="icon">🩺</div><h3>No funded deals yet</h3><p>The portfolio review runs once you have deals on the book.</p></div>
         </div>
 
         <div class="panel" id="panel-pnl" style="display:none">
@@ -1812,9 +1885,9 @@ async function handleDailyReport(input) {
 // ─── VIEWS ───────────────────────────────────────────────
 function setView(v){
   currentView=v;
-  ['book','allocator','renewal','pif','defaults','clawback','monthly','outlook','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
-  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',clawback:'Clawback eligible',monthly:'Monthly totals',outlook:'Month outlook',pnl:'PNL'}[v];
-  if(v==='allocator') renderAllocator(); if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='clawback') renderClawback(); if(v==='monthly') renderMonthly(); if(v==='outlook') renderOutlook(); if(v==='pnl') renderPnl();
+  ['book','allocator','renewal','pif','defaults','clawback','monthly','outlook','review','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
+  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',clawback:'Clawback eligible',monthly:'Monthly totals',outlook:'Month outlook',review:'Portfolio review',pnl:'PNL'}[v];
+  if(v==='allocator') renderAllocator(); if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='clawback') renderClawback(); if(v==='monthly') renderMonthly(); if(v==='outlook') renderOutlook(); if(v==='review') renderReview(); if(v==='pnl') renderPnl();
 }
 
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=-1;}renderTable();}
@@ -2714,6 +2787,191 @@ async function closeOutMonth(){
 }
 
 // One source of truth for monthly math — used by BOTH the Monthly view and the Excel export.
+// ─── Portfolio Review (build 125) ───────────────────────────────────────────
+// A real-time, book-wide analysis grounded in MCA fundamentals: book health, concentration,
+// ISO and industry quality, collection curve, and an honest graded verdict with findings.
+// Everything is computed live from `deals`; nothing is stored.
+function _rvNum(n){ return Number(n)||0; }
+function _rvPct(a,b){ return b?(a/b*100):0; }
+function _rvGradeColor(g){ return g==='A'?'#37c66f':g==='B'?'#6fd396':g==='C'?'#f59e0b':g==='D'?'#fb923c':'#f87171'; }
+// horizontal bar-row chart from [{label,value,color,note}]
+function rvBarChart(rows, maxV, fmtV){
+  const mx=maxV||Math.max(1,...rows.map(r=>Math.abs(r.value)));
+  return '<table class="rv-table"><tbody>'+rows.map(r=>{
+    const w=Math.min(100,Math.abs(r.value)/mx*100);
+    return `<tr><td class="nm">${esc0(r.label)}</td>`+
+      `<td style="width:46%"><div class="rv-bar-track"><div class="rv-bar-fill" style="width:${w}%;background:${r.color||'#4a9eff'}"></div></div></td>`+
+      `<td style="text-align:right;font-weight:700;white-space:nowrap">${fmtV?fmtV(r.value):fmt$(r.value)}</td>`+
+      `<td class="rv-mini" style="text-align:right;white-space:nowrap">${r.note||''}</td></tr>`;
+  }).join('')+'</tbody></table>';
+}
+// donut from [{label,value,color}]
+function rvDonut(parts, size){
+  const S=size||120, R=S/2, r=R*0.62, cx=R, cy=R;
+  const tot=parts.reduce((s,p)=>s+p.value,0)||1;
+  let a=-Math.PI/2, segs='';
+  parts.forEach(p=>{
+    const frac=p.value/tot, a2=a+frac*Math.PI*2;
+    const x1=cx+R*Math.cos(a), y1=cy+R*Math.sin(a), x2=cx+R*Math.cos(a2), y2=cy+R*Math.sin(a2);
+    const large=frac>0.5?1:0;
+    if(p.value>0) segs+=`<path d="M${cx} ${cy} L${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2} Z" fill="${p.color}"/>`;
+    a=a2;
+  });
+  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">${segs}<circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--bg2)"/></svg>`;
+}
+
+function renderReview(){
+  const body=document.getElementById('review-body'), empty=document.getElementById('review-empty');
+  const asof=document.getElementById('rv-asof');
+  const funded=deals.filter(d=>d.date_funded);
+  if(!funded.length){ body.innerHTML=''; empty.style.display=''; if(asof)asof.textContent=''; return; }
+  empty.style.display='none';
+  const now=new Date();
+  if(asof) asof.textContent='as of '+now.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+
+  const isDead=d=> d.status==='DEFAULT' || (d.collections_state||'').toUpperCase()==='LEGAL';
+  const isActive=d=> ['ACTIVE','NEW'].includes(d.status) && !isDead(d);
+
+  // ── Core book aggregates (OUR book share throughout) ──
+  const bookFunded=funded.reduce((s,d)=>s+_rvNum(d.book_funded),0);
+  const netPnl=funded.reduce((s,d)=>s+_rvNum(d.pnl),0);
+  const expected=funded.filter(d=>!isDead(d)).reduce((s,d)=>s+_rvNum(d.book_profit),0);
+  const atRisk=funded.filter(isDead).reduce((s,d)=>s+_rvNum(d.max_loss),0);
+  const bookBalance=funded.filter(isActive).reduce((s,d)=>s+_rvNum(d.balance)*_rvNum(d.book_pct)/100,0);
+  const nDead=funded.filter(isDead).length;
+  const defaultRate=_rvPct(nDead,funded.length);
+  const bookAtRisk=funded.filter(isDead).reduce((s,d)=>s+_rvNum(d.book_funded),0);
+  const dollarDefault=_rvPct(bookAtRisk,bookFunded);
+  // weighted collection %: how much of RTR has been collected across active deals
+  const totRtr=funded.filter(isActive).reduce((s,d)=>s+_rvNum(d.rtr),0);
+  const totPaid=funded.filter(isActive).reduce((s,d)=>s+(_rvNum(d.rtr)-_rvNum(d.balance)),0);
+  const collPct=_rvPct(totPaid,totRtr);
+  const avgFactor=funded.length?funded.reduce((s,d)=>s+_rvNum(d.factor),0)/funded.length:0;
+  const refiShare=_rvPct(funded.filter(d=>d.deal_type==='REFI').length,funded.length);
+  const pifCount=funded.filter(d=>d.status==='PIF').length;
+
+  // ── Grade: weighted from dollar-default, collection health, net PNL sign, concentration ──
+  let score=100;
+  score-= Math.min(40, dollarDefault*1.6);           // default drag
+  score-= (netPnl<0?25:0);                            // book underwater
+  score-= (collPct<35?12:collPct<50?6:0);            // slow collection
+  // concentration penalty computed after industry pass (below), applied then
+
+  // ── Industry analysis ──
+  const byInd={};
+  funded.forEach(d=>{ const k=(d.industry||'Unspecified').trim()||'Unspecified'; (byInd[k]=byInd[k]||[]).push(d); });
+  const indRows=Object.keys(byInd).map(k=>{
+    const ds=byInd[k];
+    const bf=ds.reduce((s,d)=>s+_rvNum(d.book_funded),0);
+    const pnl=ds.reduce((s,d)=>s+_rvNum(d.pnl),0);
+    const dead=ds.filter(isDead).length;
+    return {label:k, n:ds.length, bookFunded:bf, pnl, dr:_rvPct(dead,ds.length), share:_rvPct(bf,bookFunded)};
+  }).sort((a,b)=>b.bookFunded-a.bookFunded);
+  const topIndShare=indRows.length?indRows[0].share:0;
+  const concPenalty = topIndShare>45?14:topIndShare>32?7:0;
+  score-=concPenalty;
+
+  // ── ISO analysis ──
+  const byIso={};
+  funded.forEach(d=>{ const k=(d.iso||'Unspecified').trim()||'Unspecified'; (byIso[k]=byIso[k]||[]).push(d); });
+  const isoRows=Object.keys(byIso).map(k=>{
+    const ds=byIso[k];
+    const bf=ds.reduce((s,d)=>s+_rvNum(d.book_funded),0);
+    const pnl=ds.reduce((s,d)=>s+_rvNum(d.pnl),0);
+    const dead=ds.filter(isDead).length;
+    const af=ds.length?ds.reduce((s,d)=>s+_rvNum(d.factor),0)/ds.length:0;
+    return {label:k, n:ds.length, bookFunded:bf, pnl, dr:_rvPct(dead,ds.length), avgF:af, share:_rvPct(bf,bookFunded)};
+  }).sort((a,b)=>b.bookFunded-a.bookFunded);
+
+  score=Math.max(5,Math.min(100,Math.round(score)));
+  const grade = score>=85?'A':score>=72?'B':score>=58?'C':score>=42?'D':'F';
+  const gColor=_rvGradeColor(grade);
+
+  // ── Collection curve buckets (active deals by % paid) ──
+  const buckets=[{k:'0–25%',lo:0,hi:25,c:'#f87171'},{k:'25–50%',lo:25,hi:50,c:'#fb923c'},{k:'50–75%',lo:50,hi:75,c:'#f59e0b'},{k:'75–99%',lo:75,hi:100,c:'#6fd396'}];
+  const actives=funded.filter(isActive);
+  const curveRows=buckets.map(b=>{ const n=actives.filter(d=>_rvNum(d.pct_paid)>=b.lo&&_rvNum(d.pct_paid)<b.hi).length; return {label:b.k,value:n,color:b.c,note:n+' deals'}; });
+
+  // ── Status composition donut ──
+  const compParts=[
+    {label:'Active/New',value:funded.filter(isActive).length,color:'#4a9eff'},
+    {label:'Paid in full',value:pifCount,color:'#37c66f'},
+    {label:'Default/Legal',value:nDead,color:'#f87171'},
+  ];
+
+  // ── Honest findings ──
+  const F=[];
+  const push=(kind,icon,html)=>F.push({kind,icon,html});
+  if(netPnl>=0) push('good','✓',`Book is <b>net positive</b> at <b>${fmt$(netPnl)}</b> across ${funded.length} funded deals. Expected upside from the deals still paying is <b>${fmt$(expected)}</b>.`);
+  else push('bad','✕',`Book is <b>net negative</b> at <b>${fmt$(netPnl)}</b>. Losses are currently outrunning the paying book — protect margin on new fundings until this recovers.`);
+  if(dollarDefault>20) push('bad','▲',`<b>${dollarDefault.toFixed(1)}% of book capital</b> is in defaulted or legal deals (${fmt$(bookAtRisk)}). That's a heavy loss rate — tighten underwriting and revisit the ISOs feeding these.`);
+  else if(dollarDefault>10) push('warn','▲',`<b>${dollarDefault.toFixed(1)}% of book capital</b> is written off (${fmt$(bookAtRisk)}). Watchable, not alarming — keep an eye on the concentration below.`);
+  else push('good','✓',`Default exposure is contained: only <b>${dollarDefault.toFixed(1)}%</b> of book capital is in dead deals.`);
+  if(topIndShare>45) push('warn','◆',`<b>${indRows[0].label}</b> is <b>${topIndShare.toFixed(0)}%</b> of the book by capital — over-concentrated. One bad stretch in that industry hits hard; aim to diversify new fundings.`);
+  else if(indRows.length>=3) push('good','◆',`Industry spread is reasonable — the largest (<b>${indRows[0].label}</b>) is ${topIndShare.toFixed(0)}% of the book.`);
+  // ISO callouts: best and worst by default rate among ISOs with >=2 deals
+  const isoQual=isoRows.filter(r=>r.n>=2);
+  const worstIso=isoQual.slice().sort((a,b)=>b.dr-a.dr)[0];
+  const bestIso=isoQual.slice().sort((a,b)=> (b.pnl-a.pnl))[0];
+  if(worstIso && worstIso.dr>=34) push('bad','⚑',`<b>${worstIso.label}</b> is sending weak paper — <b>${worstIso.dr.toFixed(0)}% default rate</b> across ${worstIso.n} deals. Consider pausing or re-pricing deals from this source.`);
+  if(bestIso && bestIso.pnl>0) push('good','★',`<b>${bestIso.label}</b> is your strongest source by profit (<b>${fmt$(bestIso.pnl)}</b> across ${bestIso.n} deals). Lean into this relationship.`);
+  if(collPct<40) push('warn','◷',`Collections are running slow — active deals are only <b>${collPct.toFixed(0)}%</b> paid down on average. Watch for early-stage deals stalling before their first pulls clear.`);
+  else push('good','◷',`Collection pace is healthy at <b>${collPct.toFixed(0)}%</b> paid down across the active book.`);
+  if(refiShare>50) push('info','↻',`<b>${refiShare.toFixed(0)}%</b> of deals are REFIs — you're leaning on renewals. Healthy for retention, but make sure new-merchant origination keeps pace so the book doesn't age into a few names.`);
+  if(avgFactor>1.49) push('info','∑',`Average factor is <b>${avgFactor.toFixed(3)}</b> — pricing is on the higher end, which cushions defaults but can raise stack/broker risk on the merchant side.`);
+
+  // ── Render ──
+  const kpi=(k,v,s,cls)=>`<div class="rv-kpi"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div><div class="s">${s||''}</div></div>`;
+  const indTable='<table class="rv-table"><thead><tr><th>Industry</th><th style="text-align:right">Deals</th><th style="text-align:right">Book funded</th><th style="text-align:right">Share</th><th style="text-align:right">PNL</th><th style="text-align:right">Default</th></tr></thead><tbody>'+
+    indRows.slice(0,8).map(r=>`<tr><td class="nm">${esc0(r.label)}</td><td style="text-align:right">${r.n}</td><td style="text-align:right">${fmt$(r.bookFunded)}</td><td style="text-align:right">${r.share.toFixed(0)}%</td><td style="text-align:right" class="${r.pnl>=0?'rv-pos':'rv-neg'}">${fmt$(r.pnl)}</td><td style="text-align:right" class="${r.dr>25?'rv-neg':r.dr>0?'rv-amb':''}">${r.dr.toFixed(0)}%</td></tr>`).join('')+'</tbody></table>';
+  const isoTable='<table class="rv-table"><thead><tr><th>ISO / source</th><th style="text-align:right">Deals</th><th style="text-align:right">Book funded</th><th style="text-align:right">PNL</th><th style="text-align:right">Avg factor</th><th style="text-align:right">Default</th></tr></thead><tbody>'+
+    isoRows.slice(0,8).map(r=>`<tr><td class="nm">${esc0(r.label)}</td><td style="text-align:right">${r.n}</td><td style="text-align:right">${fmt$(r.bookFunded)}</td><td style="text-align:right" class="${r.pnl>=0?'rv-pos':'rv-neg'}">${fmt$(r.pnl)}</td><td style="text-align:right">${r.avgF.toFixed(3)}</td><td style="text-align:right" class="${r.dr>25?'rv-neg':r.dr>0?'rv-amb':''}">${r.dr.toFixed(0)}%</td></tr>`).join('')+'</tbody></table>';
+
+  const indBars=rvBarChart(indRows.slice(0,6).map(r=>({label:r.label,value:r.bookFunded,color: r.pnl>=0?'#4a9eff':'#f87171',note:r.share.toFixed(0)+'%'})));
+  const donut=rvDonut(compParts,120);
+  const compLegend='<div class="rv-legend">'+compParts.map(p=>`<span><i class="rv-dot" style="background:${p.color}"></i>${p.label} · ${p.value}</span>`).join('')+'</div>';
+  const curveBars=rvBarChart(curveRows, Math.max(1,...curveRows.map(r=>r.value)), v=>v);
+
+  body.innerHTML=
+    '<div class="rv-print-head"><h1>Portfolio Review — Highland Hill Capital</h1><div class="d">'+now.toLocaleString('en-US',{dateStyle:'full',timeStyle:'short'})+'</div></div>'+
+    // Hero verdict
+    `<div class="rv-hero">
+      <div class="rv-grade" style="border-color:${gColor}"><span class="g" style="color:${gColor}">${grade}</span><span class="gl">book health</span></div>
+      <div class="rv-hero-txt">
+        <h2>${grade==='A'?'Strong, well-run book':grade==='B'?'Healthy book, minor watch items':grade==='C'?'Mixed — real strengths, real leaks':grade==='D'?'Under pressure — tighten up':'At risk — act now'}</h2>
+        <p>${funded.length} funded deals · ${fmt$(bookFunded)} deployed on book · net PNL <b class="${netPnl>=0?'rv-pos':'rv-neg'}">${fmt$(netPnl)}</b>. ${nDead} deal${nDead!==1?'s':''} written off (${dollarDefault.toFixed(1)}% of capital). Expected upside from the paying book: <b class="rv-pos">${fmt$(expected)}</b>.</p>
+      </div>
+    </div>`+
+    // KPI strip
+    '<div class="rv-kpis">'+
+      kpi('Book deployed',fmt$(bookFunded),funded.length+' deals','')+
+      kpi('Net PNL',fmt$(netPnl),netPnl>=0?'in the black':'underwater',netPnl>=0?'rv-pos':'rv-neg')+
+      kpi('Capital at risk',fmt$(bookAtRisk),dollarDefault.toFixed(1)+'% of book',dollarDefault>15?'rv-neg':dollarDefault>8?'rv-amb':'')+
+      kpi('Collection pace',collPct.toFixed(0)+'%',fmt$(bookBalance)+' still out','')+
+    '</div>'+
+    // Findings
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Honest assessment</span><span class="sub">what's working, what needs attention</span></div>
+      <ul class="rv-findings">${F.map(f=>`<li class="rv-find ${f.kind}"><span class="fi">${f.icon}</span><span>${f.html}</span></li>`).join('')}</ul></div>`+
+    // Composition + collection curve
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Book composition & collection health</span><span class="sub">where the book stands right now</span></div>
+      <div class="rv-two">
+        <div><div class="rv-mini" style="margin-bottom:8px">Status mix</div><div class="rv-donut-wrap">${donut}<div>${compLegend}</div></div></div>
+        <div><div class="rv-mini" style="margin-bottom:8px">Active deals by % paid down</div>${curveBars}</div>
+      </div></div>`+
+    // Industry
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Industry concentration & performance</span><span class="sub">${indRows.length} industries</span></div>
+      <div class="rv-sec-lead">Largest exposure is <b>${esc0(indRows[0].label)}</b> at ${topIndShare.toFixed(0)}% of book capital. Bars show book funded (blue = net-positive PNL, red = net-negative).</div>
+      <div class="rv-two"><div>${indBars}</div><div>${indTable}</div></div></div>`+
+    // ISO
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">ISO / source quality</span><span class="sub">${isoRows.length} sources</span></div>
+      <div class="rv-sec-lead">Which sources bring paper that pays. Default rate and PNL per source are the tell — a high-volume ISO with a high default rate is where to tighten.</div>
+      ${isoTable}</div>`;
+}
+function exportReviewPdf(){
+  if(currentView!=='review') setView('review');
+  setTimeout(()=>window.print(),120);
+}
+
 // ─── Month Outlook (build 122) ──────────────────────────────────────────────
 // A cohort-level profitability read for each funding month. For every month:
 //   • deals we've written off (DEFAULT or sent to LEGAL) — that money is treated as gone; the
