@@ -258,6 +258,17 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .rv-dot{width:9px;height:9px;border-radius:2px;display:inline-block}
 .rv-donut-wrap{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .rv-pos{color:var(--green);font-weight:700}.rv-neg{color:var(--red);font-weight:700}.rv-amb{color:var(--amber);font-weight:700}
+.rv-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:820px){.rv-metrics{grid-template-columns:repeat(2,1fr)}}
+.rv-metric{background:var(--bg3);border-radius:9px;padding:11px 13px}
+.rv-metric .mk{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px}
+.rv-metric .mv{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05}
+.rv-metric .mn{font-size:11px;color:var(--text2);margin-top:3px}
+.rv-summary{font-size:13px;color:var(--text2);line-height:1.6}
+.rv-summary p{margin:0 0 10px}
+.rv-summary b{color:var(--text)}
+.rv-summary-list{margin:4px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.rv-summary-list li{color:var(--text2)}
 .rv-mini{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
 .rv-print-head{display:none}
 @media print{
@@ -423,7 +434,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="New Portfolio review (sidebar, under Outlook): a live book-wide analysis — graded book health, industry concentration, ISO/source quality, collection curve, and honest findings with charts. Renders in-browser and exports to PDF. Analysis only; computed live from your deals.">build 125</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Portfolio review now leads with a forward PROGNOSIS — projects mature profit/margin from the book’s own early signals against a CDF default assumption, since a young book can’t be judged on realized defaults alone. Adds deal-structure metrics (size, term, factor, commission, concentration) and a plain-English go-forward summary with concrete moves.">build 126</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2794,6 +2805,11 @@ async function closeOutMonth(){
 function _rvNum(n){ return Number(n)||0; }
 function _rvPct(a,b){ return b?(a/b*100):0; }
 function _rvGradeColor(g){ return g==='A'?'#37c66f':g==='B'?'#6fd396':g==='C'?'#f59e0b':g==='D'?'#fb923c':'#f87171'; }
+// small metric tile for the deal-structure grid
+function rvMetric(k,v,note,tone){
+  const c = tone==='pos'?'rv-pos':tone==='amb'?'rv-amb':tone==='neg'?'rv-neg':'';
+  return `<div class="rv-metric"><div class="mk">${k}</div><div class="mv ${c}">${v}</div><div class="mn">${note||''}</div></div>`;
+}
 // horizontal bar-row chart from [{label,value,color,note}]
 function rvBarChart(rows, maxV, fmtV){
   const mx=maxV||Math.max(1,...rows.map(r=>Math.abs(r.value)));
@@ -2850,12 +2866,67 @@ function renderReview(){
   const refiShare=_rvPct(funded.filter(d=>d.deal_type==='REFI').length,funded.length);
   const pifCount=funded.filter(d=>d.status==='PIF').length;
 
-  // ── Grade: weighted from dollar-default, collection health, net PNL sign, concentration ──
+  // ── Deal-structure metrics (every metric, read against CDF-MCA norms) ──
+  const bdLen=d=> d.frequency==='Weekly' ? _rvNum(d.term)*5 : _rvNum(d.term);
+  const avgBookSize = funded.length ? bookFunded/funded.length : 0;
+  const avgDealSize = funded.length ? funded.reduce((s,d)=>s+_rvNum(d.funded),0)/funded.length : 0;
+  const termDeals = funded.filter(d=>bdLen(d)>0);
+  const avgTermBD = termDeals.length ? termDeals.reduce((s,d)=>s+bdLen(d),0)/termDeals.length : 0;
+  const avgCommPct = funded.length ? funded.reduce((s,d)=>s+_rvNum(d.comm_pct),0)/funded.length : 0;
+  // largest single deal as a share of book — concentration in one name
+  const biggest = funded.reduce((m,d)=>Math.max(m,_rvNum(d.book_funded)),0);
+  const topDealShare = _rvPct(biggest, bookFunded);
+
+  // ── Book maturity: how far the active book has run (weighted by book funded) ──
+  // A young book can't be judged on realized defaults alone — most deals haven't had time to fail.
+  const actForMat = funded.filter(isActive);
+  const matBase = actForMat.reduce((s,d)=>s+_rvNum(d.book_funded),0) || 1;
+  const bookMaturity = actForMat.reduce((s,d)=>s+_rvNum(d.book_funded)*Math.min(100,_rvNum(d.pct_paid)),0)/matBase; // 0-100 %, $-weighted
+  const daysSince = d=>{ const t=Date.parse(d.date_funded); return isFinite(t)?Math.max(0,(now-t)/86400000):0; };
+  const avgAgeDays = funded.length ? funded.reduce((s,d)=>s+daysSince(d),0)/funded.length : 0;
+  const seasonedShare = _rvPct(actForMat.filter(d=>_rvNum(d.pct_paid)>=50).length, actForMat.length||1); // % of active book past halfway
+
+  // early concentration read (full industry table built later) — the prognosis needs this now
+  const _byIndEarly={};
+  funded.forEach(d=>{ const k=(d.industry||'Unspecified').trim()||'Unspecified'; (_byIndEarly[k]=_byIndEarly[k]||0)+_rvNum(d.book_funded); });
+  const topIndShare = bookFunded ? (Math.max(0,...Object.values(_byIndEarly))/bookFunded*100) : 0;
+
+  // ── FORWARD PROGNOSIS ─────────────────────────────────────────────────────
+  // The book is young, so project the mature outcome instead of judging only what's already died.
+  // Start from the CDF-MCA house baseline default assumption (~17%, per the desk's own model),
+  // then nudge it by THIS book's early signals: early defaults, collection pace, factor cushion,
+  // concentration. Recovery on a defaulted deal ~30% of RTR (post-COJ house view).
+  const BASE_DEFAULT = 17;          // % of deals, CDF baseline
+  const RECOVERY = 0.30;            // fraction of RTR recovered before a hard default
+  // Early-signal adjustment: if realized default is already running hot for how young we are,
+  // lean the projection worse; if collections are pacing well and defaults are low, lean better.
+  let projDefault = BASE_DEFAULT;
+  const earlyDefaultVsBase = defaultRate - (BASE_DEFAULT * Math.min(1, bookMaturity/60)); // expected-so-far scales with maturity
+  projDefault += Math.max(-6, Math.min(14, earlyDefaultVsBase * 1.4));   // pull toward the book's own trend
+  if(collPct>0 && collPct<35 && bookMaturity>15) projDefault += 3;        // stalling collections → more defaults ahead
+  if(avgFactor>1.47) projDefault -= 1.5;                                  // higher factor cushions loss $
+  if(topIndShare>45) projDefault += 2;                                    // concentration amplifies a bad run
+  projDefault = Math.max(6, Math.min(40, projDefault));
+  // Projected mature profit: winners pay their book_profit; the projected-default share loses
+  // (book_funded − recovery on RTR). Applied to the still-open book; realized PNL already banked.
+  const openBook = funded.filter(d=>!isDead(d));
+  const openProfitIfAllPay = openBook.reduce((s,d)=>s+_rvNum(d.book_profit),0);
+  const openBookFunded = openBook.reduce((s,d)=>s+_rvNum(d.book_funded),0);
+  const openRtr = openBook.reduce((s,d)=>s+_rvNum(d.book_payback),0);
+  const projLossFromOpen = (projDefault/100) * (openBookFunded - RECOVERY*openRtr);
+  const realizedPnl = funded.filter(isDead).reduce((s,d)=>s+_rvNum(d.pnl),0); // losses already booked
+  const projMatureProfit = realizedPnl + openProfitIfAllPay*(1-projDefault/100) - Math.max(0,projLossFromOpen);
+  const projMarginPct = _rvPct(projMatureProfit, bookFunded);
+
+  // ── Grade: blend backward-looking realized health with the forward prognosis ──
   let score=100;
-  score-= Math.min(40, dollarDefault*1.6);           // default drag
-  score-= (netPnl<0?25:0);                            // book underwater
-  score-= (collPct<35?12:collPct<50?6:0);            // slow collection
-  // concentration penalty computed after industry pass (below), applied then
+  score-= Math.min(30, dollarDefault*1.4);                 // realized default drag (capped lower now)
+  score-= (netPnl<0 && bookMaturity>40 ? 18 : 0);          // only punish underwater once the book has run a bit
+  score-= (collPct<35 && bookMaturity>20 ? 10 : collPct<50 && bookMaturity>20 ? 5 : 0);
+  score-= (projMarginPct<0 ? 22 : projMarginPct<8 ? 11 : projMarginPct<15 ? 4 : 0); // PROGNOSIS drives the grade
+  score-= (avgTermBD>110 ? 6 : 0);                          // very long terms = more time to sour
+  score-= (topDealShare>25 ? 6 : topDealShare>18 ? 3 : 0);  // single-name concentration
+
 
   // ── Industry analysis ──
   const byInd={};
@@ -2867,7 +2938,7 @@ function renderReview(){
     const dead=ds.filter(isDead).length;
     return {label:k, n:ds.length, bookFunded:bf, pnl, dr:_rvPct(dead,ds.length), share:_rvPct(bf,bookFunded)};
   }).sort((a,b)=>b.bookFunded-a.bookFunded);
-  const topIndShare=indRows.length?indRows[0].share:0;
+  // topIndShare already computed early (prognosis needs it); concentration penalty applies here
   const concPenalty = topIndShare>45?14:topIndShare>32?7:0;
   score-=concPenalty;
 
@@ -2920,6 +2991,53 @@ function renderReview(){
   if(refiShare>50) push('info','↻',`<b>${refiShare.toFixed(0)}%</b> of deals are REFIs — you're leaning on renewals. Healthy for retention, but make sure new-merchant origination keeps pace so the book doesn't age into a few names.`);
   if(avgFactor>1.49) push('info','∑',`Average factor is <b>${avgFactor.toFixed(3)}</b> — pricing is on the higher end, which cushions defaults but can raise stack/broker risk on the merchant side.`);
 
+  // ── Forward-looking (prognosis) findings ──
+  const maturedEnough = bookMaturity>=20 || avgAgeDays>=35;
+  if(!maturedEnough) push('info','◔',`This is a <b>young book</b> — only <b>${bookMaturity.toFixed(0)}%</b> paid down on the active side and averaging <b>${Math.round(avgAgeDays)} days</b> old. Realized numbers will look flattering because most deals haven't had time to sour. The prognosis below extrapolates the mature outcome.`);
+  if(projMarginPct>=15) push('good','↗',`Projected mature margin of <b>${projMarginPct.toFixed(1)}%</b> (~${fmt$(projMatureProfit)}) at a ${projDefault.toFixed(0)}% assumed default rate. If underwriting holds, this book pays.`);
+  else if(projMarginPct>=0) push('warn','→',`Projected mature margin is thin at <b>${projMarginPct.toFixed(1)}%</b> (~${fmt$(projMatureProfit)}). At the assumed ${projDefault.toFixed(0)}% default rate there isn't much cushion — a few extra defaults tip this negative. Guard underwriting quality.`);
+  else push('bad','↘',`Projection turns <b>negative</b> (~${fmt$(projMatureProfit)}) at a ${projDefault.toFixed(0)}% assumed default rate. On the current trajectory this book loses money at maturity — tighten origination and pricing now, before more capital deploys.`);
+  if(avgTermBD>0){
+    if(avgTermBD>110) push('warn','⏱',`Average term is <b>${avgTermBD.toFixed(0)} business days</b> — on the long side for CDF paper. Longer terms mean capital is exposed longer and defaults have more time to surface. Favor shorter terms where the merchant supports it.`);
+    else if(avgTermBD<60) push('info','⏱',`Average term is <b>${avgTermBD.toFixed(0)} business days</b> — short, which recycles capital fast but leaves less room to absorb a slow payer. Fits a tight-filter CDF book.`);
+    else push('good','⏱',`Average term of <b>${avgTermBD.toFixed(0)} business days</b> sits in the healthy CDF band — capital turns at a sensible pace.`);
+  }
+  if(avgBookSize>50000) push('warn','◪',`Average deal is <b>${fmt$(avgBookSize)}</b> on book — larger than the typical $10–50K CDF range. Bigger deals concentrate risk; one default stings more. Make sure the underwriting rigor scales with size.`);
+  else push('good','◪',`Average deal size of <b>${fmt$(avgBookSize)}</b> sits in the CDF sweet spot — small enough to spread risk across names.`);
+  if(topDealShare>25) push('warn','◈',`Your single largest deal is <b>${topDealShare.toFixed(0)}%</b> of the whole book. That's a lot riding on one merchant — a single default there swings the whole month.`);
+
+  // ── Written go-forward summary (plain-English, derived from the metrics above) ──
+  const strengths=[], watch=[], moves=[];
+  if(netPnl>=0) strengths.push('the book is net positive today'); else watch.push('the book is currently underwater');
+  if(bestIso&&bestIso.pnl>0) strengths.push(`${esc0(bestIso.label)} is producing quality paper`);
+  if(dollarDefault<10) strengths.push('early default exposure is contained');
+  if(collPct>=50) strengths.push('collections are pacing well');
+  if(projMarginPct>=15) strengths.push('the forward projection is comfortably profitable');
+  if(topIndShare>45) watch.push(`over-concentration in ${esc0(indRows[0].label)} (${topIndShare.toFixed(0)}% of book)`);
+  if(worstIso&&worstIso.dr>=34) watch.push(`weak paper from ${esc0(worstIso.label)}`);
+  if(avgTermBD>110) watch.push('terms running long');
+  if(topDealShare>25) watch.push('heavy single-deal concentration');
+  if(projMarginPct<8) watch.push('a thin projected margin');
+  // concrete moves
+  if(worstIso&&worstIso.dr>=34) moves.push(`Pause or re-price deals from ${esc0(worstIso.label)} until its default rate comes down.`);
+  if(topIndShare>45) moves.push(`Diversify new fundings away from ${esc0(indRows[0].label)} to bring its share under ~35%.`);
+  if(bestIso&&bestIso.pnl>0) moves.push(`Send more volume through ${esc0(bestIso.label)} — it's earning its keep.`);
+  if(avgTermBD>110) moves.push('Favor shorter terms where the merchant\u2019s cash flow supports it, to cut exposure time.');
+  if(avgBookSize>50000||topDealShare>25) moves.push('Keep deal sizes spread — resist stacking too much book into one large name.');
+  if(projMarginPct<8) moves.push('Hold the line on underwriting quality; the projected cushion is thin, so a small rise in defaults matters.');
+  if(!maturedEnough) moves.push('Re-run this review every couple of weeks as the book seasons — the prognosis sharpens as deals mature.');
+  if(!moves.length) moves.push('Stay the course — the metrics support the current underwriting and mix.');
+  const summaryHtml=
+    `<p><b>Where the book stands.</b> ${funded.length} deals, ${fmt$(bookFunded)} deployed, `+
+    `net PNL ${netPnl>=0?'<span class="rv-pos">'+fmt$(netPnl)+'</span>':'<span class="rv-neg">'+fmt$(netPnl)+'</span>'} so far. `+
+    `The active book is ${bookMaturity.toFixed(0)}% paid down and averages ${Math.round(avgAgeDays)} days old, so it's still ${maturedEnough?'maturing':'early and largely unproven'}.</p>`+
+    `<p><b>Prognosis.</b> Extrapolating from the book's own early signals against a ${projDefault.toFixed(0)}% assumed default rate, this book projects to a mature profit of `+
+    `${projMatureProfit>=0?'<span class="rv-pos">':'<span class="rv-neg">'}${fmt$(projMatureProfit)}</span> — a ${projMarginPct.toFixed(1)}% margin on deployed capital. `+
+    `${projMarginPct>=15?'That\u2019s a healthy trajectory if underwriting holds.':projMarginPct>=0?'That\u2019s a thin cushion — protect it.':'That\u2019s a losing trajectory on current form — act before more capital deploys.'}</p>`+
+    (strengths.length?`<p><b>Working:</b> ${strengths.join('; ')}.</p>`:'')+
+    (watch.length?`<p><b>Watch:</b> ${watch.join('; ')}.</p>`:'')+
+    `<p><b>Moves from here:</b></p><ul class="rv-summary-list">${moves.map(m=>'<li>'+m+'</li>').join('')}</ul>`;
+
   // ── Render ──
   const kpi=(k,v,s,cls)=>`<div class="rv-kpi"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div><div class="s">${s||''}</div></div>`;
   const indTable='<table class="rv-table"><thead><tr><th>Industry</th><th style="text-align:right">Deals</th><th style="text-align:right">Book funded</th><th style="text-align:right">Share</th><th style="text-align:right">PNL</th><th style="text-align:right">Default</th></tr></thead><tbody>'+
@@ -2939,16 +3057,50 @@ function renderReview(){
       <div class="rv-grade" style="border-color:${gColor}"><span class="g" style="color:${gColor}">${grade}</span><span class="gl">book health</span></div>
       <div class="rv-hero-txt">
         <h2>${grade==='A'?'Strong, well-run book':grade==='B'?'Healthy book, minor watch items':grade==='C'?'Mixed — real strengths, real leaks':grade==='D'?'Under pressure — tighten up':'At risk — act now'}</h2>
-        <p>${funded.length} funded deals · ${fmt$(bookFunded)} deployed on book · net PNL <b class="${netPnl>=0?'rv-pos':'rv-neg'}">${fmt$(netPnl)}</b>. ${nDead} deal${nDead!==1?'s':''} written off (${dollarDefault.toFixed(1)}% of capital). Expected upside from the paying book: <b class="rv-pos">${fmt$(expected)}</b>.</p>
+        <p>${funded.length} funded deals · ${fmt$(bookFunded)} deployed · net PNL <b class="${netPnl>=0?'rv-pos':'rv-neg'}">${fmt$(netPnl)}</b> so far. The book is <b>${bookMaturity.toFixed(0)}% paid down</b> and ${maturedEnough?'seasoning':'still young'}, so the grade leans on the <b>prognosis</b>: projected mature profit of <b class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</b> (${projMarginPct.toFixed(1)}% margin) at a ${projDefault.toFixed(0)}% assumed default rate.</p>
       </div>
     </div>`+
-    // KPI strip
+    // KPI strip — realized + forward
     '<div class="rv-kpis">'+
       kpi('Book deployed',fmt$(bookFunded),funded.length+' deals','')+
-      kpi('Net PNL',fmt$(netPnl),netPnl>=0?'in the black':'underwater',netPnl>=0?'rv-pos':'rv-neg')+
-      kpi('Capital at risk',fmt$(bookAtRisk),dollarDefault.toFixed(1)+'% of book',dollarDefault>15?'rv-neg':dollarDefault>8?'rv-amb':'')+
-      kpi('Collection pace',collPct.toFixed(0)+'%',fmt$(bookBalance)+' still out','')+
+      kpi('Net PNL (today)',fmt$(netPnl),netPnl>=0?'realized so far':'underwater so far',netPnl>=0?'rv-pos':'rv-neg')+
+      kpi('Projected profit',fmt$(projMatureProfit),'at maturity · '+projMarginPct.toFixed(1)+'% margin',projMatureProfit>=0?'rv-pos':'rv-neg')+
+      kpi('Book maturity',bookMaturity.toFixed(0)+'%','paid down · '+Math.round(avgAgeDays)+'d avg age','')+
     '</div>'+
+    // Prognosis
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Prognosis — where this book is heading</span><span class="sub">forward projection, not just what's died</span></div>
+      <div class="rv-sec-lead">Because the book is young, judging it only on realized defaults flatters it. This projects the <b>mature</b> outcome from the book's own early signals against a ${projDefault.toFixed(0)}% assumed default rate (CDF baseline ${BASE_DEFAULT}%, nudged by this book's early defaults, collection pace, factor cushion and concentration) with ~${(RECOVERY*100).toFixed(0)}% recovery on a dead deal.</div>
+      <div class="rv-two">
+        <div>
+          ${rvBarChart([
+            {label:'If every open deal pays',value:realizedPnl+openProfitIfAllPay,color:'#37c66f',note:'best case'},
+            {label:'Projected ('+projDefault.toFixed(0)+'% default)',value:projMatureProfit,color: projMatureProfit>=0?'#4a9eff':'#f87171',note:'expected'},
+            {label:'Realized today',value:netPnl,color:'#9aa3b8',note:'banked'},
+          ], Math.max(1, realizedPnl+openProfitIfAllPay))}
+        </div>
+        <div>
+          <table class="rv-table"><tbody>
+            <tr><td class="nm">Projected mature profit</td><td style="text-align:right" class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</td></tr>
+            <tr><td class="nm">Projected margin on capital</td><td style="text-align:right" class="${projMarginPct>=15?'rv-pos':projMarginPct>=0?'rv-amb':'rv-neg'}">${projMarginPct.toFixed(1)}%</td></tr>
+            <tr><td class="nm">Assumed default rate</td><td style="text-align:right">${projDefault.toFixed(0)}%</td></tr>
+            <tr><td class="nm">Upside if all open deals pay</td><td style="text-align:right" class="rv-pos">${fmt$(realizedPnl+openProfitIfAllPay)}</td></tr>
+            <tr><td class="nm">Open book still to resolve</td><td style="text-align:right">${fmt$(openBookFunded)}</td></tr>
+          </tbody></table>
+        </div>
+      </div></div>`+
+    // Deal structure metrics
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Deal structure</span><span class="sub">read against CDF-MCA norms</span></div>
+      <div class="rv-metrics">
+        ${rvMetric('Avg deal size',fmt$(avgBookSize), avgBookSize>50000?'large — concentrates risk':avgBookSize<10000?'small':'in the $10–50K CDF band', avgBookSize>50000?'amb':'pos')}
+        ${rvMetric('Avg term',avgTermBD?avgTermBD.toFixed(0)+' BD':'—', avgTermBD>110?'long — more exposure time':avgTermBD&&avgTermBD<60?'short — fast turn':'healthy band', avgTermBD>110?'amb':'pos')}
+        ${rvMetric('Avg factor',avgFactor?avgFactor.toFixed(3):'—', avgFactor>1.49?'high — good cushion':avgFactor<1.35?'thin margin':'standard', avgFactor<1.35?'amb':'pos')}
+        ${rvMetric('Avg commission',avgCommPct?avgCommPct.toFixed(1)+'%':'—', avgCommPct>15?'rich — costs upfront':'reasonable', avgCommPct>15?'amb':'pos')}
+        ${rvMetric('REFI share',refiShare.toFixed(0)+'%', refiShare>50?'renewal-heavy':'origination-led', 'info')}
+        ${rvMetric('Largest single deal',topDealShare.toFixed(0)+'%', topDealShare>25?'of book — concentrated':'of book', topDealShare>25?'amb':'pos')}
+      </div></div>`+
+    // Go-forward summary
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Go-forward summary</span><span class="sub">the read, in plain terms</span></div>
+      <div class="rv-summary">${summaryHtml}</div></div>`+
     // Findings
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Honest assessment</span><span class="sub">what's working, what needs attention</span></div>
       <ul class="rv-findings">${F.map(f=>`<li class="rv-find ${f.kind}"><span class="fi">${f.icon}</span><span>${f.html}</span></li>`).join('')}</ul></div>`+
