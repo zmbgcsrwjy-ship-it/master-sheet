@@ -221,7 +221,10 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .rv-three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px}
 @media(max-width:900px){.rv-three{grid-template-columns:1fr}}
 .rv-asof{font-size:11px;color:var(--text3)}
-#review-body{padding:0 2px 40px;max-width:1180px}
+#review-body{padding:0 2px 40px;max-width:1500px}
+.rv-cols{display:grid;grid-template-columns:1.35fr 1fr;gap:16px;align-items:start}
+@media(max-width:1050px){.rv-cols{grid-template-columns:1fr}}
+.rv-col-data,.rv-col-story{min-width:0}
 .rv-hero{background:linear-gradient(135deg,var(--bg2),var(--bg3));border:1px solid var(--border);border-radius:14px;padding:22px 26px;margin-bottom:18px;display:flex;align-items:center;gap:28px;flex-wrap:wrap}
 .rv-grade{display:flex;flex-direction:column;align-items:center;justify-content:center;width:104px;height:104px;border-radius:50%;flex:none;border:3px solid}
 .rv-grade .g{font-size:42px;font-weight:800;line-height:1}
@@ -290,6 +293,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
   .rv-print-head h1{font-size:20px;margin:0}
   .rv-print-head .d{font-size:11px;color:#555}
   .rv-two{grid-template-columns:1fr 1fr}
+  .rv-cols{grid-template-columns:1fr!important}
 }
 .wk-name{color:var(--wk-purple);font-weight:700}
 
@@ -438,7 +442,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Portfolio review can now calibrate on YOUR closed-deal history: Load history learns your real default rate (per industry / ISO / factor, credibility-weighted) and recovery rate, and the projection uses those instead of the industry baseline. Adjustable lookback. A learned-rates panel shows exactly what the projection stands on.">build 127</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Portfolio review is now a two-column layout — hard data (prognosis, calibration, deal structure, composition, industry, ISO) on the left, the narrative (go-forward summary, honest assessment) on the right — so the page uses its width instead of stacking. Sidebar label simplified to just Portfolio review.">build 128</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -454,7 +458,7 @@ select.badge:hover{filter:brightness(1.2)}
       </div>
       <div class="sidebar-nav-bottom">
         <div class="nav-item nav-outlook-bottom" id="nav-outlook" onclick="setView('outlook')">📈 Outlook <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:500">month analysis</span></div>
-        <div class="nav-item nav-review-bottom" id="nav-review" onclick="setView('review')">🩺 Portfolio review <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:500">book analysis</span></div>
+        <div class="nav-item nav-review-bottom" id="nav-review" onclick="setView('review')">🩺 Portfolio review</div>
       </div>
       <div class="sidebar-bottom">
         <div class="sidebar-chip" id="sync-info">⏱ Not synced yet</div>
@@ -3182,51 +3186,28 @@ function renderReview(){
   const isoTable='<table class="rv-table"><thead><tr><th>ISO / source</th><th style="text-align:right">Deals</th><th style="text-align:right">Book funded</th><th style="text-align:right">PNL</th><th style="text-align:right">Avg factor</th><th style="text-align:right">Default</th></tr></thead><tbody>'+
     isoRows.slice(0,8).map(r=>`<tr><td class="nm">${esc0(r.label)}</td><td style="text-align:right">${r.n}</td><td style="text-align:right">${fmt$(r.bookFunded)}</td><td style="text-align:right" class="${r.pnl>=0?'rv-pos':'rv-neg'}">${fmt$(r.pnl)}</td><td style="text-align:right">${r.avgF.toFixed(3)}</td><td style="text-align:right" class="${r.dr>25?'rv-neg':r.dr>0?'rv-amb':''}">${r.dr.toFixed(0)}%</td></tr>`).join('')+'</tbody></table>';
 
-  const indBars=rvBarChart(indRows.slice(0,6).map(r=>({label:r.label,value:r.bookFunded,color: r.pnl>=0?'#4a9eff':'#f87171',note:r.share.toFixed(0)+'%'})));
   const donut=rvDonut(compParts,120);
   const compLegend='<div class="rv-legend">'+compParts.map(p=>`<span><i class="rv-dot" style="background:${p.color}"></i>${p.label} · ${p.value}</span>`).join('')+'</div>';
   const curveBars=rvBarChart(curveRows, Math.max(1,...curveRows.map(r=>r.value)), v=>v);
 
-  body.innerHTML=
-    '<div class="rv-print-head"><h1>Portfolio Review — Highland Hill Capital</h1><div class="d">'+now.toLocaleString('en-US',{dateStyle:'full',timeStyle:'short'})+'</div></div>'+
-    // Hero verdict
-    `<div class="rv-hero">
-      <div class="rv-grade" style="border-color:${gColor}"><span class="g" style="color:${gColor}">${grade}</span><span class="gl">book health</span></div>
-      <div class="rv-hero-txt">
-        <h2>${grade==='A'?'Strong, well-run book':grade==='B'?'Healthy book, minor watch items':grade==='C'?'Mixed — real strengths, real leaks':grade==='D'?'Under pressure — tighten up':'At risk — act now'}</h2>
-        <p>${funded.length} funded deals · ${fmt$(bookFunded)} deployed · net PNL <b class="${netPnl>=0?'rv-pos':'rv-neg'}">${fmt$(netPnl)}</b> so far. The book is <b>${bookMaturity.toFixed(0)}% paid down</b> and ${maturedEnough?'seasoning':'still young'}, so the grade leans on the <b>prognosis</b>: projected mature profit of <b class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</b> (${projMarginPct.toFixed(1)}% margin) at a ${projDefault.toFixed(0)}% assumed default rate.</p>
-      </div>
-    </div>`+
-    // KPI strip — realized + forward
-    '<div class="rv-kpis">'+
-      kpi('Book deployed',fmt$(bookFunded),funded.length+' deals','')+
-      kpi('Net PNL (today)',fmt$(netPnl),netPnl>=0?'realized so far':'underwater so far',netPnl>=0?'rv-pos':'rv-neg')+
-      kpi('Projected profit',fmt$(projMatureProfit),'at maturity · '+projMarginPct.toFixed(1)+'% margin',projMatureProfit>=0?'rv-pos':'rv-neg')+
-      kpi('Book maturity',bookMaturity.toFixed(0)+'%','paid down · '+Math.round(avgAgeDays)+'d avg age','')+
-    '</div>'+
+  const LEFT =
     // Prognosis
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Prognosis — where this book is heading</span><span class="sub">${projMethod==='calibrated'?'calibrated on your history':"forward projection, not just what's died"}</span></div>
       <div class="rv-sec-lead">${ projMethod==='calibrated'
         ? `Projected from <b>your own book</b>: calibrated on <b>${cal.nResolved}</b> closed deals${cal.lookbackMonths?` (last ${cal.lookbackMonths} months)`:''} — your real default rate is <b>${cal.overallRate.toFixed(1)}%</b> and recovery <b>${cal.recovery.toFixed(0)}%</b>. Each open deal is matched to its own industry / ISO / factor segment, credibility-weighted so thin slices fall back to your overall rate. This is the effective <b>${projDefault.toFixed(0)}%</b> $-weighted default rate across the open book.`
         : `Because the book is young, judging it only on realized defaults flatters it. This projects the <b>mature</b> outcome against a ${projDefault.toFixed(0)}% assumed default rate (CDF baseline ${BASE_DEFAULT}%). <b>Load your closed-deal history</b> (top right) to replace this industry assumption with your own real rates.` }</div>
-      <div class="rv-two">
-        <div>
-          ${rvBarChart([
-            {label:'If every open deal pays',value:realizedPnl+openProfitIfAllPay,color:'#37c66f',note:'best case'},
-            {label:'Projected ('+projDefault.toFixed(0)+'% default)',value:projMatureProfit,color: projMatureProfit>=0?'#4a9eff':'#f87171',note:'expected'},
-            {label:'Realized today',value:netPnl,color:'#9aa3b8',note:'banked'},
-          ], Math.max(1, realizedPnl+openProfitIfAllPay))}
-        </div>
-        <div>
-          <table class="rv-table"><tbody>
-            <tr><td class="nm">Projected mature profit</td><td style="text-align:right" class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</td></tr>
-            <tr><td class="nm">Projected margin on capital</td><td style="text-align:right" class="${projMarginPct>=15?'rv-pos':projMarginPct>=0?'rv-amb':'rv-neg'}">${projMarginPct.toFixed(1)}%</td></tr>
-            <tr><td class="nm">Effective default rate</td><td style="text-align:right">${projDefault.toFixed(0)}%${projMethod==='calibrated'?' <span class="rv-mini">yours</span>':' <span class="rv-mini">baseline</span>'}</td></tr>
-            <tr><td class="nm">Recovery on defaults</td><td style="text-align:right">${(RECOVERY*100).toFixed(0)}%</td></tr>
-            <tr><td class="nm">Upside if all open deals pay</td><td style="text-align:right" class="rv-pos">${fmt$(realizedPnl+openProfitIfAllPay)}</td></tr>
-          </tbody></table>
-        </div>
-      </div></div>`+
+      ${rvBarChart([
+        {label:'If every open deal pays',value:realizedPnl+openProfitIfAllPay,color:'#37c66f',note:'best case'},
+        {label:'Projected ('+projDefault.toFixed(0)+'% default)',value:projMatureProfit,color: projMatureProfit>=0?'#4a9eff':'#f87171',note:'expected'},
+        {label:'Realized today',value:netPnl,color:'#9aa3b8',note:'banked'},
+      ], Math.max(1, realizedPnl+openProfitIfAllPay))}
+      <table class="rv-table" style="margin-top:10px"><tbody>
+        <tr><td class="nm">Projected mature profit</td><td style="text-align:right" class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</td></tr>
+        <tr><td class="nm">Projected margin on capital</td><td style="text-align:right" class="${projMarginPct>=15?'rv-pos':projMarginPct>=0?'rv-amb':'rv-neg'}">${projMarginPct.toFixed(1)}%</td></tr>
+        <tr><td class="nm">Effective default rate</td><td style="text-align:right">${projDefault.toFixed(0)}%${projMethod==='calibrated'?' <span class="rv-mini">yours</span>':' <span class="rv-mini">baseline</span>'}</td></tr>
+        <tr><td class="nm">Recovery on defaults</td><td style="text-align:right">${(RECOVERY*100).toFixed(0)}%</td></tr>
+        <tr><td class="nm">Upside if all open deals pay</td><td style="text-align:right" class="rv-pos">${fmt$(realizedPnl+openProfitIfAllPay)}</td></tr>
+      </tbody></table></div>`+
     ( cal ? rvCalibrationPanel(cal) : '' )+
     // Deal structure metrics
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Deal structure</span><span class="sub">read against CDF-MCA norms</span></div>
@@ -3238,26 +3219,46 @@ function renderReview(){
         ${rvMetric('REFI share',refiShare.toFixed(0)+'%', refiShare>50?'renewal-heavy':'origination-led', 'info')}
         ${rvMetric('Largest single deal',topDealShare.toFixed(0)+'%', topDealShare>25?'of book — concentrated':'of book', topDealShare>25?'amb':'pos')}
       </div></div>`+
+    // Composition + collection curve
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Book composition & collection health</span><span class="sub">where the book stands right now</span></div>
+      <div><div class="rv-mini" style="margin-bottom:8px">Status mix</div><div class="rv-donut-wrap">${donut}<div>${compLegend}</div></div></div>
+      <div style="margin-top:14px"><div class="rv-mini" style="margin-bottom:8px">Active deals by % paid down</div>${curveBars}</div></div>`+
+    // Industry
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Industry concentration & performance</span><span class="sub">${indRows.length} industries</span></div>
+      <div class="rv-sec-lead">Largest exposure is <b>${esc0(indRows[0].label)}</b> at ${topIndShare.toFixed(0)}% of book capital.</div>
+      ${indTable}</div>`+
+    // ISO
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">ISO / source quality</span><span class="sub">${isoRows.length} sources</span></div>
+      <div class="rv-sec-lead">Which sources bring paper that pays — a high-volume ISO with a high default rate is where to tighten.</div>
+      ${isoTable}</div>`;
+
+  const RIGHT =
     // Go-forward summary
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Go-forward summary</span><span class="sub">the read, in plain terms</span></div>
       <div class="rv-summary">${summaryHtml}</div></div>`+
     // Findings
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Honest assessment</span><span class="sub">what's working, what needs attention</span></div>
-      <ul class="rv-findings">${F.map(f=>`<li class="rv-find ${f.kind}"><span class="fi">${f.icon}</span><span>${f.html}</span></li>`).join('')}</ul></div>`+
-    // Composition + collection curve
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Book composition & collection health</span><span class="sub">where the book stands right now</span></div>
-      <div class="rv-two">
-        <div><div class="rv-mini" style="margin-bottom:8px">Status mix</div><div class="rv-donut-wrap">${donut}<div>${compLegend}</div></div></div>
-        <div><div class="rv-mini" style="margin-bottom:8px">Active deals by % paid down</div>${curveBars}</div>
-      </div></div>`+
-    // Industry
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Industry concentration & performance</span><span class="sub">${indRows.length} industries</span></div>
-      <div class="rv-sec-lead">Largest exposure is <b>${esc0(indRows[0].label)}</b> at ${topIndShare.toFixed(0)}% of book capital. Bars show book funded (blue = net-positive PNL, red = net-negative).</div>
-      <div class="rv-two"><div>${indBars}</div><div>${indTable}</div></div></div>`+
-    // ISO
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">ISO / source quality</span><span class="sub">${isoRows.length} sources</span></div>
-      <div class="rv-sec-lead">Which sources bring paper that pays. Default rate and PNL per source are the tell — a high-volume ISO with a high default rate is where to tighten.</div>
-      ${isoTable}</div>`;
+      <ul class="rv-findings">${F.map(f=>`<li class="rv-find ${f.kind}"><span class="fi">${f.icon}</span><span>${f.html}</span></li>`).join('')}</ul></div>`;
+
+  body.innerHTML=
+    '<div class="rv-print-head"><h1>Portfolio Review — Highland Hill Capital</h1><div class="d">'+now.toLocaleString('en-US',{dateStyle:'full',timeStyle:'short'})+'</div></div>'+
+    // Hero verdict (full width)
+    `<div class="rv-hero">
+      <div class="rv-grade" style="border-color:${gColor}"><span class="g" style="color:${gColor}">${grade}</span><span class="gl">book health</span></div>
+      <div class="rv-hero-txt">
+        <h2>${grade==='A'?'Strong, well-run book':grade==='B'?'Healthy book, minor watch items':grade==='C'?'Mixed — real strengths, real leaks':grade==='D'?'Under pressure — tighten up':'At risk — act now'}</h2>
+        <p>${funded.length} funded deals · ${fmt$(bookFunded)} deployed · net PNL <b class="${netPnl>=0?'rv-pos':'rv-neg'}">${fmt$(netPnl)}</b> so far. The book is <b>${bookMaturity.toFixed(0)}% paid down</b> and ${maturedEnough?'seasoning':'still young'}, so the grade leans on the <b>prognosis</b>: projected mature profit of <b class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</b> (${projMarginPct.toFixed(1)}% margin) at a ${projDefault.toFixed(0)}% assumed default rate.</p>
+      </div>
+    </div>`+
+    // KPI strip (full width)
+    '<div class="rv-kpis">'+
+      kpi('Book deployed',fmt$(bookFunded),funded.length+' deals','')+
+      kpi('Net PNL (today)',fmt$(netPnl),netPnl>=0?'realized so far':'underwater so far',netPnl>=0?'rv-pos':'rv-neg')+
+      kpi('Projected profit',fmt$(projMatureProfit),'at maturity · '+projMarginPct.toFixed(1)+'% margin',projMatureProfit>=0?'rv-pos':'rv-neg')+
+      kpi('Book maturity',bookMaturity.toFixed(0)+'%','paid down · '+Math.round(avgAgeDays)+'d avg age','')+
+    '</div>'+
+    // Two columns: hard data left, narrative right
+    `<div class="rv-cols"><div class="rv-col-data">${LEFT}</div><div class="rv-col-story">${RIGHT}</div></div>`;
 }
 function exportReviewPdf(){
   if(currentView!=='review') setView('review');
