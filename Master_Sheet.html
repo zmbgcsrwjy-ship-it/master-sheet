@@ -167,27 +167,27 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .pnl-pos{color:var(--green);font-weight:700}.pnl-neg{color:var(--red);font-weight:700}
 /* ─── Month Outlook (build 122) ─────────────────────────── */
 #panel-outlook{padding:4px 2px 40px}
-.ol-intro{color:var(--text2);font-size:12.5px;line-height:1.5;max-width:760px;margin:2px 4px 20px}
+.ol-intro{color:var(--text2);font-size:11.5px;line-height:1.45;max-width:760px;margin:2px 4px 12px}
 .ol-intro b{color:var(--text)}
-.ol-months{display:flex;flex-direction:column;gap:14px}
-.ol-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;border-left:4px solid var(--border2)}
+.ol-months{display:flex;flex-direction:column;gap:8px}
+.ol-card{background:var(--bg2);border:1px solid var(--border);border-radius:9px;overflow:hidden;border-left:3px solid var(--border2)}
 .ol-card.good{border-left-color:var(--green)}
 .ol-card.tight{border-left-color:var(--amber)}
 .ol-card.bad{border-left-color:var(--red)}
-.ol-head{display:flex;align-items:center;gap:18px;padding:16px 20px;cursor:pointer;user-select:none}
+.ol-head{display:flex;align-items:center;gap:16px;padding:9px 16px;cursor:pointer;user-select:none}
 .ol-head:hover{background:var(--bg3)}
-.ol-month{font-size:13.5px;font-weight:700;letter-spacing:.01em;min-width:74px}
-.ol-month .ol-caret{color:var(--text3);font-size:11px;margin-right:6px;display:inline-block;transition:transform .15s}
+.ol-month{font-size:13px;font-weight:700;letter-spacing:.01em;min-width:118px}
+.ol-month .ol-caret{color:var(--text3);font-size:10px;margin-right:6px;display:inline-block;transition:transform .15s}
 .ol-card.open .ol-caret{transform:rotate(90deg)}
 .ol-verdict{margin-left:auto;text-align:right}
-.ol-verdict-num{font-size:22px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.ol-verdict-num{font-size:17px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
 .ol-verdict-num.good{color:var(--green)}.ol-verdict-num.tight{color:var(--amber)}.ol-verdict-num.bad{color:var(--red)}
-.ol-verdict-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);margin-top:2px}
+.ol-verdict-lbl{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-top:1px}
 /* the three-number spine: expected − losses = outlook */
-.ol-spine{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.ol-chip{display:flex;flex-direction:column;gap:1px;padding:6px 12px;background:var(--bg3);border-radius:8px;min-width:104px}
-.ol-chip .n{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
-.ol-chip .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3)}
+.ol-spine{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ol-chip{display:flex;flex-direction:column;gap:0;padding:4px 10px;background:var(--bg3);border-radius:6px;min-width:96px}
+.ol-chip .n{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.ol-chip .k{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)}
 .ol-chip.loss .n{color:var(--red)}
 .ol-op{font-size:16px;color:var(--text3);font-weight:600}
 .ol-detail{border-top:1px solid var(--border);padding:0;display:none}
@@ -360,7 +360,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook tab moved to the bottom of the sidebar. Tight band is now 0–10k. Months collapse accordion-style (one open at a time, none open on load). Cascading absorbs-losses tag shows how many winners it takes to cover the written-off deals. Deal rows now carry paid-off / refi / bouncing / suspended tags. Compact month labels for density.">build 123</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook cards are more compact — smaller row font and tighter padding so more months fit without scrolling — with the full month name restored. Tight band 0–10k, accordion months, cascading absorbs-losses tag, and paid-off / refi / collections tags on each deal.">build 124</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2733,8 +2733,8 @@ function renderOutlook(){
   const isWrittenOff=d=> d.status==='DEFAULT' || (d.collections_state||'').toUpperCase()==='LEGAL';
   const lossOf=d=> Math.max(0, d.max_loss||0);
   const upsideOf=d=> (d.book_profit||0);
-  const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const shortMonth=ym=>{ const [y,m]=ym.split('-'); return MO[parseInt(m)-1]+" \u2019"+y.slice(2); };
+  const MO=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const shortMonth=ym=>{ const [y,m]=ym.split('-'); return MO[parseInt(m)-1]+" "+y; };
 
   const intro='<div class="ol-intro">Each month reads <b>expected profit from the deals still paying</b> minus <b>the deals we\u2019ve written off</b> (defaulted or sent to legal \u2014 that money is treated as gone). Positive means the month is on track; a big winner can absorb several bad deals. <b>All deals</b> has the deal-by-deal detail.</div>';
 
