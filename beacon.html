@@ -380,7 +380,7 @@
   .tab-bar-actions .btn-sub { color: var(--text-3); font-weight: 400; margin-left: 2px; }
   .tab-bar-actions button.primary .btn-sub { color: rgba(255,255,255,0.55); }
   
-  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
   .metric { background: var(--tile-gradient); border: 0.5px solid var(--border); border-radius: var(--r-md); padding: 16px 18px; box-shadow: var(--shadow-sm), var(--shadow-inset); transition: box-shadow 0.18s, transform 0.18s; }
   .metric:hover { box-shadow: var(--shadow-md), var(--shadow-inset); transform: translateY(-1px); }
   .metric .label { font-size: 13px; color: var(--text-2); margin: 0 0 4px; }
@@ -1271,7 +1271,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v146 · live</span>
+    <span class="build-tag">v147 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1345,6 +1345,7 @@
   <div class="metric"><p class="label">Failed pulls</p><p class="value" id="m-failed"></p><p class="sub" id="m-failed-sub"></p></div>
   <div class="metric"><p class="label">Total exposure at risk</p><p class="value" id="m-risk"></p><p class="sub" id="m-risk-sub"></p></div>
   <div class="metric"><p class="label">Active book RTR</p><p class="value" id="m-rtr"></p><p class="sub" id="m-rtr-sub"></p></div>
+  <div class="metric"><p class="label">Collected today</p><p class="value" id="m-collected"></p><p class="sub" id="m-collected-sub"></p></div>
   <div class="metric"><p class="label">Paid MTD</p><p class="value" id="m-paid"></p><p class="sub" id="m-paid-sub"></p></div>
 </div>
 
@@ -1990,6 +1991,8 @@ function beaconReconstruct(raw, todayISO){
     date_iso:today, date_disp:bDisp(today), date_display:bDisp(today), total_pulls:todayEvents.length,
     active_rtr:Math.round(merchants.filter(m=>['NEW','ACTIVE'].includes(m.status)).reduce((s,m)=>s+(m.balance||0),0)*100)/100,
     paid_mtd:Math.round(merchants.reduce((s,m)=>s+(m.paid_mtd||0),0)*100)/100,
+    collected_today:Math.round(merchants.reduce((s,m)=>s+(m.paid_today||0),0)*100)/100,  // v147: total $ cleared today per the daily report (sum of each deal's Paid Today)
+    collected_today_count:merchants.filter(m=>(m.paid_today||0)>0).length,
     active_count:merchants.filter(m=>m.status==='ACTIVE'||m.status==='NEW').length,
     default_count:merchants.filter(m=>m.status==='DEFAULT').length,
     completed_count:raw.deals.filter(r=>(r.fields&&r.fields.Status)==='COMPLETED').length,
@@ -3368,6 +3371,8 @@ function renderForDate() {
   
   document.getElementById("m-rtr").textContent = fmt$k(STATS.active_rtr);
   document.getElementById("m-rtr-sub").textContent = STATS.active_count + " active deals (current)";
+  document.getElementById("m-collected").textContent = fmt$k(STATS.collected_today || 0);
+  document.getElementById("m-collected-sub").textContent = (STATS.collected_today_count || 0) + " deal" + ((STATS.collected_today_count||0)===1?"":"s") + " cleared today";
   document.getElementById("m-paid").textContent = fmt$k(STATS.paid_mtd);
   document.getElementById("m-paid-sub").textContent = "across all deals (current)";
   
