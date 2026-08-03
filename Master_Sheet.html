@@ -44,7 +44,10 @@ body{background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-d
 .sidebar-logo{padding:14px 16px 12px;border-bottom:1px solid var(--border)}
 .sidebar-logo h1{font-size:16px;font-weight:700}
 .sidebar-logo span{font-size:11px;color:var(--text3);display:block;margin-top:3px;line-height:1.35}
-.sidebar-nav{padding:12px 8px;flex:1}
+.sidebar-nav{padding:12px 8px}
+.sidebar-nav-bottom{padding:6px 8px;margin-top:auto;border-top:1px solid var(--border)}
+.nav-outlook-bottom{color:var(--green)}
+.nav-outlook-bottom.active{background:var(--green-bg)}
 .nav-section{font-size:10px;font-weight:700;color:var(--text3);padding:10px 10px 4px;letter-spacing:.08em;text-transform:uppercase}
 .nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);font-size:13px;color:var(--text2);cursor:pointer;margin-bottom:1px;transition:all .15s;user-select:none}
 .nav-item:hover{background:var(--bg3);color:var(--text)}
@@ -173,8 +176,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .ol-card.bad{border-left-color:var(--red)}
 .ol-head{display:flex;align-items:center;gap:18px;padding:16px 20px;cursor:pointer;user-select:none}
 .ol-head:hover{background:var(--bg3)}
-.ol-month{font-size:16px;font-weight:700;letter-spacing:.01em;min-width:150px}
-.ol-month .ol-caret{color:var(--text3);font-size:12px;margin-right:8px;display:inline-block;transition:transform .15s}
+.ol-month{font-size:13.5px;font-weight:700;letter-spacing:.01em;min-width:74px}
+.ol-month .ol-caret{color:var(--text3);font-size:11px;margin-right:6px;display:inline-block;transition:transform .15s}
 .ol-card.open .ol-caret{transform:rotate(90deg)}
 .ol-verdict{margin-left:auto;text-align:right}
 .ol-verdict-num{font-size:22px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
@@ -202,6 +205,9 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .ol-line .tag.legal{background:var(--bg4);color:#9db0c9}
 .ol-line .tag.default{background:var(--red-bg);color:var(--red)}
 .ol-line .tag.big{background:var(--green-bg);color:var(--green)}
+.ol-line .tag.paid{background:var(--green-bg);color:var(--green)}
+.ol-line .tag.refi{background:var(--blue-bg);color:var(--blue)}
+.ol-line .nm.paidname{color:var(--green)}
 .ol-line .v{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;flex:none}
 .ol-line .v.pos{color:var(--green)}.ol-line .v.neg{color:var(--red)}
 .ol-empty-col{color:var(--text3);font-size:12px;font-style:italic;padding:6px 0}
@@ -354,7 +360,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="New Outlook tab: a month-by-month profitability read — expected profit from the deals still paying, minus the deals written off (default/legal), giving each cohort a green/amber/red verdict so you can see early whether a month lands positive. Analysis only; All deals has the per-deal detail.">build 122</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook tab moved to the bottom of the sidebar. Tight band is now 0–10k. Months collapse accordion-style (one open at a time, none open on load). Cascading absorbs-losses tag shows how many winners it takes to cover the written-off deals. Deal rows now carry paid-off / refi / bouncing / suspended tags. Compact month labels for density.">build 123</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -365,9 +371,11 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="nav-item" id="nav-defaults" onclick="setView('defaults')">⚠️ Defaults <span class="nav-badge" id="default-badge" style="background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)">0</span></div>
         <div class="nav-item" id="nav-clawback" onclick="setView('clawback')">⏪ Clawback <span class="nav-badge" id="clawback-badge" title="Deals whose commission is clawback-eligible (4th bounce within 30 business days of funding)" style="background:rgba(45,212,191,.15);color:#5eead4;border:1px solid rgba(45,212,191,.45)">0</span></div>
         <div class="nav-item" id="nav-monthly" onclick="setView('monthly')">📅 Monthly</div>
-        <div class="nav-item" id="nav-outlook" onclick="setView('outlook')">📈 Outlook</div>
         <div class="nav-item" id="nav-pnl" onclick="setView('pnl')">🧮 PNL</div>
         <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
+      </div>
+      <div class="sidebar-nav-bottom">
+        <div class="nav-item nav-outlook-bottom" id="nav-outlook" onclick="setView('outlook')">📈 Outlook <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:500">month analysis</span></div>
       </div>
       <div class="sidebar-bottom">
         <div class="sidebar-chip" id="sync-info">⏱ Not synced yet</div>
@@ -2718,33 +2726,49 @@ function renderOutlook(){
   const body=document.getElementById('outlook-body'), empty=document.getElementById('outlook-empty');
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
-  const months=Object.keys(groups).sort().reverse();
+  const months=Object.keys(groups).sort().reverse();   // newest month first
   if(!months.length){ body.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
 
   const isWrittenOff=d=> d.status==='DEFAULT' || (d.collections_state||'').toUpperCase()==='LEGAL';
   const lossOf=d=> Math.max(0, d.max_loss||0);
   const upsideOf=d=> (d.book_profit||0);
+  const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const shortMonth=ym=>{ const [y,m]=ym.split('-'); return MO[parseInt(m)-1]+" \u2019"+y.slice(2); };
 
-  const intro='<div class="ol-intro">Each month reads: <b>expected profit from the deals still paying</b> minus <b>the deals we\u2019ve written off</b> (defaulted or sent to legal \u2014 that money is treated as gone). The result is the month\u2019s outlook: is it landing green, or are the losers outrunning the winners? A single strong deal can absorb several bad ones. This is the at-a-glance read \u2014 <b>All deals</b> has the deal-by-deal detail.</div>';
+  const intro='<div class="ol-intro">Each month reads <b>expected profit from the deals still paying</b> minus <b>the deals we\u2019ve written off</b> (defaulted or sent to legal \u2014 that money is treated as gone). Positive means the month is on track; a big winner can absorb several bad deals. <b>All deals</b> has the deal-by-deal detail.</div>';
 
-  const cards=months.map((ym,idx)=>{
+  const cards=months.map(ym=>{
     const ds=groups[ym];
     const losers=ds.filter(isWrittenOff);
     const payers=ds.filter(d=>!isWrittenOff(d));
     const expected=payers.reduce((s,d)=>s+upsideOf(d),0);
     const losses=losers.reduce((s,d)=>s+lossOf(d),0);
     const outlook=expected-losses;
-    const band = outlook>2000 ? 'good' : outlook>=0 ? 'tight' : 'bad';
+    const band = outlook>10000 ? 'good' : outlook>=0 ? 'tight' : 'bad';   // build 123: tight now 0-10k
     const bandLbl = band==='good'?'On track':band==='tight'?'Tight':'At risk';
-    const topWinner = payers.slice().sort((a,b)=>upsideOf(b)-upsideOf(a))[0];
-    const bigWinnerFlag = d=> topWinner && d===topWinner && upsideOf(d)>0 && losses>0 && upsideOf(d) >= losses*0.5;
+
+    // Cascading absorber flag: walk the winners high-to-low, tagging each until their COMBINED
+    // profit has covered the written-off losses. Tells you how many payers it takes to erase the hit.
+    const payersSorted=payers.slice().sort((a,b)=>upsideOf(b)-upsideOf(a));
+    const absorbSet=new Set();
+    if(losses>0){ let acc=0; for(const d of payersSorted){ if(upsideOf(d)<=0) break; absorbSet.add(d); acc+=upsideOf(d); if(acc>=losses) break; } }
+
+    // per-deal status tag (paid off / refi'd shows green; collections pills carried from Beacon)
+    const dealTag=d=>{
+      let t='';
+      if(d.status==='PIF') t+='<span class="tag paid">paid off</span>';
+      else if(d.deal_type==='REFI') t+='<span class="tag refi">refi\u2019d</span>';
+      t+=olCsChip(d);           // bouncing / suspended / resume / lowered / legal — same as All deals
+      return t;
+    };
+    const nameCls=d=> (d.status==='PIF'||d.deal_type==='REFI') ? 'nm paidname' : 'nm';
 
     const payerLines = payers.length
-      ? payers.slice().sort((a,b)=>upsideOf(b)-upsideOf(a)).map(d=>{
+      ? payersSorted.map(d=>{
           const v=upsideOf(d);
-          const big=bigWinnerFlag(d)?'<span class="tag big">absorbs losses</span>':'';
-          return `<div class="ol-line"><span class="nm">${esc0(d.merchant)}</span>${big}<span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
+          const absorb=absorbSet.has(d)?'<span class="tag big">absorbs losses</span>':'';
+          return `<div class="ol-line"><span class="${nameCls(d)}">${esc0(d.merchant)}</span>${dealTag(d)}${absorb}<span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
         }).join('')
       : '<div class="ol-empty-col">No deals still paying this month.</div>';
 
@@ -2755,9 +2779,11 @@ function renderOutlook(){
         }).join('')
       : '<div class="ol-empty-col">Nothing written off \u2014 clean month so far.</div>';
 
-    return `<div class="ol-card ${band} ${idx===0?'open':''}">
-      <div class="ol-head" onclick="this.parentElement.classList.toggle('open')">
-        <div class="ol-month"><span class="ol-caret">\u25b8</span>${monthLabelFull(ym)}</div>
+    const absorbNote = (losses>0 && absorbSet.size) ? `<span>${absorbSet.size} deal${absorbSet.size!==1?'s':''} covering the losers</span>` : '';
+
+    return `<div class="ol-card ${band}">
+      <div class="ol-head" onclick="olToggle(this)">
+        <div class="ol-month"><span class="ol-caret">\u25b8</span>${shortMonth(ym)}</div>
         <div class="ol-spine">
           <div class="ol-chip"><span class="n pnl-pos">${fmt$(expected)}</span><span class="k">Expected \u00b7 ${payers.length} paying</span></div>
           <span class="ol-op">\u2212</span>
@@ -2780,16 +2806,40 @@ function renderOutlook(){
           </div>
         </div>
         <div class="ol-foot">
-          <span><b>${ds.length}</b> deals funded</span>
-          <span><b>${payers.length}</b> still paying</span>
+          <span><b>${ds.length}</b> funded</span>
+          <span><b>${payers.length}</b> paying</span>
           <span><b>${losers.length}</b> written off</span>
-          <span>Outlook if payers pay out: <b class="${outlook>=0?'pnl-pos':'pnl-neg'}">${fmt$(outlook)}</b></span>
+          ${absorbNote}
+          <span>Outlook: <b class="${outlook>=0?'pnl-pos':'pnl-neg'}">${fmt$(outlook)}</b></span>
         </div>
       </div>
     </div>`;
   }).join('');
 
   body.innerHTML=intro+'<div class="ol-months">'+cards+'</div>';
+}
+
+// Accordion: open the clicked month, collapse the others. No month is open on first render.
+function olToggle(headEl){
+  const card=headEl.parentElement;
+  const wasOpen=card.classList.contains('open');
+  document.querySelectorAll('#panel-outlook .ol-card.open').forEach(c=>c.classList.remove('open'));
+  if(!wasOpen) card.classList.add('open');
+}
+
+// Compact collections pill for the outlook rows — same states/colours as csChip, smaller.
+function olCsChip(d){
+  const s=(d.collections_state||'').toUpperCase(); if(!s||s==='OK') return '';
+  const hasStop = bounceByLead[d.lead_id] && bounceByLead[d.lead_id].hasStop;
+  let col, label=s;
+  if(s==='LEGAL'){ col='#6b7885'; }
+  else if(s==='BOUNCING'){ col=hasStop?'#e5534b':'#539bf5'; }
+  else if(s==='SUSPENDED'||s==='RESUME SCHEDULED'){ col='#d4a72c'; label='SUSPENDED'; }
+  else if(s==='RESUME NORMAL'){ col='#2ea043'; label='RESUME NORM'; }
+  else if(s==='LOWERED'){ col='#2dd4bf'; }
+  else col='#888';
+  const txt = s==='LEGAL' ? '#ff6b61' : '#fff';
+  return `<span class="tag" style="color:${txt};background:${col};letter-spacing:.3px">${label}</span>`;
 }
 
 async function computeMonthlyRows(){
