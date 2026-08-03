@@ -334,7 +334,7 @@
   .us-confirm { margin-top: 8px; width: 100%; background: var(--text); color: var(--surface); border: 0; padding: 7px; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
   .us-confirm:disabled { background: var(--text-3); cursor: default; }
   
-  .main { padding: 14px 36px 120px; max-width: 1600px; margin-left: auto; margin-right: auto; }
+  .main { padding: 14px 48px 120px; max-width: 1920px; margin-left: auto; margin-right: auto; }   /* v148: wider content area (was 1600) — uses more of the screen while leaving clean side gutters */
   
   .bx-side-logo { padding: 4px 40px 12px 4px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
   .bx-side-logo h1 { font-size: 21px; font-weight: 800; margin: 0; letter-spacing: -0.4px; display: inline-flex; align-items: center; gap: 9px; }
@@ -791,7 +791,7 @@
   
   /* Force merchant cell content (chip + name + flag) onto a single line via flex layout.
      Prevents the chip-on-top, name-below wrapping that happened when content exceeded column width. */
-  table.matrix td.merchant-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  table.matrix td.merchant-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 260px; }   /* v148: floor so the name isn't squeezed to nothing by the tags */
   .wk-board-name { color: var(--sev-wkly) !important; font-weight: 700 !important; }
   .mname-click { cursor: pointer; }
   .mname-click:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -813,7 +813,7 @@
   .minfo-panel .minfo-note-date { font-size: 10px; color: var(--text-3); margin-bottom: 2px; }
   table.matrix .merchant-cell-inner { display: flex; align-items: center; gap: 8px; min-width: 0; }
   table.matrix .merchant-cell-inner > * { flex-shrink: 0; }
-  table.matrix .merchant-cell-inner .merchant-name { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; }
+  table.matrix .merchant-cell-inner .merchant-name { flex-shrink: 1; min-width: 92px; overflow: hidden; text-overflow: ellipsis; font-size: 14.5px; }   /* v148: keep a readable slice of the name even when many tags follow */
   /* v86: clawback chip — teal identity, matches Master Sheet. Solid = eligible, dashed = window closing */
   .claw-chip { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:9px; margin-left:6px; white-space:nowrap; background:rgba(45,212,191,.18); color:#0c8f7e; border:1px solid rgba(45,212,191,.55); }
   .claw-chip-warn { display:inline-flex; align-items:center; gap:3px; font-size:9.5px; font-weight:700; padding:1px 6px; border-radius:9px; margin-left:6px; white-space:nowrap; background:transparent; color:#0c8f7e; border:1px dashed rgba(45,212,191,.6); }
@@ -1271,7 +1271,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v147 · live</span>
+    <span class="build-tag">v148 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
