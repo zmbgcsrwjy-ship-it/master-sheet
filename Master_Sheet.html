@@ -442,7 +442,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Trimmed the header subtitle to just Live sync with Airtable (dropped the you-and-Sal line) and added the missing Allocator title so every tab now names itself at the top.">build 131</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="A deal that has stopped payment now shows a red STOP PMT pill instead of a red BOUNCING pill — a plain bounce still reads BOUNCING in blue. Label matches the red color that already flagged it.">build 132</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1813,7 +1813,9 @@ function csChip(d){
   // is visible without hovering. Falls back to a bare SUSPENDED if the detail is missing/reshaped.
   const resumeOn = s==='RESUME SCHEDULED' ? ((detail.match(/^Resume\s+(.+)$/)||[])[1]||'') : '';
   const label = s==='RESUME SCHEDULED' ? ('SUSPENDED'+(resumeOn?' · '+resumeOn:''))
-              : s==='RESUME NORMAL' ? 'RESUME NORM' : s;
+              : s==='RESUME NORMAL' ? 'RESUME NORM'
+              : (s==='BOUNCING'&&hasStop) ? 'STOP PMT'   // build 132: stop payment reads its own label, not BOUNCING
+              : s;
   const tipState = s==='RESUME SCHEDULED' ? 'SUSPENDED' : s;
   const tip = 'Collections (Beacon): ' + tipState + (detail ? ' — ' + detail : '') + (s==='BOUNCING'&&hasStop?' (stop payment)':'');
   const txt = s==='LEGAL' ? '#ff6b61' : '#fff';   // legal reads in red on its slate pill so it stands out
