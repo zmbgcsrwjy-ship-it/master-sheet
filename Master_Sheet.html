@@ -442,7 +442,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="A deal that has stopped payment now shows a red STOP PMT pill instead of a red BOUNCING pill — a plain bounce still reads BOUNCING in blue. Label matches the red color that already flagged it.">build 132</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="REFI eligible list: each deal now has an Ignore button (dismisses it from the list for you and Sal; a show-ignored toggle lets you view/restore). And the ISO filter now cascades — pick a rep and the ISO dropdown only lists that rep’s ISOs.">build 133</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -597,11 +597,12 @@ select.badge:hover{filter:brightness(1.2)}
           <div class="panel-header"><h3>REFI eligible</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <select id="refi-rep-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All reps</option></select>
             <select id="refi-iso-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select>
+            <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--text3)"><input type="checkbox" id="refi-show-ignored" onchange="renderRenewal()" style="cursor:pointer">show ignored</label>
             <span>Balances at ≥ <input id="refi-threshold-input" type="number" min="1" max="100" step="1" value="50" style="width:52px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:12px;text-align:center" onchange="saveThreshold(this.value)">% paid · shared setting — changes apply for both of you</span>
           </span></div>
           <div class="table-wrap" id="renewal-table-wrap">
             <table>
-              <thead><tr><th onclick="sortRenewal('date_funded')">Date Funded ↕</th><th>Merchant</th><th onclick="sortRenewal('balance')">Balance ↕</th><th onclick="sortRenewal('pct_paid')">% Paid ↕</th><th>ISO</th><th>Rep</th><th>Lead ID</th><th>Funder</th></tr></thead>
+              <thead><tr><th onclick="sortRenewal('date_funded')">Date Funded ↕</th><th>Merchant</th><th onclick="sortRenewal('balance')">Balance ↕</th><th onclick="sortRenewal('pct_paid')">% Paid ↕</th><th>ISO</th><th>Rep</th><th>Lead ID</th><th>Funder</th><th></th></tr></thead>
               <tbody id="renewal-body"></tbody>
             </table>
           </div>
@@ -949,6 +950,7 @@ const REQUIRED_FIELDS = [
   {name:'FinanceFeePct',type:'number', options:{precision:2}},
   {name:'DDFee',       type:'number', options:{precision:2}},
   {name:'DealType',    type:'singleSelect', options:{choices:[{name:'NEW'},{name:'REFI'}]}},
+  {name:'RefiIgnored', type:'number', options:{precision:0}},  // build 133: 1 = dismissed from the REFI eligible list (shared with Sal)
   {name:'PrevLeadID',  type:'singleLineText'},
   {name:'Notes',       type:'multilineText'},
   {name:'OrigFee',     type:'number', options:{precision:2}},
@@ -1021,6 +1023,7 @@ function dealToFields(d) {
     Funder:       d.funder       || '',
     DDFee:        d.dd_fee       || 0,
     DealType:     d.deal_type    || 'NEW',
+    RefiIgnored:  d.refi_ignored ? 1 : 0,
     PrevLeadID:   d.prev_lead_id || '',
     OrigFee:      d.orig_fee     || 0,
     KickbackPaid: d.kickback_paid|| 0,
@@ -1058,6 +1061,7 @@ function fieldsToDeal(id, f) {
     funder:       f.Funder        || '',
     dd_fee:       f.DDFee         || 0,
     deal_type:    f.DealType      || 'NEW',
+    refi_ignored: f.RefiIgnored ? 1 : 0,
     prev_lead_id: f.PrevLeadID    || '',
     orig_fee:     f.OrigFee       || 0,
     kickback_paid:f.KickbackPaid  || 0,
@@ -2009,24 +2013,35 @@ function sortRenewal(key){
   renderRenewal();
 }
 function renderRenewal(){
-  const eligible=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0);
+  const all=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0);
   const body=document.getElementById('renewal-body'),empty=document.getElementById('renewal-empty'),wrap=document.getElementById('renewal-table-wrap');
   const repSel=document.getElementById('refi-rep-filter'),isoSel=document.getElementById('refi-iso-filter');
-  // rebuild filter options from the eligible pool, preserving current selection
+  const showIgnored=document.getElementById('refi-show-ignored') && document.getElementById('refi-show-ignored').checked;
+  // eligible pool = crossed threshold; ignored ones are held out unless "show ignored" is on
+  const eligible=all.filter(d=>showIgnored ? d.refi_ignored : !d.refi_ignored);
   const keepRep=repSel.value,keepIso=isoSel.value;
+  // build the rep list from the whole eligible pool
   const reps=[...new Set(eligible.map(d=>d.rep||'Unassigned'))].sort();
-  const isos=[...new Set(eligible.map(d=>d.iso||'Unassigned'))].sort();
   repSel.innerHTML='<option value="">All reps</option>'+reps.map(r=>`<option${r===keepRep?' selected':''}>${r}</option>`).join('');
-  isoSel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option${i===keepIso?' selected':''}>${i}</option>`).join('');
+  const fRep=repSel.value;   // (re-read after rebuild; keepRep preserved if still present)
+  // build 133: the ISO dropdown only lists ISOs that belong to the selected rep. With no rep chosen,
+  // show every ISO. This keeps you from picking a rep/ISO combo that has no deals.
+  const isoPool = fRep ? eligible.filter(d=>(d.rep||'Unassigned')===fRep) : eligible;
+  const isos=[...new Set(isoPool.map(d=>d.iso||'Unassigned'))].sort();
+  // if the currently-selected ISO isn't valid for this rep, drop it
+  const isoStillValid = !keepIso || isos.includes(keepIso);
+  isoSel.innerHTML='<option value="">All ISOs</option>'+isos.map(i=>`<option${(isoStillValid&&i===keepIso)?' selected':''}>${i}</option>`).join('');
+  if(!isoStillValid) isoSel.value='';
   if(!eligible.length){body.innerHTML='';wrap.style.display='none';empty.style.display='';return;}
   wrap.style.display='';empty.style.display='none';
-  const fRep=repSel.value,fIso=isoSel.value;
+  const fIso=isoSel.value;
   const rows=eligible.filter(d=>(!fRep||(d.rep||'Unassigned')===fRep)&&(!fIso||(d.iso||'Unassigned')===fIso));
   const k=renewalSort.key,dir=renewalSort.dir;
   rows.sort((a,b)=>{ let va=a[k],vb=b[k]; if(k==='date_funded'){ va=new Date(va||0); vb=new Date(vb||0); } return ((va||0)-(vb||0))*dir; });
   document.querySelectorAll('#panel-renewal .sort-ind').forEach(s=>{ s.textContent=' ↕'; });
-  if(!rows.length){body.innerHTML='<tr><td colspan="8" style="color:var(--text3);text-align:center;padding:20px">No eligible deals match these filters.</td></tr>';return;}
-  body.innerHTML=rows.map(d=>`<tr>
+  if(!rows.length){body.innerHTML='<tr><td colspan="9" style="color:var(--text3);text-align:center;padding:20px">No eligible deals match these filters.</td></tr>';return;}
+  const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  body.innerHTML=rows.map(d=>`<tr${d.refi_ignored?' style="opacity:.5"':''}>
     <td style="white-space:nowrap;color:var(--text3)">${fmtDate(d.date_funded)}</td>
     <td style="font-weight:600">${dealNameHtml(d)}${bounceBadges(d)}</td>
     <td>${fmt$(d.balance)}</td>
@@ -2035,7 +2050,17 @@ function renderRenewal(){
     <td style="color:var(--text3)">${d.rep||'—'}</td>
     <td style="color:var(--text2)">${d.lead_id||'—'}</td>
     <td style="color:${isExternalFunder(d.funder)?'var(--peach)':'var(--text3)'};font-weight:${isExternalFunder(d.funder)?'600':'400'};white-space:nowrap">${d.funder||'—'}</td>
+    <td style="text-align:right;white-space:nowrap">${ d.refi_ignored
+        ? `<button class="btn btn-sm" onclick="setRefiIgnored('${esc(d._id)}',0)" title="Put this deal back in the list">↩ Restore</button>`
+        : `<button class="btn btn-sm" onclick="setRefiIgnored('${esc(d._id)}',1)" title="Hide this deal from the REFI list (for you and Sal)">✕ Ignore</button>` }</td>
   </tr>`).join('');
+}
+async function setRefiIgnored(id, val){
+  const d=deals.find(x=>x._id===id); if(!d) return;
+  d.refi_ignored=val;                       // optimistic
+  renderRenewal();
+  try{ await atFetch('PATCH','',{records:[{id, fields:{RefiIgnored:val}}]}); }
+  catch(e){ d.refi_ignored=val?0:1; renderRenewal(); showNotice('Could not save ignore state: '+(e&&e.message||e),'error'); }
 }
 
 let defaultsSort={key:'date_funded',dir:-1};
