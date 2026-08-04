@@ -442,7 +442,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Portfolio review is now centered in its available space instead of hugging the left, so the report and its toolbar sit balanced with even margins on both sides.">build 129</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Top dashboard cards now show OUR BOOK totals — book funded, book RTR, and outstanding book balance (each scaled by our book share) — instead of the whole-deal figures.">build 130</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -488,9 +488,9 @@ select.badge:hover{filter:brightness(1.2)}
         <div id="notice" class="notice"></div>
         <div class="metrics-grid">
           <div class="metric-card"><div class="lbl">Active deals</div><div class="val val-blue" id="m-active">0</div><div class="sub">in portfolio</div></div>
-          <div class="metric-card"><div class="lbl">Total funded</div><div class="val" id="m-funded">$0</div><div class="sub">active book</div></div>
-          <div class="metric-card"><div class="lbl">Total RTR</div><div class="val" id="m-rtr">$0</div><div class="sub">to collect</div></div>
-          <div class="metric-card"><div class="lbl">Outstanding</div><div class="val" id="m-balance">$0</div><div class="sub">balance remaining</div></div>
+          <div class="metric-card"><div class="lbl">Total book funded</div><div class="val" id="m-funded">$0</div><div class="sub">our book, active</div></div>
+          <div class="metric-card"><div class="lbl">Total book RTR</div><div class="val" id="m-rtr">$0</div><div class="sub">our book, to collect</div></div>
+          <div class="metric-card"><div class="lbl">Outstanding book balance</div><div class="val" id="m-balance">$0</div><div class="sub">our book remaining</div></div>
           <div class="metric-card"><div class="lbl">Renewal eligible</div><div class="val val-amber" id="m-renewal">0</div><div class="sub">≥ 50% paid</div></div>
           <div class="metric-card"><div class="lbl">Portfolio PNL</div><div class="val" id="m-pnl">$0</div><div class="sub">all deals</div></div>
           <div class="metric-card"><div class="lbl">Defaults</div><div class="val val-red" id="m-defaults">0</div><div class="sub" id="m-default-sub">total</div></div>
@@ -2416,9 +2416,9 @@ function renderMetrics(){
   const pifs=deals.filter(d=>d.status==='PIF');
   const rc=active.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&d.balance>0).length,totalPNL=deals.reduce((s,d)=>s+(d.pnl||0),0);
   document.getElementById('m-active').textContent=active.length;
-  document.getElementById('m-funded').textContent=fmtK(active.reduce((s,d)=>s+d.funded,0));
-  document.getElementById('m-rtr').textContent=fmtK(active.reduce((s,d)=>s+d.rtr,0));
-  document.getElementById('m-balance').textContent=fmtK(active.reduce((s,d)=>s+d.balance,0));
+  document.getElementById('m-funded').textContent=fmtK(active.reduce((s,d)=>s+(d.book_funded||0),0));
+  document.getElementById('m-rtr').textContent=fmtK(active.reduce((s,d)=>s+(d.book_payback||0),0));
+  document.getElementById('m-balance').textContent=fmtK(active.reduce((s,d)=>s+(d.balance||0)*(d.book_pct||100)/100,0));
   document.getElementById('m-renewal').textContent=rc;
   document.getElementById('m-defaults').textContent=defs.length;
   // Default rate = defaulted book funding ÷ total book funding (dollar-weighted, book basis)
