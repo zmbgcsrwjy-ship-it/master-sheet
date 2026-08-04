@@ -1271,7 +1271,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v149 · live</span>
+    <span class="build-tag">v150 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2106,8 +2106,14 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       const lastStop=priorStops.length?priorStops[priorStops.length-1]:null;
       const resumed=lastStop && m.deal.last_cleared && m.deal.last_cleared>lastStop;
       const handled=!!m.deal.resolution_type;  // sent to legal / suspended / etc. — already handled
+      const inLegal=(m.deal.resolution_type==='legal');  // v150: legal deals must stay visible while still hitting
       const brokeResume=m.deal.resume_date && bDay>=m.deal.resume_date;  // agreed resume passed, still stopping → surface
-      if (lastStop && !brokeResume && (handled || !resumed)){ skipped.push(key+' (ongoing/handled stop)'); continue; }
+      // v150: a legal deal that keeps getting hit TODAY should still surface as "LEGAL · STILL HITTING"
+      // even though it's a carried-forward stop — the old skip hid it from the board entirely. We still
+      // suppress calendar re-stamping (below) for ongoing stops, but for a legal deal bouncing on TODAY
+      // we let the record through so bounced_today can light up the watch-list row.
+      const legalToday = inLegal && bDay===bLocalToday();
+      if (lastStop && !brokeResume && !legalToday && (handled || !resumed)){ skipped.push(key+' (ongoing/handled stop)'); continue; }
       (batchStops[m.deal._rid]=batchStops[m.deal._rid]||[]).push(bDay);
     }
     const sev = _isStop ? 'STOP' : (b.consec>1?'CONSEC':'NEW');
