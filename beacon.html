@@ -1271,7 +1271,7 @@
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
     <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v148 · live</span>
+    <span class="build-tag">v149 · live</span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2037,7 +2037,26 @@ function beaconParseBounceWB(wb){
     merchant:ci('merchant'), type:ci('type'), desc:ci('return desc'), amount:ci('amount'),
     consec:ci('consec'), mtd:ci('mtd'), rep:ci('rep'), iso:ci('iso') };
   if(col.merchant<0||col.amount<0) throw new Error('Bounce report headers not recognized — format changed?');
-  const isoD = v=>{ if(!v) return ''; const d=new Date(v); return isNaN(d)?'':d.toISOString().slice(0,10); };
+  // v149: parse the report date as a plain CALENDAR date — never round-trip through toISOString(),
+  // which converts to UTC and can roll the day backward in timezones behind UTC (this is why a
+  // bounce dated today could land on 'yesterday' and vanish from today's board). Handles M/D/YYYY
+  // and YYYY-MM-DD (and Excel serial numbers) without any timezone shift.
+  const isoD = v=>{
+    if(v==null||v==='') return '';
+    // already ISO-ish "YYYY-MM-DD..." → take the date part verbatim, no Date object
+    let s=String(v).trim();
+    let mIso=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(mIso) return mIso[1]+'-'+mIso[2]+'-'+mIso[3];
+    // US "M/D/YYYY" (optionally with time) → build the calendar date directly
+    let mUs=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if(mUs){ let[,mo,da,yr]=mUs; if(yr.length===2)yr='20'+yr; return yr+'-'+String(+mo).padStart(2,'0')+'-'+String(+da).padStart(2,'0'); }
+    // Excel serial number (days since 1899-12-30) → calendar date, no tz
+    if(/^\d+(\.\d+)?$/.test(s)){ const n=Math.floor(+s); const dt=new Date(Date.UTC(1899,11,30+n));
+      return dt.getUTCFullYear()+'-'+String(dt.getUTCMonth()+1).padStart(2,'0')+'-'+String(dt.getUTCDate()).padStart(2,'0'); }
+    // last resort: parse and read LOCAL components (not toISOString)
+    const d=new Date(s); if(isNaN(d)) return '';
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  };
   const bounces=[];
   for(let i=1;i<rows.length;i++){
     const r=rows[i]; if(!r||!r[col.merchant]) continue;
