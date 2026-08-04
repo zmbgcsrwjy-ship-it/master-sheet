@@ -207,6 +207,8 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .ol-line .tag.big{background:var(--green-bg);color:var(--green)}
 .ol-line .tag.paid{background:var(--green-bg);color:var(--green)}
 .ol-line .tag.refi{background:var(--blue-bg);color:var(--blue)}
+.ol-line .tag.refi-warn{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)}
+.ol-fdate{font-size:10px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap}
 .ol-line .nm.paidname{color:var(--green)}
 .ol-line .v{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;flex:none}
 .ol-line .v.pos{color:var(--green)}.ol-line .v.neg{color:var(--red)}
@@ -442,7 +444,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Removed the user-facing you-and-Sal / for-both-of-you messages from tooltips, notices and dialogs across the app (kept the shared-setting label and the PNL settle-up, which needs the names for the money split).">build 135</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook refi rows are now self-verifying: each deal shows its funded date, the refi tag names the earlier lead it replaced (refi’d ← 7360), and a deal flagged REFI without a genuinely-earlier linked deal shows an amber refi’d ? so a bad flag can’t hide. Confirms name + date at a glance.">build 137</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1324,12 +1326,15 @@ async function importCrmExport(file){
       const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
       const comm=Math.round(ourComm*scale*100)/100;           // whole-deal commission (book_comm derives our share)
       const ml=calcML(funded,bookpct,fees,comm);
-      // Refi detection with date cross-check (build 39): bind to the most-recent prior that
-      // PRE-DATES this deal, by date funded — never just newest-by-name, which can cross a chain.
+      // Refi detection with date cross-check (build 39, corrected build 136): a refi MUST post-date
+      // the deal it replaces. Bind only to a prior funded strictly BEFORE this deal. If the only
+      // same-name deals were funded on/after this one, this is NOT the refi — it's the original, and
+      // the later deal becomes the refi when it's the incoming row. This stops import ORDER from
+      // deciding which of two same-name deals gets flagged (the bug: older deal tagged as the refi).
       const incDate=new Date(r._df||Date.now());
       let priors=deals.filter(x=>squish(x.merchant)===squish(merchant)&&['NEW','ACTIVE','PIF'].includes(x.status));
-      priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
-      const validPriors=priors.filter(p=>new Date(p.date_funded||0)<=incDate);
+      const validPriors=priors.filter(p=>new Date(p.date_funded||0)<incDate);
+      validPriors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
       let status='NEW', dealtype='NEW', prev='', prior=null;
       if(validPriors.length){
         prior=validPriors[0]; status='ACTIVE'; dealtype='REFI'; prev=prior.lead_id||'';
@@ -1676,23 +1681,27 @@ async function saveDeal() {
     }
     const priors=deals.filter(x=>squish(x.merchant)===squish(deal.merchant)&&['NEW','ACTIVE','PIF'].includes(x.status));
     if(priors.length){
-      // Refi the most-recent OPEN deal in the chain. Cross-check by date: the prior must pre-date
-      // this funding — a "prior" funded AFTER this deal is a data error, not a real predecessor.
-      priors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+      // Refi the most-recent OPEN deal that PRE-DATES this funding (build 136). A "prior" funded
+      // on/after this deal is not a predecessor — so this deal is NOT a refi, it's the original.
+      // Only bind when a genuinely-earlier deal exists; never force a refi off import order.
       const incDate=new Date(deal.date_funded||Date.now());
-      const validPriors=priors.filter(p=>new Date(p.date_funded||0)<=incDate);
-      _prior=(validPriors.length?validPriors:priors)[0];
-      if(validPriors.length===0){
-        showNotice('Heads up: every open "'+deal.merchant+'" deal was funded AFTER this one ('+fmtDate(deal.date_funded)+'). Linking to the newest, but check the dates — a refi should post-date the deal it replaces.','warn',11000);
+      const validPriors=priors.filter(p=>new Date(p.date_funded||0)<incDate);
+      validPriors.sort((a,b)=>new Date(b.date_funded||0)-new Date(a.date_funded||0));
+      if(validPriors.length){
+        _prior=validPriors[0];
+        if(_prior.merchant!==deal.merchant){
+          // QB-name guard (build 29): one spelling per merchant, forever. A refi that
+          // arrives as "PENDLETON PAWN" when the book says "PENDLETONPAWN" silently
+          // breaks Beacon's name matching — so adopt the book's spelling and say so.
+          showNotice('QB name normalized to "'+_prior.merchant+'" (you typed "'+deal.merchant+'") to match the existing deal chain.','info',9000);
+          deal.merchant=_prior.merchant;
+        }
+        deal.status='ACTIVE'; deal.deal_type='REFI'; deal.prev_lead_id=_prior.lead_id||'';
+      } else {
+        // Same-name deals exist but all funded on/after this one → this is the original, not the refi.
+        showNotice('"'+deal.merchant+'" already exists but only funded AFTER this date — saving this as the ORIGINAL (not a refi). The later deal is the refi.','info',10000);
+        deal.status='NEW';
       }
-      if(_prior.merchant!==deal.merchant){
-        // QB-name guard (build 29): one spelling per merchant, forever. A refi that
-        // arrives as "PENDLETON PAWN" when the book says "PENDLETONPAWN" silently
-        // breaks Beacon's name matching — so adopt the book's spelling and say so.
-        showNotice('QB name normalized to "'+_prior.merchant+'" (you typed "'+deal.merchant+'") to match the existing deal chain.','info',9000);
-        deal.merchant=_prior.merchant;
-      }
-      deal.status='ACTIVE'; deal.deal_type='REFI'; deal.prev_lead_id=_prior.lead_id||'';
     } else { deal.status='NEW'; }
   }
   const btn=document.getElementById('save-btn');
@@ -3305,6 +3314,7 @@ function renderOutlook(){
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
   const months=Object.keys(groups).sort().reverse();   // newest month first
+  const byLead={}; deals.forEach(x=>{ if(x.lead_id) byLead[x.lead_id]=x; });  // build 137: for refi verification
   if(!months.length){ body.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
 
@@ -3332,21 +3342,31 @@ function renderOutlook(){
     const absorbSet=new Set();
     if(losses>0){ let acc=0; for(const d of payersSorted){ if(upsideOf(d)<=0) break; absorbSet.add(d); acc+=upsideOf(d); if(acc>=losses) break; } }
 
-    // per-deal status tag (paid off / refi'd shows green; collections pills carried from Beacon)
+    // build 137: refi tag names the earlier lead it replaced; row shows funded date; a REFI without a
+    // genuinely-earlier linked deal is marked suspect (⚠) rather than silently trusted. (byLead built above.)
+    const refiIsSound=d=>{ if(!d.prev_lead_id) return false; const p=byLead[d.prev_lead_id];
+      return !!(p && new Date(p.date_funded||0) < new Date(d.date_funded||0)); };
     const dealTag=d=>{
       let t='';
       if(d.status==='PIF') t+='<span class="tag paid">paid off</span>';
-      else if(d.deal_type==='REFI') t+='<span class="tag refi">refi\u2019d</span>';
+      else if(d.deal_type==='REFI'){
+        const prevOK=refiIsSound(d);
+        const prevTxt = d.prev_lead_id ? (' \u2190 '+d.prev_lead_id) : '';
+        t+= prevOK
+          ? '<span class="tag refi" title="Refi of lead '+esc0(d.prev_lead_id)+', funded earlier">refi\u2019d'+prevTxt+'</span>'
+          : '<span class="tag refi-warn" title="Flagged REFI but no earlier same-name deal is linked — verify this">refi\u2019d ?'+ '</span>';
+      }
       t+=olCsChip(d);           // bouncing / suspended / resume / lowered / legal — same as All deals
       return t;
     };
     const nameCls=d=> (d.status==='PIF'||d.deal_type==='REFI') ? 'nm paidname' : 'nm';
+    const fundedTag=d=> d.date_funded ? '<span class="ol-fdate">'+fmtDate(d.date_funded)+'</span>' : '';
 
     const payerLines = payers.length
       ? payersSorted.map(d=>{
           const v=upsideOf(d);
           const absorb=absorbSet.has(d)?'<span class="tag big">absorbs losses</span>':'';
-          return `<div class="ol-line"><span class="${nameCls(d)}">${esc0(d.merchant)}</span>${dealTag(d)}${absorb}<span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
+          return `<div class="ol-line"><span class="${nameCls(d)}">${esc0(d.merchant)}</span>${fundedTag(d)}${dealTag(d)}${absorb}<span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
         }).join('')
       : '<div class="ol-empty-col">No deals still paying this month.</div>';
 
