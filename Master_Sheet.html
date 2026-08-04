@@ -442,7 +442,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="REFI eligible list: each deal now has an Ignore button (dismisses it from the list for you and Sal; a show-ignored toggle lets you view/restore). And the ISO filter now cascades — pick a rep and the ISO dropdown only lists that rep’s ISOs.">build 133</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="REFI Ignore button now left-aligned to follow the same column spacing as the rest of the row instead of sitting far right.">build 134</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2050,7 +2050,7 @@ function renderRenewal(){
     <td style="color:var(--text3)">${d.rep||'—'}</td>
     <td style="color:var(--text2)">${d.lead_id||'—'}</td>
     <td style="color:${isExternalFunder(d.funder)?'var(--peach)':'var(--text3)'};font-weight:${isExternalFunder(d.funder)?'600':'400'};white-space:nowrap">${d.funder||'—'}</td>
-    <td style="text-align:right;white-space:nowrap">${ d.refi_ignored
+    <td style="white-space:nowrap">${ d.refi_ignored
         ? `<button class="btn btn-sm" onclick="setRefiIgnored('${esc(d._id)}',0)" title="Put this deal back in the list">↩ Restore</button>`
         : `<button class="btn btn-sm" onclick="setRefiIgnored('${esc(d._id)}',1)" title="Hide this deal from the REFI list (for you and Sal)">✕ Ignore</button>` }</td>
   </tr>`).join('');
