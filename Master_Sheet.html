@@ -427,7 +427,7 @@ select.badge:hover{filter:brightness(1.2)}
 <div id="setup-screen">
   <div class="setup-card">
     <h1>📋 Master Sheet</h1>
-    <p>Enter your credentials to connect to Airtable. Your data will sync in real time — you and Sal will always see the same book. Enter once, works forever.</p>
+    <p>Enter your credentials to connect to Airtable. Your data syncs in real time. Enter once, works forever.</p>
     <label>Airtable API Token</label>
     <input type="password" id="setup-airtable" placeholder="pat..." autocomplete="off" spellcheck="false">
     <div class="setup-hint">Base ID is pre-configured. Your credentials are saved locally and baked into your copy of this file.</div>
@@ -442,7 +442,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="REFI Ignore button now left-aligned to follow the same column spacing as the rest of the row instead of sitting far right.">build 134</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Removed the user-facing you-and-Sal / for-both-of-you messages from tooltips, notices and dialogs across the app (kept the shared-setting label and the PNL settle-up, which needs the names for the money split).">build 135</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -598,7 +598,7 @@ select.badge:hover{filter:brightness(1.2)}
             <select id="refi-rep-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All reps</option></select>
             <select id="refi-iso-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select>
             <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--text3)"><input type="checkbox" id="refi-show-ignored" onchange="renderRenewal()" style="cursor:pointer">show ignored</label>
-            <span>Balances at ≥ <input id="refi-threshold-input" type="number" min="1" max="100" step="1" value="50" style="width:52px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:12px;text-align:center" onchange="saveThreshold(this.value)">% paid · shared setting — changes apply for both of you</span>
+            <span>Balances at ≥ <input id="refi-threshold-input" type="number" min="1" max="100" step="1" value="50" style="width:52px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:12px;text-align:center" onchange="saveThreshold(this.value)">% paid · shared setting</span>
           </span></div>
           <div class="table-wrap" id="renewal-table-wrap">
             <table>
@@ -1747,7 +1747,7 @@ async function saveKickbackInline(id, val){
     await atFetch('PATCH','',{records:[{id, fields:{Kickback:v}}]});
     const wasPaid=d.kickback_paid;
     d.kickback=v;
-    showNotice(d.merchant+' kickback set to '+fmt$(v)+(wasPaid?' — NOTE: this kickback was already distributed in a closed month; the change will not flow to a new payout. Adjust with Sal if money moved.':''),wasPaid?'warn':'success',wasPaid?10000:4000);
+    showNotice(d.merchant+' kickback set to '+fmt$(v)+(wasPaid?' — NOTE: this kickback was already distributed in a closed month; the change will not flow to a new payout.':''),wasPaid?'warn':'success',wasPaid?10000:4000);
     renderAll();
   }catch(err){ showNotice('Kickback save failed: '+err.message,'error'); renderAll(); }
 }
@@ -2052,7 +2052,7 @@ function renderRenewal(){
     <td style="color:${isExternalFunder(d.funder)?'var(--peach)':'var(--text3)'};font-weight:${isExternalFunder(d.funder)?'600':'400'};white-space:nowrap">${d.funder||'—'}</td>
     <td style="white-space:nowrap">${ d.refi_ignored
         ? `<button class="btn btn-sm" onclick="setRefiIgnored('${esc(d._id)}',0)" title="Put this deal back in the list">↩ Restore</button>`
-        : `<button class="btn btn-sm" onclick="setRefiIgnored('${esc(d._id)}',1)" title="Hide this deal from the REFI list (for you and Sal)">✕ Ignore</button>` }</td>
+        : `<button class="btn btn-sm" onclick="setRefiIgnored('${esc(d._id)}',1)" title="Hide this deal from the REFI list">✕ Ignore</button>` }</td>
   </tr>`).join('');
 }
 async function setRefiIgnored(id, val){
@@ -2199,7 +2199,7 @@ async function markClawed(dealId){
   const month=new Date().toISOString().slice(0,7);
   let msg=`Mark ${d.merchant} as clawed back?\n\nBooks ${fmt$(bookComm)} book commission into ${month}'s Clawback (income, 50/50).`;
   if(kb>0) msg += kbPaid
-    ? `\nReverses the ${fmt$(kb)} MSC kickback off your page (already paid out) — shared 50/50 with Sal.`
+    ? `\nReverses the ${fmt$(kb)} MSC kickback off your page (already paid out).`
     : `\nStops the ${fmt$(kb)} MSC kickback from paying out (not yet distributed).`;
   if(!confirm(msg)) return;
   try{
@@ -2284,7 +2284,7 @@ function renderPif(){
       <td class="pif-c pif-dim">${d.frequency==='Weekly'?'<span class="wk-name">'+termStr+'</span>':termStr}</td>
       <td class="pif-c">${feeStr}</td>
       <td class="pif-c pif-dim">${d.lead_id||'—'}</td>
-      <td><input class="pif-note-input" value="${hesc(d.notes)}" placeholder="Add note…" onclick="event.stopPropagation()" onchange="saveNote('${d._id}',this.value)" title="Saves on enter/blur — synced for both of you"></td>
+      <td><input class="pif-note-input" value="${hesc(d.notes)}" placeholder="Add note…" onclick="event.stopPropagation()" onchange="saveNote('${d._id}',this.value)" title="Saves on enter/blur"></td>
     </tr>`;
   }).join('');
   body.innerHTML=`<table class="pif-table"><colgroup>
@@ -2522,7 +2522,7 @@ async function saveThreshold(pct){
     if(id) await atFetchT('Settings','PATCH','',{records:[{id, fields:{Num:v}}]});
     else{ const out=await atFetchT('Settings','POST','',{records:[{fields:{Key:'refi_threshold',Num:v}}]}); appSettings._ids['refi_threshold']=out.records[0].id; }
     appSettings.refi_threshold=v;
-    showNotice('REFI eligibility threshold set to '+Math.round(v*100)+'% — applies for you and Matt.','success');
+    showNotice('REFI eligibility threshold set to '+Math.round(v*100)+'%.','success');
     renderAll();
   }catch(err){ showNotice('Could not save threshold: '+err.message,'error'); }
 }
@@ -2838,7 +2838,7 @@ async function closeOutMonth(){
     for(let i=0;i<kickRecs.length;i+=10) await atFetch('PATCH','',{records:kickRecs.slice(i,i+10)});
     p.kicks.forEach(k=>{const d=deals.find(x=>x._id===k._id); if(d) d.kickback_paid=1;});
     hideLoading();
-    showNotice(monthLabelFull(p.month)+' closed. '+fmt$(p.each)+' each to you and Matt. Snapshot saved to history.','success',8000);
+    showNotice(monthLabelFull(p.month)+' closed. '+fmt$(p.each)+' each. Snapshot saved to history.','success',8000);
     renderPnl('');
   }catch(err){ hideLoading(); showNotice('Close-out failed: '+err.message,'error',8000); }
 }
