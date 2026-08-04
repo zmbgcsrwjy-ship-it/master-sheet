@@ -342,7 +342,7 @@
   .bx-logo-dot { width: 9px; height: 9px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #7ff3df, #2dd4bf); box-shadow: 0 0 9px 1px rgba(94,234,212,0.75); flex-shrink: 0; animation: bxPulse 2.2s ease-in-out infinite; }
   @keyframes bxPulse { 0%,100% { transform: scale(1); opacity: 1; box-shadow: 0 0 8px 1px rgba(94,234,212,0.55); } 50% { transform: scale(1.35); opacity: 0.55; box-shadow: 0 0 14px 3px rgba(94,234,212,0.85); } }
   .bx-side-logo .sub { font-size: 11px; color: var(--text-2); display: block; margin-top: 4px; line-height: 1.35; }
-  .bx-side-logo .build-tag { font-size: 11px; color: var(--text-2); display: block; margin-top: 4px; font-family: -apple-system, BlinkMacSystemFont, monospace; letter-spacing: 0.02em; }
+  .bx-side-logo .build-tag { font-size: 11px; color: var(--text-2); display: inline; margin-top: 0; font-family: inherit; letter-spacing: normal; }
   .layout.collapsed .bx-side-logo { display: none; }
   .layout.collapsed #bx-claw-alert { display: none !important; }
   header.brief-header { display: flex; justify-content: flex-end; align-items: flex-end; gap: 24px; margin-bottom: 8px; }
@@ -1270,8 +1270,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked</span>
-    <span class="build-tag">v150 · live</span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v151 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
