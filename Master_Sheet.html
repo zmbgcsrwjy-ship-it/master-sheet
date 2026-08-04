@@ -442,7 +442,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Top dashboard cards now show OUR BOOK totals — book funded, book RTR, and outstanding book balance (each scaled by our book share) — instead of the whole-deal figures.">build 130</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Trimmed the header subtitle to just Live sync with Airtable (dropped the you-and-Sal line) and added the missing Allocator title so every tab now names itself at the top.">build 131</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -473,7 +473,7 @@ select.badge:hover{filter:brightness(1.2)}
       <div class="topbar">
         <div class="topbar-left">
           <h2 id="view-title">All deals</h2>
-          <p>Live sync with Airtable — you and Sal always see the same book</p>
+          <p>Live sync with Airtable</p>
         </div>
         <div id="claw-alert" onclick="setView('clawback')" title="Deals whose clawback window closes within 7 days — decide before they age out" style="display:none;cursor:pointer;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);font-size:13px;font-weight:700"></div>
         <div class="btn-row">
@@ -1916,7 +1916,7 @@ async function handleDailyReport(input) {
 function setView(v){
   currentView=v;
   ['book','allocator','renewal','pif','defaults','clawback','monthly','outlook','review','pnl'].forEach(id=>{document.getElementById('panel-'+id).style.display=id===v?'':'none';document.getElementById('nav-'+id).className='nav-item'+(id===v?' active':'');});
-  document.getElementById('view-title').textContent={book:'All deals',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',clawback:'Clawback eligible',monthly:'Monthly totals',outlook:'Month outlook',review:'Portfolio review',pnl:'PNL'}[v];
+  document.getElementById('view-title').textContent={book:'All deals',allocator:'Allocator',renewal:'REFI eligible',pif:'Paid in Full',defaults:'Defaults',clawback:'Clawback eligible',monthly:'Monthly totals',outlook:'Month outlook',review:'Portfolio review',pnl:'PNL'}[v];
   if(v==='allocator') renderAllocator(); if(v==='renewal') renderRenewal(); if(v==='pif') renderPif(); if(v==='defaults') renderDefaults(); if(v==='clawback') renderClawback(); if(v==='monthly') renderMonthly(); if(v==='outlook') renderOutlook(); if(v==='review') renderReview(); if(v==='pnl') renderPnl();
 }
 
