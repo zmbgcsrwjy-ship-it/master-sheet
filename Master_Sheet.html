@@ -452,7 +452,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Portfolio review prognosis is now a CURRENT-STATE model: anchored on the book’s live default rate and adjusted per-deal by real-time signals (bounces, stop payments, ACH severity, collections state, paydown) — a best-case read if everything stays as it is today. Replaces the historical/baseline projection.">build 146</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Portfolio review fixes: Paid-in-full now counts completed deals too; book maturity and the collection curve read pct_paid on the correct 0–100 scale (was showing 0% paid down and dumping every deal in the 0–25% bucket); the largest-industry share in the findings now matches the table (was showing 0%). Unspecified industries are real blanks in the CRM export, not a bug.">build 147</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3112,7 +3112,7 @@ function renderReview(){
   const collPct=_rvPct(totPaid,totRtr);
   const avgFactor=funded.length?funded.reduce((s,d)=>s+_rvNum(d.factor),0)/funded.length:0;
   const refiShare=_rvPct(funded.filter(d=>d.deal_type==='REFI').length,funded.length);
-  const pifCount=funded.filter(d=>d.status==='PIF').length;
+  const pifCount=funded.filter(d=>d.status==='PIF'||d.status==='COMPLETED').length;  // build 147: a completed deal paid us too
 
   // ── Deal-structure metrics (every metric, read against CDF-MCA norms) ──
   const bdLen=d=> d.frequency==='Weekly' ? _rvNum(d.term)*5 : _rvNum(d.term);
@@ -3127,17 +3127,19 @@ function renderReview(){
 
   // ── Book maturity: how far the active book has run (weighted by book funded) ──
   // A young book can't be judged on realized defaults alone — most deals haven't had time to fail.
+  // build 147: pct_paid is stored as a 0–1 FRACTION (the All Deals tab renders it as pct_paid*100).
+  // Normalize to a 0–100 percent everywhere in the review so maturity, the curve, and buckets are right.
+  const pp100 = d=>{ let v=_rvNum(d.pct_paid); return v<=1 ? v*100 : v; };
   const actForMat = funded.filter(isActive);
   const matBase = actForMat.reduce((s,d)=>s+_rvNum(d.book_funded),0) || 1;
-  const bookMaturity = actForMat.reduce((s,d)=>s+_rvNum(d.book_funded)*Math.min(100,_rvNum(d.pct_paid)),0)/matBase; // 0-100 %, $-weighted
+  const bookMaturity = actForMat.reduce((s,d)=>s+_rvNum(d.book_funded)*Math.min(100,pp100(d)),0)/matBase; // 0-100 %, $-weighted
   const daysSince = d=>{ const t=Date.parse(d.date_funded); return isFinite(t)?Math.max(0,(now-t)/86400000):0; };
   const avgAgeDays = funded.length ? funded.reduce((s,d)=>s+daysSince(d),0)/funded.length : 0;
-  const seasonedShare = _rvPct(actForMat.filter(d=>_rvNum(d.pct_paid)>=50).length, actForMat.length||1); // % of active book past halfway
+  const seasonedShare = _rvPct(actForMat.filter(d=>pp100(d)>=50).length, actForMat.length||1); // % of active book past halfway
 
-  // early concentration read (full industry table built later) — the prognosis needs this now
-  const _byIndEarly={};
-  funded.forEach(d=>{ const k=(d.industry||'Unspecified').trim()||'Unspecified'; (_byIndEarly[k]=_byIndEarly[k]||0)+_rvNum(d.book_funded); });
-  const topIndShare = bookFunded ? (Math.max(0,...Object.values(_byIndEarly))/bookFunded*100) : 0;
+  // topIndShare now derived from indRows below (single source of truth) — the early estimate could
+  // diverge from the table. Placeholder here; real value set right after indRows is built.
+  let topIndShare = 0;
 
   // ── FORWARD PROGNOSIS — CURRENT-STATE MODEL (build 146) ─────────────────────
   // "Best case if everything stays exactly as it is today." Anchors on the book's OWN live default
@@ -3216,7 +3218,7 @@ function renderReview(){
     const dead=ds.filter(isDead).length;
     return {label:k, n:ds.length, bookFunded:bf, pnl, dr:_rvPct(dead,ds.length), share:_rvPct(bf,bookFunded)};
   }).sort((a,b)=>b.bookFunded-a.bookFunded);
-  // topIndShare already computed early (prognosis needs it); concentration penalty applies here
+  topIndShare = indRows.length ? indRows[0].share : 0;   // build 147: from the same rows the table shows
   const concPenalty = topIndShare>45?14:topIndShare>32?7:0;
   score-=concPenalty;
 
@@ -3239,7 +3241,7 @@ function renderReview(){
   // ── Collection curve buckets (active deals by % paid) ──
   const buckets=[{k:'0–25%',lo:0,hi:25,c:'#f87171'},{k:'25–50%',lo:25,hi:50,c:'#fb923c'},{k:'50–75%',lo:50,hi:75,c:'#f59e0b'},{k:'75–99%',lo:75,hi:100,c:'#6fd396'}];
   const actives=funded.filter(isActive);
-  const curveRows=buckets.map(b=>{ const n=actives.filter(d=>_rvNum(d.pct_paid)>=b.lo&&_rvNum(d.pct_paid)<b.hi).length; return {label:b.k,value:n,color:b.c,note:n+' deals'}; });
+  const curveRows=buckets.map(b=>{ const n=actives.filter(d=>pp100(d)>=b.lo&&pp100(d)<b.hi).length; return {label:b.k,value:n,color:b.c,note:n+' deals'}; });
 
   // ── Status composition donut ──
   const compParts=[
