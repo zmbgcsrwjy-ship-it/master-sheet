@@ -452,7 +452,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Hardened the PNL month-end freeze: the safety net now freezes EVERY unfrozen, unclosed past month on the next sync — not just the single prior month — so even if several month-ends pass without a sync, no earlier month is left reading live numbers. Verified across 17 months and multi-month-gap scenarios.">build 145</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Portfolio review prognosis is now a CURRENT-STATE model: anchored on the book’s live default rate and adjusted per-deal by real-time signals (bounces, stop payments, ACH severity, collections state, paydown) — a best-case read if everything stays as it is today. Replaces the historical/baseline projection.">build 146</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3139,45 +3139,61 @@ function renderReview(){
   funded.forEach(d=>{ const k=(d.industry||'Unspecified').trim()||'Unspecified'; (_byIndEarly[k]=_byIndEarly[k]||0)+_rvNum(d.book_funded); });
   const topIndShare = bookFunded ? (Math.max(0,...Object.values(_byIndEarly))/bookFunded*100) : 0;
 
-  // ── FORWARD PROGNOSIS ─────────────────────────────────────────────────────
-  // Uses YOUR learned rates when a history calibration is loaded; otherwise the CDF baseline.
+  // ── FORWARD PROGNOSIS — CURRENT-STATE MODEL (build 146) ─────────────────────
+  // "Best case if everything stays exactly as it is today." Anchors on the book's OWN live default
+  // rate (what's actually defaulting right now), then adjusts each still-open deal up or down by its
+  // real current signals — bounces, stops, ACH severity, collections state, and how far it's paid
+  // down. A clean deal near payoff barely moves the number; a stopped/bouncing deal carries a much
+  // higher default probability. Recovery uses your loaded history if present, else the house 30%.
   const cal = rvLoadCalibration();
-  const BASE_DEFAULT = cal ? cal.overallRate : 17;   // your real rate, or CDF baseline
-  const RECOVERY = cal ? cal.recovery/100 : 0.30;    // your real recovery, or house assumption
+  const RECOVERY = cal ? cal.recovery/100 : 0.30;
+  const liveDefaultRate = defaultRate;               // ANCHOR: dead deals ÷ all funded, right now
   const openBook = funded.filter(d=>!isDead(d));
   const openProfitIfAllPay = openBook.reduce((s,d)=>s+_rvNum(d.book_profit),0);
   const openBookFunded = openBook.reduce((s,d)=>s+_rvNum(d.book_funded),0);
   const openRtr = openBook.reduce((s,d)=>s+_rvNum(d.book_payback),0);
   const realizedPnl = funded.filter(isDead).reduce((s,d)=>s+_rvNum(d.pnl),0);
 
-  let projMatureProfit, projLossFromOpen, projDefault, projMethod;
-  if(cal){
-    // Per-deal: each open deal carries its OWN segment-matched default probability.
-    projMethod='calibrated';
-    let expSurviveProfit=0, expLoss=0, wDefSum=0, wCap=0;
-    openBook.forEach(d=>{
-      const pr=Math.max(2,Math.min(70, rvDealDefaultRate(cal,d)))/100;  // this deal's default prob
-      const bf=_rvNum(d.book_funded), bp=_rvNum(d.book_profit), rtr=_rvNum(d.book_payback);
-      expSurviveProfit += bp*(1-pr);                    // profit if it survives
-      expLoss += pr*Math.max(0, bf - RECOVERY*rtr);      // loss if it defaults (dollar/recovery math)
-      wDefSum += pr*bf; wCap += bf;                       // capital-weighted blended default rate (for display)
-    });
-    projLossFromOpen = expLoss;
-    projMatureProfit = realizedPnl + expSurviveProfit - expLoss;
-    projDefault = wCap ? wDefSum/wCap*100 : cal.overallRate;   // effective $-weighted default rate
-  } else {
-    // Fallback: single baseline rate nudged by this book's early signals (pre-calibration behaviour).
-    projMethod='baseline';
-    projDefault = BASE_DEFAULT;
-    const earlyDefaultVsBase = defaultRate - (BASE_DEFAULT * Math.min(1, bookMaturity/60));
-    projDefault += Math.max(-6, Math.min(14, earlyDefaultVsBase * 1.4));
-    if(collPct>0 && collPct<35 && bookMaturity>15) projDefault += 3;
-    if(avgFactor>1.47) projDefault -= 1.5;
-    if(topIndShare>45) projDefault += 2;
-    projDefault = Math.max(6, Math.min(40, projDefault));
-    projLossFromOpen = (projDefault/100) * (openBookFunded - RECOVERY*openRtr);
-    projMatureProfit = realizedPnl + openProfitIfAllPay*(1-projDefault/100) - Math.max(0,projLossFromOpen);
-  }
+  // Per-deal live default probability: start at the book's current rate, then move it by what the
+  // deal is actually doing today. Returns a probability 0–1 (clamped to a sane 2%–92%).
+  const liveDealDefaultProb = d=>{
+    let p = liveDefaultRate/100;                      // start at the current book rate
+    if(p<=0) p=0.05;                                  // if nothing's defaulted yet, seed a small floor
+    const b = bounceByLead[d.lead_id] || null;
+    const cs = (d.collections_state||'').toUpperCase();
+    const paid = Math.max(0, Math.min(1, d.pct_paid||0));
+    // --- risk UP: active distress signals ---
+    if(cs==='LEGAL' || (b && b.hasStop))      p += 0.45;         // stop payment / in legal — strongest pre-default flag
+    else if(cs==='BOUNCING' || (b && b.count>0)){
+      const n = b ? b.count : 1;
+      const sev = b && [...b.codes].some(c=>STOP_RCODES.includes(c));  // account-error/severe code present
+      p += Math.min(0.35, 0.08*n) + (sev?0.10:0);                // each bounce adds risk, capped; severe code adds more
+    }
+    if(cs==='SUSPENDED' || cs==='RESUME SCHEDULED') p += 0.12;   // not collecting right now
+    // --- risk DOWN: healthy signals ---
+    if(cs==='RESUME NORMAL')                   p -= 0.06;         // talked to, back on track
+    if(cs==='LOWERED')                         p -= 0.02;         // reduced but paying
+    // paydown cushion: the further along, the less can go wrong. Full weight near payoff.
+    p -= paid*0.22;                                                // 0% paid: no relief; 100% paid: −22 pts
+    if(paid>=0.85) p = Math.min(p, 0.06);                         // nearly home — cap risk low regardless
+    return Math.max(0.02, Math.min(0.92, p));
+  };
+
+  let expSurviveProfit=0, expLoss=0, wDefSum=0, wCap=0, nFlagged=0;
+  openBook.forEach(d=>{
+    const pr = liveDealDefaultProb(d);
+    const bf=_rvNum(d.book_funded), bp=_rvNum(d.book_profit), rtr=_rvNum(d.book_payback);
+    expSurviveProfit += bp*(1-pr);                     // profit if it survives
+    expLoss += pr*Math.max(0, bf - RECOVERY*rtr);       // loss if it defaults (dollar/recovery math)
+    wDefSum += pr*bf; wCap += bf;
+    const b=bounceByLead[d.lead_id]; const cs=(d.collections_state||'').toUpperCase();
+    if((b&&(b.hasStop||b.count>0)) || ['LEGAL','BOUNCING','SUSPENDED','RESUME SCHEDULED'].includes(cs)) nFlagged++;
+  });
+  const projMethod='current';
+  const projLossFromOpen = expLoss;
+  const projMatureProfit = realizedPnl + expSurviveProfit - expLoss;
+  const projDefault = wCap ? wDefSum/wCap*100 : liveDefaultRate;   // effective $-weighted live default rate
+  const BASE_DEFAULT = liveDefaultRate;                            // (kept for downstream references)
   const projMarginPct = _rvPct(projMatureProfit, bookFunded);
 
   // ── Grade: blend backward-looking realized health with the forward prognosis ──
@@ -3256,9 +3272,9 @@ function renderReview(){
   // ── Forward-looking (prognosis) findings ──
   const maturedEnough = bookMaturity>=20 || avgAgeDays>=35;
   if(!maturedEnough) push('info','◔',`This is a <b>young book</b> — only <b>${bookMaturity.toFixed(0)}%</b> paid down on the active side and averaging <b>${Math.round(avgAgeDays)} days</b> old. Realized numbers will look flattering because most deals haven't had time to sour. The prognosis below extrapolates the mature outcome.`);
-  if(projMarginPct>=15) push('good','↗',`Projected mature margin of <b>${projMarginPct.toFixed(1)}%</b> (~${fmt$(projMatureProfit)}) at a ${projDefault.toFixed(0)}% assumed default rate. If underwriting holds, this book pays.`);
+  if(projMarginPct>=15) push('good','↗',`Current-state projected margin of <b>${projMarginPct.toFixed(1)}%</b> (~${fmt$(projMatureProfit)}) at the effective ${projDefault.toFixed(0)}% signal-adjusted default rate. If today’s conditions hold, this book pays.`);
   else if(projMarginPct>=0) push('warn','→',`Projected mature margin is thin at <b>${projMarginPct.toFixed(1)}%</b> (~${fmt$(projMatureProfit)}). At the assumed ${projDefault.toFixed(0)}% default rate there isn't much cushion — a few extra defaults tip this negative. Guard underwriting quality.`);
-  else push('bad','↘',`Projection turns <b>negative</b> (~${fmt$(projMatureProfit)}) at a ${projDefault.toFixed(0)}% assumed default rate. On the current trajectory this book loses money at maturity — tighten origination and pricing now, before more capital deploys.`);
+  else push('bad','↘',`Current-state projection turns <b>negative</b> (~${fmt$(projMatureProfit)}) at the effective ${projDefault.toFixed(0)}% signal-adjusted default rate. On today’s trajectory this book loses money — tighten origination and work the flagged deals before more capital deploys.`);
   if(avgTermBD>0){
     if(avgTermBD>110) push('warn','⏱',`Average term is <b>${avgTermBD.toFixed(0)} business days</b> — on the long side for CDF paper. Longer terms mean capital is exposed longer and defaults have more time to surface. Favor shorter terms where the merchant supports it.`);
     else if(avgTermBD<60) push('info','⏱',`Average term is <b>${avgTermBD.toFixed(0)} business days</b> — short, which recycles capital fast but leaves less room to absorb a slow payer. Fits a tight-filter CDF book.`);
@@ -3292,8 +3308,8 @@ function renderReview(){
   const summaryHtml=
     `<p><b>Where the book stands.</b> ${funded.length} deals, ${fmt$(bookFunded)} deployed, `+
     `net PNL ${netPnl>=0?'<span class="rv-pos">'+fmt$(netPnl)+'</span>':'<span class="rv-neg">'+fmt$(netPnl)+'</span>'} so far. `+
-    `The active book is ${bookMaturity.toFixed(0)}% paid down and averages ${Math.round(avgAgeDays)} days old, so it's still ${maturedEnough?'maturing':'early and largely unproven'}.</p>`+
-    `<p><b>Prognosis.</b> Extrapolating from the book's own early signals against a ${projDefault.toFixed(0)}% assumed default rate, this book projects to a mature profit of `+
+    `The active book is ${bookMaturity.toFixed(0)}% paid down and averages ${Math.round(avgAgeDays)} days old, so today’s read is ${maturedEnough?'well-seasoned':'still early, but based on live signals not assumptions'}.</p>`+
+    `<p><b>Prognosis (current-state).</b> Anchored on the live ${liveDefaultRate.toFixed(1)}% default rate and each open deal’s real signals (bounces, stops, collections, paydown), this book projects to a profit of `+
     `${projMatureProfit>=0?'<span class="rv-pos">':'<span class="rv-neg">'}${fmt$(projMatureProfit)}</span> — a ${projMarginPct.toFixed(1)}% margin on deployed capital. `+
     `${projMarginPct>=15?'That\u2019s a healthy trajectory if underwriting holds.':projMarginPct>=0?'That\u2019s a thin cushion — protect it.':'That\u2019s a losing trajectory on current form — act before more capital deploys.'}</p>`+
     (strengths.length?`<p><b>Working:</b> ${strengths.join('; ')}.</p>`:'')+
@@ -3313,19 +3329,19 @@ function renderReview(){
 
   const LEFT =
     // Prognosis
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Prognosis — where this book is heading</span><span class="sub">${projMethod==='calibrated'?'calibrated on your history':"forward projection, not just what's died"}</span></div>
-      <div class="rv-sec-lead">${ projMethod==='calibrated'
-        ? `Projected from <b>your own book</b>: calibrated on <b>${cal.nResolved}</b> closed deals${cal.lookbackMonths?` (last ${cal.lookbackMonths} months)`:''} — your real default rate is <b>${cal.overallRate.toFixed(1)}%</b> and recovery <b>${cal.recovery.toFixed(0)}%</b>. Each open deal is matched to its own industry / ISO / factor segment, credibility-weighted so thin slices fall back to your overall rate. This is the effective <b>${projDefault.toFixed(0)}%</b> $-weighted default rate across the open book.`
-        : `Because the book is young, judging it only on realized defaults flatters it. This projects the <b>mature</b> outcome against a ${projDefault.toFixed(0)}% assumed default rate (CDF baseline ${BASE_DEFAULT}%). <b>Load your closed-deal history</b> (top right) to replace this industry assumption with your own real rates.` }</div>
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Prognosis — current-state best case</span><span class="sub">if everything stays as it is today</span></div>
+      <div class="rv-sec-lead">Anchored on the book's <b>live default rate of ${liveDefaultRate.toFixed(1)}%</b> (what's actually defaulted so far), then each open deal is adjusted by its <b>real current signals</b> — bounces, stop payments, ACH severity, collections state, and how far it's paid down. ${nFlagged} open deal${nFlagged!==1?'s are':' is'} carrying a live risk flag right now. A clean deal near payoff barely moves the number; a stopped or bouncing deal carries a much higher default probability. Effective <b>${projDefault.toFixed(0)}%</b> $-weighted default across the open book, ${(RECOVERY*100).toFixed(0)}% recovery on a loss.${cal?'':' <span class="rv-mini">Load closed-deal history (top right) to also calibrate recovery to your real number.</span>'}</div>
       ${rvBarChart([
         {label:'If every open deal pays',value:realizedPnl+openProfitIfAllPay,color:'#37c66f',note:'best case'},
-        {label:'Projected ('+projDefault.toFixed(0)+'% default)',value:projMatureProfit,color: projMatureProfit>=0?'#4a9eff':'#f87171',note:'expected'},
+        {label:'Projected ('+projDefault.toFixed(0)+'% live default)',value:projMatureProfit,color: projMatureProfit>=0?'#4a9eff':'#f87171',note:'current-state'},
         {label:'Realized today',value:netPnl,color:'#9aa3b8',note:'banked'},
       ], Math.max(1, realizedPnl+openProfitIfAllPay))}
       <table class="rv-table" style="margin-top:10px"><tbody>
-        <tr><td class="nm">Projected mature profit</td><td style="text-align:right" class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</td></tr>
+        <tr><td class="nm">Projected profit (current-state)</td><td style="text-align:right" class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</td></tr>
         <tr><td class="nm">Projected margin on capital</td><td style="text-align:right" class="${projMarginPct>=15?'rv-pos':projMarginPct>=0?'rv-amb':'rv-neg'}">${projMarginPct.toFixed(1)}%</td></tr>
-        <tr><td class="nm">Effective default rate</td><td style="text-align:right">${projDefault.toFixed(0)}%${projMethod==='calibrated'?' <span class="rv-mini">yours</span>':' <span class="rv-mini">baseline</span>'}</td></tr>
+        <tr><td class="nm">Live default rate (anchor)</td><td style="text-align:right">${liveDefaultRate.toFixed(1)}% <span class="rv-mini">right now</span></td></tr>
+        <tr><td class="nm">Effective default (signal-adjusted)</td><td style="text-align:right">${projDefault.toFixed(0)}%</td></tr>
+        <tr><td class="nm">Open deals flagged at risk</td><td style="text-align:right" class="${nFlagged>0?'rv-amb':''}">${nFlagged}</td></tr>
         <tr><td class="nm">Recovery on defaults</td><td style="text-align:right">${(RECOVERY*100).toFixed(0)}%</td></tr>
         <tr><td class="nm">Upside if all open deals pay</td><td style="text-align:right" class="rv-pos">${fmt$(realizedPnl+openProfitIfAllPay)}</td></tr>
       </tbody></table></div>`+
@@ -3368,7 +3384,7 @@ function renderReview(){
       <div class="rv-grade" style="border-color:${gColor}"><span class="g" style="color:${gColor}">${grade}</span><span class="gl">book health</span></div>
       <div class="rv-hero-txt">
         <h2>${grade==='A'?'Strong, well-run book':grade==='B'?'Healthy book, minor watch items':grade==='C'?'Mixed — real strengths, real leaks':grade==='D'?'Under pressure — tighten up':'At risk — act now'}</h2>
-        <p>${funded.length} funded deals · ${fmt$(bookFunded)} deployed · net PNL <b class="${netPnl>=0?'rv-pos':'rv-neg'}">${fmt$(netPnl)}</b> so far. The book is <b>${bookMaturity.toFixed(0)}% paid down</b> and ${maturedEnough?'seasoning':'still young'}, so the grade leans on the <b>prognosis</b>: projected mature profit of <b class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</b> (${projMarginPct.toFixed(1)}% margin) at a ${projDefault.toFixed(0)}% assumed default rate.</p>
+        <p>${funded.length} funded deals · ${fmt$(bookFunded)} deployed · net PNL <b class="${netPnl>=0?'rv-pos':'rv-neg'}">${fmt$(netPnl)}</b> so far. The book is <b>${bookMaturity.toFixed(0)}% paid down</b> and ${maturedEnough?'seasoning':'still young'}, so the grade leans on the <b>current-state prognosis</b>: projected profit of <b class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</b> (${projMarginPct.toFixed(1)}% margin) at the live ${liveDefaultRate.toFixed(1)}% default rate, adjusted for each deal’s current signals.</p>
       </div>
     </div>`+
     // KPI strip (full width)
