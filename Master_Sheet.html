@@ -452,7 +452,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Smoother sidebar collapse: inner content is now a fixed width and fades out in sync with the rail sliding closed, instead of reflowing and squashing mid-animation.">build 142</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL month-end fixes: (1) a month’s rollup now only includes cohorts funded in or before that month, so a future month (e.g. August) no longer leaks into July’s PNL. (2) The freeze now fires on the LAST BUSINESS DAY of the month after that day’s sync (weekend month-ends roll to Friday), with the first-new-month sync as a safety net so a month is never left unfrozen.">build 143</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1917,10 +1917,10 @@ async function handleDailyReport(input) {
       });
       if(ambiguous>0) showNotice(ambiguous+' row'+(ambiguous!==1?'s':'')+' skipped — same LeadID on multiple deals and amounts did not disambiguate. Update those balances manually.','warn',9000);
       if(!updates.length){ showNotice('No matching active deals found in report.','warn'); return; }
-      // MONTH-END FREEZE (build 41): if this is the first sync of a new accounting month and the
-      // prior month hasn't been closed yet, freeze each cohort's current (pre-sync) book-PNL as the
-      // prior month-end value. Late payments in the new month then can't move the old month's PNL.
-      try { await maybeFreezePriorMonth(); } catch(e){ console.warn('month-end freeze skipped:', e); }
+      // MONTH-END FREEZE (build 143): freeze on the LAST BUSINESS DAY of the month (after today's
+      // sync, most complete data) or as a safety net on the first sync of a new month if the prior
+      // month was never frozen. Once frozen, later-clearing payments can't move that month's PNL.
+      try { await maybeFreezeMonthEnd(); } catch(e){ console.warn('month-end freeze skipped:', e); }
       showLoading('Syncing '+updates.length+' deals to Airtable...');
       // Batch update in groups of 10 (Airtable limit)
       for(let i=0;i<updates.length;i+=10){
@@ -2650,29 +2650,49 @@ async function loadPnlState(){
   } while(offset);
 }
 
-// Freeze the prior accounting month if we've rolled into a new month and it isn't closed yet.
-// Idempotent: only writes a cohort's freeze once per frozen-month.
-async function maybeFreezePriorMonth(){
+// True if `date` (a Date) is the last business day (Mon–Fri) of its month. If the calendar
+// month-end falls on a weekend, the last business day is the preceding Friday.
+function isLastBusinessDayOfMonth(date){
+  const y=date.getFullYear(), m=date.getMonth();
+  let d=new Date(y, m+1, 0);                       // last calendar day of this month
+  while(d.getDay()===0 || d.getDay()===6){ d.setDate(d.getDate()-1); }  // skip Sat/Sun
+  return date.getFullYear()===d.getFullYear() && date.getMonth()===d.getMonth() && date.getDate()===d.getDate();
+}
+
+// Freeze a month's cohort book-PNL so later-clearing payments can't move it. Fires in two cases
+// (build 143): (1) IDEAL — today is the LAST BUSINESS DAY of the current month → freeze THIS month
+// now, after today's sync, capturing the most complete data before payments clear into next month.
+// (2) SAFETY NET — we've rolled into a new month and the prior month was never frozen (a last-day
+// sync was missed) → freeze the prior month on the first sync of the new month. Idempotent per
+// cohort/frozen-month; skips months already closed out.
+async function maybeFreezeMonthEnd(){
   await loadPnlState();
-  const curYM = new Date().toISOString().slice(0,7);
+  const now=new Date();
+  const curYM = now.toISOString().slice(0,7);
   const priorYM = addMonthsYM(curYM, -1);
-  // already closed? then no freeze needed — close-out already locked it.
-  if (pnlSnapshots.some(s=>s.month===priorYM)) return;
-  // group deals by cohort, compute current book-PNL, freeze any cohort not already frozen for priorYM
+  const targets=[];
+  if(isLastBusinessDayOfMonth(now) && !pnlSnapshots.some(s=>s.month===curYM)) targets.push(curYM);
+  if(!pnlSnapshots.some(s=>s.month===priorYM)) targets.push(priorYM);
+  if(!targets.length) return;
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
   const toWrite=[];
-  for(const ym of Object.keys(groups)){
-    const key=ym+'|'+priorYM;
-    if(pnlFreeze[key]) continue;  // already frozen for this month-end
-    const pnl=Math.round(groups[ym].reduce((s,d)=>s+(d.pnl||0),0)*100)/100;
-    toWrite.push({fields:{Cohort:ym, FrozenForMonth:priorYM, FrozenPnl:pnl, FrozenAt:new Date().toISOString()}});
+  for(const frozenForMonth of targets){
+    for(const ym of Object.keys(groups)){
+      if(ym>frozenForMonth) continue;              // a future cohort has no place in an earlier month
+      const key=ym+'|'+frozenForMonth;
+      if(pnlFreeze[key]) continue;                 // already frozen for this month-end
+      const pnl=Math.round(groups[ym].reduce((s,d)=>s+(d.pnl||0),0)*100)/100;
+      toWrite.push({fields:{Cohort:ym, FrozenForMonth:frozenForMonth, FrozenPnl:pnl, FrozenAt:new Date().toISOString()}});
+    }
   }
+  if(!toWrite.length) return;
   for(let i=0;i<toWrite.length;i+=10){
     const out=await atFetchT('PnlFreeze','POST','',{records:toWrite.slice(i,i+10)});
     out.records.forEach(r=>{ pnlFreeze[r.fields.Cohort+'|'+r.fields.FrozenForMonth]={_id:r.id, pnl:r.fields.FrozenPnl}; });
   }
-  if(toWrite.length) showNotice('Froze '+monthLabelFull(priorYM)+' month-end PNL ('+toWrite.length+' cohorts) — new-month payments won\'t affect it until you close out.','info',9000);
+  const froze=[...new Set(toWrite.map(w=>w.fields.FrozenForMonth))].map(monthLabelFull).join(' & ');
+  showNotice('Froze '+froze+' month-end PNL — later payments will not move it until you close out.','info',9000);
 }
 
 async function computePnl(){
@@ -2709,7 +2729,9 @@ async function computePnl(){
   const cohortDark = grp => { const open=grp.filter(d=>dealDark(d)!==null); return open.length>0 && open.every(d=>dealDark(d)===true); };
   const acctClosed = pnlSnapshots.some(s=>s.month===curYM);
   const useFreeze = !acctClosed;
-  const cohorts = Object.keys(groups).sort().map(ym=>{
+  // build 143: a month's rollup only includes cohorts funded IN or BEFORE the accounting month —
+  // a future funding month (e.g. August while you're closing July) must not appear in July's PNL.
+  const cohorts = Object.keys(groups).filter(ym=>ym<=curYM).sort().map(ym=>{
     const frozen = useFreeze ? pnlFreeze[ym+'|'+curYM] : null;
     const pnl = frozen ? frozen.pnl : groups[ym].reduce((s,d)=>s+(d.pnl||0),0);
     const ourEnd = pnl*HOUSE_SPLIT;
