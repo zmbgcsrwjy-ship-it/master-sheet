@@ -207,7 +207,6 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .ol-line .tag.big{background:var(--green-bg);color:var(--green)}
 .ol-line .tag.paid{background:var(--green-bg);color:var(--green)}
 .ol-line .tag.refi{background:var(--blue-bg);color:var(--blue)}
-.ol-fdate{font-size:10px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap}
 .ol-line .nm.paidname{color:var(--green)}
 .ol-line .v{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;flex:none}
 .ol-rowmeta{display:inline-flex;align-items:center;gap:8px;flex:none;margin-left:auto}
@@ -449,7 +448,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook: fixed refi/green semantics — GREEN + refi’d tag now sit on the ORIGINAL completed deal that got paid off/replaced (the one that made us money), not the still-running incoming refi. Removed the guess ? Added outstanding book balance and a % paid meter to every row.">build 138</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook polish: a renewed deal’s tag now reads refi (not refi’d/completed), the % paid meter is now on written-off deals too (see how far a default got before dying), and the funded date beside each name was removed for a cleaner row.">build 139</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3360,14 +3359,13 @@ function renderOutlook(){
     const wasRefiedOut = d=> d.lead_id && refiedOutLeads.has(String(d.lead_id));
     const dealTag=d=>{
       let t='';
-      if(wasRefiedOut(d)) t+='<span class="tag refi" title="This deal was refinanced — replaced by a newer advance for the same merchant">refi\u2019d</span>';
+      if(wasRefiedOut(d)) t+='<span class="tag refi" title="This deal renewed — replaced by a newer advance for the same merchant">refi</span>';
       else if(d.status==='PIF') t+='<span class="tag paid">paid off</span>';
       else if(d.status==='COMPLETED') t+='<span class="tag paid">completed</span>';
       t+=olCsChip(d);           // bouncing / suspended / resume / lowered / legal — same as All deals
       return t;
     };
     const nameCls=d=> (isPaid(d)||wasRefiedOut(d)) ? 'nm paidname' : 'nm';
-    const fundedTag=d=> d.date_funded ? '<span class="ol-fdate">'+fmtDate(d.date_funded)+'</span>' : '';
     // balance + %paid meter for each row so you can see how far into the deal we are
     const pctBar=d=>{ const pct=Math.max(0,Math.min(100,Math.round((d.pct_paid||0)*100)));
       return '<span class="ol-meter" title="'+pct+'% paid down"><span class="ol-meter-fill" style="width:'+pct+'%"></span></span><span class="ol-pct">'+pct+'%</span>'; };
@@ -3378,14 +3376,14 @@ function renderOutlook(){
       ? payersSorted.map(d=>{
           const v=upsideOf(d);
           const absorb=absorbSet.has(d)?'<span class="tag big">absorbs losses</span>':'';
-          return `<div class="ol-line"><span class="${nameCls(d)}">${esc0(d.merchant)}</span>${fundedTag(d)}${dealTag(d)}${absorb}<span class="ol-rowmeta">${balTag(d)}${pctBar(d)}</span><span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
+          return `<div class="ol-line"><span class="${nameCls(d)}">${esc0(d.merchant)}</span>${dealTag(d)}${absorb}<span class="ol-rowmeta">${balTag(d)}${pctBar(d)}</span><span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
         }).join('')
       : '<div class="ol-empty-col">No deals still paying this month.</div>';
 
     const loserLines = losers.length
       ? losers.slice().sort((a,b)=>lossOf(b)-lossOf(a)).map(d=>{
           const tag = (d.collections_state||'').toUpperCase()==='LEGAL' ? '<span class="tag legal">legal</span>' : '<span class="tag default">default</span>';
-          return `<div class="ol-line"><span class="nm">${esc0(d.merchant)}</span>${tag}<span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
+          return `<div class="ol-line"><span class="nm">${esc0(d.merchant)}</span>${tag}<span class="ol-rowmeta">${pctBar(d)}</span><span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
         }).join('')
       : '<div class="ol-empty-col">Nothing written off \u2014 clean month so far.</div>';
 
