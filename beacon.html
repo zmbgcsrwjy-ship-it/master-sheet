@@ -98,7 +98,8 @@
   
   .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 14px; overflow-y: auto; overflow-x: hidden; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; }
   .layout.collapsed .sidebar { padding: 24px 6px; padding-top: 50px; }
-  .layout.collapsed .sidebar > *:not(.sidebar-toggle) { display: none; }
+  .sidebar > *:not(.sidebar-toggle){ transition: opacity 0.14s ease; }
+  .layout.collapsed .sidebar > *:not(.sidebar-toggle) { opacity: 0; pointer-events: none; }
   .sidebar-toggle { position: absolute; top: 14px; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; color: var(--text-2); z-index: 2; }
   .layout.collapsed .sidebar-toggle { right: 8px; }
   .layout.collapsed #bx-refresh-btn { padding: 9px 0; margin-bottom: 12px; }
@@ -1270,7 +1271,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v152 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v153 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
