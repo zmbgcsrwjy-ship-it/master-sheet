@@ -198,10 +198,11 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .ol-col+.ol-col{border-left:1px solid var(--border)}
 @media(max-width:900px){.ol-col+.ol-col{border-left:0;border-top:1px solid var(--border)}}
 .ol-col-h{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text2);font-weight:700;margin-bottom:10px;display:flex;justify-content:space-between}
-.ol-row{display:grid;grid-template-columns:minmax(0,1fr) auto 92px 60px 34px 90px;align-items:center;column-gap:12px;padding:5px 0;font-size:12.5px;border-bottom:1px solid var(--bg3)}
+.ol-row{display:grid;grid-template-columns:minmax(0,1fr) 92px 60px 34px 90px;align-items:center;column-gap:12px;padding:5px 0;font-size:12.5px;border-bottom:1px solid var(--bg3)}
+.ol-namecell{display:flex;align-items:center;gap:6px;min-width:0}
 .ol-row .nm{color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .ol-row .nm.paidname{color:var(--green)}
-.ol-tags{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.ol-tags{display:flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 .ol-row .ol-bal{font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums;white-space:nowrap;text-align:right}
 .ol-row .ol-meter{width:100%;height:5px;background:var(--bg4);border-radius:3px;overflow:hidden}
 .ol-row .ol-meter-fill{display:block;height:100%;background:var(--blue);border-radius:3px}
@@ -446,7 +447,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook rows rebuilt on a fixed column grid so name / balance / % meter / amount all line up perfectly on both sides. Removed the absorbs-losses tag and the word left after the balance; added the book balance to written-off deals too.">build 140</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook: bounce/status tags moved back to hug the deal name (as before) while keeping the balance / % meter / amount columns aligned across all rows.">build 141</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3374,14 +3375,14 @@ function renderOutlook(){
     const payerLines = payers.length
       ? payersSorted.map(d=>{
           const v=upsideOf(d);
-          return `<div class="ol-row"><span class="${nameCls(d)}">${esc0(d.merchant)}</span><span class="ol-tags">${dealTag(d)}</span>${balCell(d)}${pctBar(d)}<span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
+          return `<div class="ol-row"><span class="ol-namecell"><span class="${nameCls(d)}">${esc0(d.merchant)}</span><span class="ol-tags">${dealTag(d)}</span></span>${balCell(d)}${pctBar(d)}<span class="v ${v>=0?'pos':'neg'}">${fmt$(v)}</span></div>`;
         }).join('')
       : '<div class="ol-empty-col">No deals still paying this month.</div>';
 
     const loserLines = losers.length
       ? losers.slice().sort((a,b)=>lossOf(b)-lossOf(a)).map(d=>{
           const tag = (d.collections_state||'').toUpperCase()==='LEGAL' ? '<span class="tag legal">legal</span>' : '<span class="tag default">default</span>';
-          return `<div class="ol-row"><span class="nm">${esc0(d.merchant)}</span><span class="ol-tags">${tag}</span>${balCell(d)}${pctBar(d)}<span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
+          return `<div class="ol-row"><span class="ol-namecell"><span class="nm">${esc0(d.merchant)}</span><span class="ol-tags">${tag}</span></span>${balCell(d)}${pctBar(d)}<span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
         }).join('')
       : '<div class="ol-empty-col">Nothing written off \u2014 clean month so far.</div>';
 
