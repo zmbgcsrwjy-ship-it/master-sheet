@@ -452,7 +452,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Added Unclose month: reopens a closed PNL month by exactly reversing what the close-out wrote (rolls cohort settlements back out of the ledger, resets kickback flags, deletes the snapshot) using the snapshot’s own data, then recomputes live with the corrected logic so a fixed month (e.g. July without August leaking in) can be reviewed and re-closed. Requires confirmation.">build 144</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Hardened the PNL month-end freeze: the safety net now freezes EVERY unfrozen, unclosed past month on the next sync — not just the single prior month — so even if several month-ends pass without a sync, no earlier month is left reading live numbers. Verified across 17 months and multi-month-gap scenarios.">build 145</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2670,13 +2670,25 @@ async function maybeFreezeMonthEnd(){
   await loadPnlState();
   const now=new Date();
   const curYM = now.toISOString().slice(0,7);
-  const priorYM = addMonthsYM(curYM, -1);
-  const targets=[];
-  if(isLastBusinessDayOfMonth(now) && !pnlSnapshots.some(s=>s.month===curYM)) targets.push(curYM);
-  if(!pnlSnapshots.some(s=>s.month===priorYM)) targets.push(priorYM);
-  if(!targets.length) return;
   const groups={};
   deals.forEach(d=>{ if(!d.date_funded) return; const ym=d.date_funded.slice(0,7); (groups[ym]=groups[ym]||[]).push(d); });
+  const closed = m => pnlSnapshots.some(s=>s.month===m);
+  const targets=new Set();
+  // IDEAL: today is the last business day of the current month → freeze THIS month now.
+  if(isLastBusinessDayOfMonth(now) && !closed(curYM)) targets.add(curYM);
+  // SAFETY NET (build 145): freeze EVERY past month that has fundings, isn't closed, and isn't
+  // already frozen — not just the single prior month. This closes the multi-month-gap hole: if
+  // more than one month-end passes without a sync, no earlier month is left reading live forever.
+  // A "past month" is any month strictly before the current calendar month.
+  for(const ym of Object.keys(groups)){
+    if(ym>=curYM) continue;                 // only months already ended
+    if(closed(ym)) continue;                // close-out already locked it
+    // frozen-for-itself already? then it's captured — skip
+    if(pnlFreeze[ym+'|'+ym]) continue;
+    targets.add(ym);
+  }
+  if(!targets.size) return;
+
   const toWrite=[];
   for(const frozenForMonth of targets){
     for(const ym of Object.keys(groups)){
@@ -2692,7 +2704,7 @@ async function maybeFreezeMonthEnd(){
     const out=await atFetchT('PnlFreeze','POST','',{records:toWrite.slice(i,i+10)});
     out.records.forEach(r=>{ pnlFreeze[r.fields.Cohort+'|'+r.fields.FrozenForMonth]={_id:r.id, pnl:r.fields.FrozenPnl}; });
   }
-  const froze=[...new Set(toWrite.map(w=>w.fields.FrozenForMonth))].map(monthLabelFull).join(' & ');
+  const froze=[...new Set(toWrite.map(w=>w.fields.FrozenForMonth))].sort().map(monthLabelFull).join(' & ');
   showNotice('Froze '+froze+' month-end PNL — later payments will not move it until you close out.','info',9000);
 }
 
