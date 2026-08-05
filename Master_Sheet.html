@@ -452,7 +452,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="PNL month-end fixes: (1) a month’s rollup now only includes cohorts funded in or before that month, so a future month (e.g. August) no longer leaks into July’s PNL. (2) The freeze now fires on the LAST BUSINESS DAY of the month after that day’s sync (weekend month-ends roll to Friday), with the first-new-month sync as a safety net so a month is never left unfrozen.">build 143</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Added Unclose month: reopens a closed PNL month by exactly reversing what the close-out wrote (rolls cohort settlements back out of the ledger, resets kickback flags, deletes the snapshot) using the snapshot’s own data, then recomputes live with the corrected logic so a fixed month (e.g. July without August leaking in) can be reviewed and re-closed. Requires confirmation.">build 144</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -593,6 +593,7 @@ select.badge:hover{filter:brightness(1.2)}
           <div class="panel-header"><h3 id="pnl-title">PNL</h3><span style="display:flex;align-items:center;gap:8px">
             <select id="pnl-history" onchange="renderPnl(this.value)" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">Current (in progress)</option></select>
             <button class="btn btn-green" id="pnl-close-btn" onclick="closeOutMonth()">🔒 Close out month</button>
+            <button class="btn" id="pnl-unclose-btn" onclick="uncloseMonth()" style="display:none">🔓 Unclose month</button>
           </span></div>
           <div class="table-wrap">
             <table>
@@ -2842,13 +2843,15 @@ async function renderPnl(historyMonth){
     const snap=pnlSnapshots.find(s=>s.month===keep);
     if(snap){
       title.textContent='PNL — '+monthLabelFull(snap.month)+' (closed '+(snap.closedAt?snap.closedAt.slice(0,10):'')+')';
-      btn.style.display='none';  // viewing a past closed month from history — no action here
+      btn.style.display='none';  // viewing a past closed month from history — no close action here
+      { const ub=document.getElementById('pnl-unclose-btn'); if(ub){ ub.style.display=''; ub.dataset.month=snap.month; } }
       try{ const sp=JSON.parse(snap.data); body.innerHTML=pnlRowsHtml(sp); document.getElementById('pnl-settle').innerHTML=pnlSettleHtml(sp); }
       catch(e){ body.innerHTML='<tr><td colspan="7" class="pnl-neg">Snapshot data unreadable.</td></tr>'; }
       return;
     }
   }
   const p=await computePnl();
+  { const ub=document.getElementById('pnl-unclose-btn'); if(ub) ub.style.display='none'; }
   const closed=pnlSnapshots.some(s=>s.month===p.month);
   title.textContent='PNL — '+monthLabelFull(p.month)+(closed?' (closed)':' (ready to close)');
   if(closed){ btn.style.display=''; btn.disabled=true; btn.textContent='✓ '+monthLabelFull(p.month)+' closed'; btn.classList.add('btn-dim'); }
@@ -2880,6 +2883,46 @@ async function closeOutMonth(){
     showNotice(monthLabelFull(p.month)+' closed. '+fmt$(p.each)+' each. Snapshot saved to history.','success',8000);
     renderPnl('');
   }catch(err){ hideLoading(); showNotice('Close-out failed: '+err.message,'error',8000); }
+}
+
+// Un-close a month (build 143): fully reverses what closeOutMonth wrote for that month, using the
+// snapshot's own stored data so the reversal is exact — (1) subtract each cohort's settled `payable`
+// back out of the ledger, (2) reset the kickback KickbackPaid flags this close set, (3) delete the
+// snapshot. The month then reopens live and recomputes with current logic (August excluded, etc.),
+// so you can review the corrected numbers and re-close when ready. Requires typed confirmation.
+async function uncloseMonth(){
+  try{
+    await loadPnlState();
+    const month=(document.getElementById('pnl-unclose-btn')||{}).dataset?.month;
+    const snap=pnlSnapshots.find(s=>s.month===month);
+    if(!snap){ showNotice('No closed snapshot found for that month.','warn'); return; }
+    let sp=null; try{ sp=JSON.parse(snap.data); }catch(e){}
+    if(!sp){ showNotice('Snapshot data is unreadable — cannot safely unclose. Fix manually.','error',9000); return; }
+    const settled=(sp.cohorts||[]).filter(c=>!c.held && c.payable!==0);
+    const kicks=sp.kicks||[];
+    const ok=confirm('Unclose '+monthLabelFull(month)+'?\n\nThis will REVERSE the close-out:\n • Roll back '+settled.length+' cohort settlement'+(settled.length!==1?'s':'')+' from the ledger (net '+fmt$(settled.reduce((s,c)=>s+c.payable,0))+')\n • Reset '+kicks.length+' kickback'+(kicks.length!==1?'s':'')+' to unpaid\n • Delete the '+monthLabelFull(month)+' snapshot\n\nThe month reopens live and recomputes with the corrected logic. You can review and re-close. Proceed?');
+    if(!ok) return;
+    showLoading('Unclosing '+monthLabelFull(month)+'...');
+    // 1) reverse ledger settlements — subtract the exact payable each cohort was settled by
+    for(const c of settled){
+      const led=pnlLedger[c.ym];
+      if(led && led._id){
+        const back=Math.round((led.paid - c.payable)*100)/100;
+        await atFetchT('PnlLedger','PATCH','',{records:[{id:led._id, fields:{PaidToDate:back}}]});
+        pnlLedger[c.ym].paid=back;
+      }
+    }
+    // 2) reset kickback flags this close set
+    const kickRecs=kicks.filter(k=>k._id).map(k=>({id:k._id, fields:{KickbackPaid:0}}));
+    for(let i=0;i<kickRecs.length;i+=10) await atFetch('PATCH','',{records:kickRecs.slice(i,i+10)});
+    kicks.forEach(k=>{ const d=deals.find(x=>x._id===k._id); if(d) d.kickback_paid=0; });
+    // 3) delete the snapshot record
+    await atFetchT('PnlSnapshots','DELETE','/'+snap._id);
+    pnlSnapshots=pnlSnapshots.filter(s=>s.month!==month);
+    hideLoading();
+    showNotice(monthLabelFull(month)+' reopened. Reviewing live — August-type future cohorts are now excluded. Re-close when the numbers look right.','success',9000);
+    renderPnl('');   // back to live view
+  }catch(err){ hideLoading(); showNotice('Unclose failed: '+err.message+' — some steps may have applied; re-check the ledger before re-closing.','error',12000); }
 }
 
 // One source of truth for monthly math — used by BOTH the Monthly view and the Excel export.
