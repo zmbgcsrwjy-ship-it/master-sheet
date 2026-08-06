@@ -223,6 +223,7 @@ tbody td{padding:11px 14px;vertical-align:middle}
 .ol-empty-col{color:var(--text3);font-size:12px;font-style:italic;padding:6px 0}
 .ol-foot{padding:12px 20px;background:var(--bg);border-top:1px solid var(--border);font-size:11.5px;color:var(--text2);display:flex;gap:18px;flex-wrap:wrap}
 .ol-foot b{color:var(--text)}
+.copy-email-btn:hover{color:#539bf5 !important}
 /* ─── Portfolio Review (build 125) ──────────────────────── */
 .rv-toolbar{display:flex;align-items:center;justify-content:space-between;margin:0 auto 16px;gap:12px;max-width:1500px}
 .rv-toolbar-l{display:flex;align-items:center;gap:12px}
@@ -452,7 +453,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Portfolio review fixes: Paid-in-full now counts completed deals too; book maturity and the collection curve read pct_paid on the correct 0–100 scale (was showing 0% paid down and dumping every deal in the 0–25% bucket); the largest-industry share in the findings now matches the table (was showing 0%). Unspecified industries are real blanks in the CRM export, not a bug.">build 147</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Merchant contact card: added a one-click copy button next to the owner email so you can grab it for welcome emails without highlighting. Shows a checkmark on copy.">build 148</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1805,7 +1806,7 @@ function toggleContact(el, ev){
     if(c.i||c.s) bits.push('<span style="'+pill+'color:#8b96ad">'+hx(c.i||'')+((c.i&&c.s)?' · ':'')+hx(c.s||'')+'</span>');
     if(c.n) bits.push('<span style="'+pill+'color:#dde4ef">👤 '+hx(tc(c.n))+'</span>');
     if(c.p) bits.push('<span style="'+pill+'">📞 <a href="tel:'+hx(String(c.p).replace(/\D/g,''))+'" style="color:#539bf5;text-decoration:none" onclick="event.stopPropagation()">'+hx(fp(c.p))+'</a></span>');
-    if(c.e) bits.push('<span style="'+pill+'">✉ <a href="mailto:'+hx(String(c.e).trim())+'" style="color:#539bf5;text-decoration:none" onclick="event.stopPropagation()">'+hx(String(c.e).trim().toLowerCase())+'</a></span>');
+    if(c.e){ var em=String(c.e).trim(); bits.push('<span style="'+pill+'">✉ <a href="mailto:'+hx(em)+'" style="color:#539bf5;text-decoration:none" onclick="event.stopPropagation()">'+hx(em.toLowerCase())+'</a><button class="copy-email-btn" data-email="'+hx(em)+'" onclick="copyEmail(this,event)" title="Copy email" style="background:none;border:0;cursor:pointer;color:#8b96ad;font-size:12px;padding:0 2px;line-height:1">⧉</button></span>'); }
     if(!bits.length) return;
     var det=document.createElement('tr'); det.className='contact-row';
     det.innerHTML='<td colspan="30" style="position:static;text-align:left;width:auto;min-width:0;max-width:none;overflow:visible;padding:7px 14px;background:transparent;border:0;z-index:auto"><div style="position:sticky;left:14px;width:fit-content;display:inline-flex;align-items:center;gap:8px;background:#151e31;border:1px solid #2c3a57;border-left:3px solid #539bf5;border-radius:10px;padding:8px 12px;font-size:12.5px;box-shadow:0 6px 18px rgba(0,0,0,.3)">'+bits.join('')+'</div></td>';
@@ -1813,8 +1814,26 @@ function toggleContact(el, ev){
   }catch(err){ console.error('contact card:', err); }
 }
 
-
-function hasContact(d){ return !!(d.industry||d.owner_name||d.owner_phone||d.owner_email); }
+// Copy a merchant email to the clipboard (build 148) — no more highlight-and-copy for welcome emails.
+function copyEmail(btn, ev){
+  if(ev){ ev.stopPropagation(); ev.preventDefault(); }
+  var email = btn && btn.dataset ? btn.dataset.email : '';
+  if(!email) return;
+  var done=function(){ var o=btn.textContent; btn.textContent='✓'; btn.style.color='#2ea043';
+    setTimeout(function(){ btn.textContent=o; btn.style.color='#8b96ad'; }, 1200); };
+  var fail=function(){ btn.textContent='✕'; setTimeout(function(){ btn.textContent='⧉'; }, 1200); };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(email).then(done, fail);
+    } else {
+      // fallback for non-secure contexts
+      var ta=document.createElement('textarea'); ta.value=email; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); done(); }catch(e){ fail(); }
+      document.body.removeChild(ta);
+    }
+  }catch(e){ fail(); }
+}function hasContact(d){ return !!(d.industry||d.owner_name||d.owner_phone||d.owner_email); }
 
 function csChip(d){
   const s=d.collections_state; if(!s||s==='OK') return '';
