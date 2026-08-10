@@ -1270,7 +1270,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v155 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v156 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2727,6 +2727,15 @@ function isBroken(m) {
   if (!m.bounced_today) return false;
   if (!m.resolution_type) return false;
   if (isInFlight(m)) return false;
+  // v156: a promise is only BROKEN if they never kept their end. If a payment has CLEARED at any point
+  // AFTER the arrangement was made, the promise was kept — a later isolated bounce is just a normal
+  // bounce, not a broken promise. The "arrangement anchor" is the resume date (paused/lowered) or the
+  // resolution date (spoke). We also require the clear to be more recent than the LAST bounce we knew
+  // about before this one isn't needed — simply clearing after the anchor proves they resumed as agreed.
+  const anchor = (m.resolution_type === 'paused' || m.resolution_type === 'lowered')
+    ? (m.resume_date || m.resolution_date)
+    : m.resolution_date;
+  if (anchor && m.last_cleared && m.last_cleared >= anchor) return false;
   if (m.resolution_type === 'spoke') {
     if (m.hit_date && m.resolution_date) return new Date(m.hit_date) >= new Date(m.resolution_date);
     return true;
