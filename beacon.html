@@ -1270,7 +1270,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v158 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v159 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1934,12 +1934,12 @@ function beaconReconstruct(raw, todayISO){
       m.resume_date = f['Resume Date']||'';
       m.lowered_amount = (payload&&payload.amount)||0;
       if (payload&&payload.orig){ m.original_freq=payload.orig.freq||''; m.original_bounce_amt=payload.orig.amt||0; m.original_return_code=payload.orig.code||''; }
-      // v157: a resolution goes STALE once the merchant pays again. If a payment cleared AFTER this
-      // arrangement (and it isn't a legal case, which persists regardless), the promise was kept and
-      // resolved — a later bounce is a fresh, unresolved bounce, not a lingering "spoke to". Drop the
-      // active resolution but leave a dated history note so we don't lose that we talked to them.
+      // v157 + v158: a resolution goes STALE only once the merchant pays again AFTER the arrangement —
+      // a clear STRICTLY after the anchor proves they honored it (a spoke-to they paid, a lowered amount
+      // they paid). The strict > avoids expiring off a pre-lowering full payment stamped the same day.
+      // Legal cases persist regardless. When it does expire, leave a dated history note.
       const anchorDate = (m.resume_date && (m.resolution_type==='paused'||m.resolution_type==='lowered')) ? m.resume_date : dISO;
-      if (m.resolution_type!=='legal' && m.last_cleared && m.last_cleared >= anchorDate){
+      if (m.resolution_type!=='legal' && m.last_cleared && m.last_cleared > anchorDate){
         const past = t + (m.resume_date?(' (resume '+m.resume_date+')'):'') + ' on '+dISO+' — kept, paid since';
         if (!m.notes_log.find(e=>e.date_iso===dISO && /kept, paid since/.test(e.text||'')))
           m.notes_log.push({date_iso:dISO, text:past, _system:true});
@@ -2752,11 +2752,16 @@ function isBroken(m) {
   // AFTER the arrangement was made, the promise was kept — a later isolated bounce is just a normal
   // bounce, not a broken promise. The "arrangement anchor" is the resume date (paused/lowered) or the
   // resolution date (spoke). We also require the clear to be more recent than the LAST bounce we knew
-  // about before this one isn't needed — simply clearing after the anchor proves they resumed as agreed.
+  // v156 + v158: a resolution is "kept" only if the merchant cleared a payment STRICTLY AFTER the
+  // arrangement was set — proving they honored it. The strict > matters for lowered deals: the last
+  // cleared payment is often a FULL payment from the same day the lowering was logged (before it took
+  // effect), which is not honoring the lowered amount. Requiring a clear dated after the arrangement
+  // avoids treating that pre-lowering payment as "kept." (ELROSARIO cleared days later → kept. LUXDOG
+  // never cleared a lowered payment → not kept → falls through to broken.)
   const anchor = (m.resolution_type === 'paused' || m.resolution_type === 'lowered')
     ? (m.resume_date || m.resolution_date)
     : m.resolution_date;
-  if (anchor && m.last_cleared && m.last_cleared >= anchor) return false;
+  if (anchor && m.last_cleared && m.last_cleared > anchor) return false;
   if (m.resolution_type === 'spoke') {
     if (m.hit_date && m.resolution_date) return new Date(m.hit_date) >= new Date(m.resolution_date);
     return true;
