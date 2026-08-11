@@ -1270,7 +1270,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v160 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v162 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2727,18 +2727,11 @@ function isInFlight(m) {
     const hit = m.hit_date || TODAY_ISO;
     return new Date(hit) < new Date(m.resume_date);
   }
-  // v158: a LOWERED deal is different from a pause. Lowering means she agreed to pay a REDUCED amount,
-  // not to stop paying. So a bounce only counts as in-flight noise if the lowered payments haven't
-  // STARTED yet (a future resume/start date). Once the lowered arrangement is active — no future start
-  // date, or that date has arrived — a payment IS expected, and bouncing it is a broken promise, not
-  // expected noise. This catches "agreed to lowered, then bounced the lowered payment."
-  if (m.resolution_type === 'lowered') {
-    if (m.resume_date) {
-      const hit = m.hit_date || TODAY_ISO;
-      return new Date(hit) < new Date(m.resume_date);   // still before lowered payments begin → in-flight
-    }
-    return false;                                       // lowered active now → a bounce is a break, not in-flight
-  }
+  // v162: in Beacon, marking a deal LOWERED means the reduced payment is due NOW — there's no
+  // "suspend then resume at a lower amount" option, so operators use Lowered for that case too. A
+  // lowered payment that bounces is therefore ALWAYS a broken promise, never expected noise, and the
+  // resume_date on the record is ignored for lowered (it only governs a pure Suspension/pause).
+  if (m.resolution_type === 'lowered') return false;   // lowered is active now → a bounce is a break, never in-flight
   // Spoke, or a paused/lowered with no resume date: in-flight only if the pull already happened
   // on or before we resolved. <= so same-day resolutions count — the pull couldn't be undone.
   if (!m.hit_date || !m.resolution_date) return false;
@@ -2758,7 +2751,9 @@ function isBroken(m) {
   // effect), which is not honoring the lowered amount. Requiring a clear dated after the arrangement
   // avoids treating that pre-lowering payment as "kept." (ELROSARIO cleared days later → kept. LUXDOG
   // never cleared a lowered payment → not kept → falls through to broken.)
-  const anchor = (m.resolution_type === 'paused' || m.resolution_type === 'lowered')
+  // v162: the "kept" anchor. For a pure pause it's the resume date; for lowered it's the lowering
+  // date itself (the reduced payment is due from then), since a lowered resume_date can point far out.
+  const anchor = (m.resolution_type === 'paused')
     ? (m.resume_date || m.resolution_date)
     : m.resolution_date;
   if (anchor && m.last_cleared && m.last_cleared > anchor) return false;
@@ -2771,9 +2766,7 @@ function isBroken(m) {
     return false;
   }
   if (m.resolution_type === 'lowered') {
-    // v158: if there's a future start date, only broken once it's passed. If the lowered arrangement
-    // is active now (no resume date, or it's arrived), bouncing the reduced payment IS the break.
-    if (m.resume_date) return m.hit_date ? new Date(m.hit_date) >= new Date(m.resume_date) : false;
+    // v162: lowered = reduced payment due now. Bouncing it is always the break; resume_date ignored.
     return true;
   }
   return false;
@@ -4343,15 +4336,6 @@ function renderMainTable() {
       const isLegalStill = m.resolution_type === "legal" || hasOpenLegalCase(m.lead_id);
       const broken = isBroken(m);
       const inflight = isInFlight(m);
-      // TEMP DIAG v160 — remove after: dump LUXDOG's real fields so we can see the true timeline
-      if (/LUXDOG/i.test(m.name||'')) {
-        console.log('🐶 LUXDOG DIAG:', JSON.stringify({
-          name:m.name, resolution_type:m.resolution_type, resolution_date:m.resolution_date,
-          resume_date:m.resume_date, last_cleared:m.last_cleared, hit_date:m.hit_date,
-          bounced_today:m.bounced_today, lowered_amount:m.lowered_amount,
-          broken:broken, inflight:inflight
-        }, null, 2));
-      }
       // Display order: STOPS (1) → CONSEC (2) → WEEKLY (3) → NEW (4) — operational priority first.
       // Then a gap, then BROKEN PROMISES (8) and SENT TO LEGAL STILL BOUNCING (9) at the bottom
       // as separate "closed-loop" sections that need a different mental mode to action.
