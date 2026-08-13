@@ -453,7 +453,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Merchant contact card: added a one-click copy button next to the owner email so you can grab it for welcome emails without highlighting. Shows a checkmark on copy.">build 148</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Master Sheet now shows Beacon’s manual-pay pill: a teal MANUAL PAY tag on deals paying off the auto-debit rail on a manual schedule, turning to a red PAY LATE tag when a scheduled payment is past due. Separate track from the collections pill — a deal can show both.">build 149</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -937,6 +937,7 @@ const REQUIRED_FIELDS = [
   {name:'ClawedInfo', type:'singleLineText'},
   {name:'CollectionsDetail', type:'singleLineText'},
   {name:'LegalCompany', type:'singleLineText'},
+  {name:'ManualPayStateXapp', type:'singleLineText'},   // build 149: Beacon-owned manual-pay pill state (MANUAL PAY / PAYMENT LATE)
   {name:'DateFunded',  type:'date', options:{dateFormat:{name:'iso'}}},
   {name:'Funded',      type:'number', options:{precision:2}},
   {name:'RTR',         type:'number', options:{precision:2}},
@@ -1089,6 +1090,7 @@ function fieldsToDeal(id, f) {
     owner_phone:  f.OwnerPhone   || '',
     notes:        f.Notes        || '',
     collections_state: f.CollectionsState || '',   // Beacon-owned — Master Sheet only displays it
+    manual_pay_xapp: f.ManualPayStateXapp || '',    // Beacon-owned — manual-pay pill (build 149)
     collections_detail: f.CollectionsDetail || '', // Beacon-owned — resume date / lowered detail, for the pill tooltip
     legal_company: f.LegalCompany || '',           // Beacon-owned — collections firm handling the case
     clawback_state: f.ClawbackState || '',          // clawback lifecycle: '' | FORCED | CLAWED | DISMISSED
@@ -1862,6 +1864,21 @@ function csChip(d){
   const txt = s==='LEGAL' ? '#ff6b61' : '#fff';   // legal reads in red on its slate pill so it stands out
   return `<span title="${tip}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:${txt};background:${col};vertical-align:middle;white-space:nowrap">${label}</span>`;
 }
+
+// Manual-pay pill (build 149) — Beacon-owned, display-only here. A separate track from the
+// collections pill: a deal can carry both. Teal = on a manual payment plan; red = a payment is late.
+function manualPayChip(d){
+  const s = (d.manual_pay_xapp||'').toUpperCase();
+  if(!s) return '';
+  const late = s === 'PAYMENT LATE';
+  const col = late ? '#e5534b' : '#2dd4bf';   // red if late, else teal (matches Beacon manual-pay theme)
+  const txt = late ? '#fff' : '#06231f';
+  const label = late ? 'PAY LATE' : 'MANUAL PAY';
+  const tip = late
+    ? 'Manual pay (Beacon): a scheduled self-remit payment is past due'
+    : 'Manual pay (Beacon): deal is off auto-debit, paying on a manual schedule';
+  return `<span title="${tip}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:${txt};background:${col};vertical-align:middle;white-space:nowrap">${label}</span>`;
+}
 async function setDealStatus(id, val){
   const d=deals.find(x=>x._id===id); if(!d) return;
   try{
@@ -2030,7 +2047,7 @@ function renderTable(){
       <td class="${nz(pnl)?(pnl>0?'pnl-pos':'pnl-neg'):''}">${fmt$(pnl)}</td>
       <td style="color:var(--text2);white-space:nowrap">${d.frequency==='Weekly'?'<span class="wk-name">'+lenTxt+'</span>':lenTxt}</td>
       <td><div class="progress-wrap"><div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${Math.min(pct*100,100)}%"></div></div><span class="pct-text">${(pct*100).toFixed(1)}%</span></div></td>
-      <td style="white-space:nowrap"><select class="badge ${badgeCls}" onchange="setDealStatus('${d._id}',this.value)" title="${d.status_override?'Manually pinned — sync will not change this status':'Status (auto) — pick one to pin it manually'}">${['NEW','ACTIVE','PIF','COMPLETED','DEFAULT'].map(s=>`<option value="${s}"${s===d.status?' selected':''}>${s}</option>`).join('')}${d.status_override?'<option value="__AUTO__">↺ release to auto</option>':''}</select>${d.status_override?'<span class="ovr-dot" title="Manually pinned — sync will not change this status">📌</span>':''}${csChip(d)}</td>
+      <td style="white-space:nowrap"><select class="badge ${badgeCls}" onchange="setDealStatus('${d._id}',this.value)" title="${d.status_override?'Manually pinned — sync will not change this status':'Status (auto) — pick one to pin it manually'}">${['NEW','ACTIVE','PIF','COMPLETED','DEFAULT'].map(s=>`<option value="${s}"${s===d.status?' selected':''}>${s}</option>`).join('')}${d.status_override?'<option value="__AUTO__">↺ release to auto</option>':''}</select>${d.status_override?'<span class="ovr-dot" title="Manually pinned — sync will not change this status">📌</span>':''}${csChip(d)}${manualPayChip(d)}</td>
       <td style="font-size:11px;color:${isExternalFunder(d.funder)?'var(--peach)':'var(--text2)'}${isExternalFunder(d.funder)?';font-weight:600':''}">${d.funder||'—'}</td>
       <td style="white-space:nowrap;text-align:center"><input class="kb-edit" type="text" value="${d.kickback?fmt$(d.kickback):''}" placeholder="—" onchange="saveKickbackInline('${d._id}',this.value)" title="${d.kickback_paid?'Already distributed in a closed PNL month — changes will NOT flow to a new payout':'Kickback (upfront bank) — saves on enter/blur'}">${d.kickback_paid?'<span style="font-size:10px;color:var(--green)" title="Distributed">✓</span>':''}</td>
       <td style="font-size:11px;color:var(--text3);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.iso||'—'}</td>
