@@ -979,6 +979,8 @@
   .resolve-expand .resolve-menu button.menu-item { display: block; width: 100%; text-align: left; background: transparent; border: 0; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 5px; cursor: pointer; color: var(--text); }
   .resolve-expand .resolve-menu button.menu-item:hover { background: var(--surface-2); }
   .resolve-expand .resolve-menu button.menu-item.legal-item { color: #FF6B61; font-weight: 600; }
+  .mini-btn { background: var(--surface-2); border: 0.5px solid var(--border); color: var(--text); font: inherit; font-size: 11px; padding: 4px 9px; border-radius: 5px; cursor: pointer; }
+  .mini-btn:hover { background: var(--surface-3); }
   .resolve-expand .resolve-menu .menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
   .resolve-expand .resolve-menu .date-row { padding: 8px 10px; display: none; }
   .resolve-expand .resolve-menu .date-row.shown { display: block; }
@@ -1270,7 +1272,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v162 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v163 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1408,6 +1410,30 @@
     </tr></thead>
     <tbody id="main-body"></tbody>
   </table>
+</div>
+
+<!-- Manual Payments section (v163) — off-debit deals self-remitting on a schedule -->
+<div id="manualpay-section" style="display:none;margin-top:22px">
+  <div class="section-title">
+    <div class="left">
+      <h2>Manual Payments</h2>
+      <p id="manualpay-subtitle">off-debit deals on a payment plan · check off each payment as it arrives</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr>
+        <th style="width:22%">Merchant</th>
+        <th class="ctr" style="width:10%">Cadence</th>
+        <th class="ctr" style="width:11%">Expected</th>
+        <th class="ctr" style="width:12%">Next due</th>
+        <th class="ctr" style="width:11%">Total remitted</th>
+        <th class="ctr" style="width:12%">Status</th>
+        <th class="ctr" style="width:22%">Action</th>
+      </tr></thead>
+      <tbody id="manualpay-body"></tbody>
+    </table>
+  </div>
 </div>
 
 <div class="session-footer">
@@ -1579,6 +1605,48 @@
   </div>
 </div>
 
+<!-- Manual payment plan modal (v163) — for deals that went off auto-debit and self-remit on a schedule -->
+<div class="legal-form-overlay" id="manualpay-overlay">
+  <div class="legal-form-modal">
+    <h3>Manual payment plan</h3>
+    <p class="form-merchant">Tracking off-debit payments for <strong id="manualpay-merchant"></strong>. This does <strong>not</strong> touch the deal's balance — Pinnacle still updates that from the daily report (next-day lag). This only tracks whether the promised payments arrive on schedule.</p>
+    <div class="legal-form-grid">
+      <div><label>Cadence<span class="req">*</span></label>
+        <select id="manualpay-cadence" onchange="manualPayCadenceChanged()">
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Every 2 weeks</option>
+          <option value="monthly">Monthly</option>
+          <option value="everyN">Every N days…</option>
+        </select>
+      </div>
+      <div id="manualpay-everyn-wrap" style="display:none"><label>Every how many days<span class="req">*</span></label><input type="number" id="manualpay-everyn" min="1" placeholder="10" /></div>
+      <div><label>Expected amount / payment<span class="req">*</span></label><input type="number" id="manualpay-amount" min="0" step="0.01" placeholder="0.00" /></div>
+      <div><label>First payment due<span class="req">*</span></label><input type="date" id="manualpay-nextdue" /></div>
+    </div>
+    <div class="legal-form-actions">
+      <button class="legal-cancel" onclick="closeManualPayForm()">Cancel</button>
+      <button class="legal-save" onclick="submitManualPayForm()">Start tracking</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual payment check-off modal -->
+<div class="legal-form-overlay" id="manualpay-checkoff-overlay">
+  <div class="legal-form-modal">
+    <h3>Log received payment</h3>
+    <p class="form-merchant">Recording a payment from <strong id="manualpay-checkoff-merchant"></strong>. Amount required. The next due date rolls forward by the cadence — override it below if needed.</p>
+    <div class="legal-form-grid">
+      <div><label>Amount received<span class="req">*</span></label><input type="number" id="manualpay-checkoff-amount" min="0" step="0.01" placeholder="0.00" /></div>
+      <div><label>Received on</label><input type="date" id="manualpay-checkoff-date" /></div>
+      <div class="full"><label>Next due (override — leave to auto-advance)</label><input type="date" id="manualpay-checkoff-nextdue" /></div>
+    </div>
+    <div class="legal-form-actions">
+      <button class="legal-cancel" onclick="closeManualPayCheckoff()">Cancel</button>
+      <button class="legal-save" onclick="submitManualPayCheckoff()">Log payment</button>
+    </div>
+  </div>
+</div>
+
 <div class="save-toast" id="toast"></div>
 <div id="sync-progress" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(8,12,20,.72);align-items:center;justify-content:center;backdrop-filter:blur(2px)">
   <div style="background:#141b2d;border:1px solid #2c3a57;border-radius:14px;padding:26px 30px;min-width:320px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.5)">
@@ -1703,7 +1771,7 @@ async function beaconPreflight(){
   // ensure Deals.CollectionsDetail exists so we can hand the resume-date / lowered detail to the Master Sheet tooltip
   try{
     const dtc = meta.tables.find(x=>x.name==='Deals');
-    for (const fname of ['CollectionsDetail','LegalCompany']){
+    for (const fname of ['CollectionsDetail','LegalCompany','ManualPayState','ManualPayCadence','ManualPayAmount','ManualPayNextDue','ManualPayLog','ManualPayStateXapp']){
       if(dtc && !(dtc.fields||[]).some(f=>f.name===fname)){
         try{
           await atFetch('/meta/bases/'+BEACON_CFG.baseId+'/tables/'+dtc.id+'/fields', {method:'POST', body:{name:fname, type:'singleLineText'}});
@@ -1833,6 +1901,9 @@ function beaconReconstruct(raw, todayISO){
       lead_id: lid, name: f.Merchant||'', status: f.Status||'ACTIVE',
       funded: f.DateFunded||'', balance: Number(f.Balance)||0, pct_paid: pct,
       paid_today: Number(f.PaidToday)||0, paid_mtd: Number(f.PaidMTD)||0, last_cleared: (f.LastCleared||'').slice(0,10),
+      manual_pay_state: f.ManualPayState||'', manual_pay_cadence: f.ManualPayCadence||'',
+      manual_pay_amount: Number(f.ManualPayAmount)||0, manual_pay_next_due: (f.ManualPayNextDue||'').slice(0,10),
+      manual_pay_log: (function(){ try{ return JSON.parse(f.ManualPayLog||'[]'); }catch(e){ return []; } })(),
       bounced_today:false, bounce_amt:0, bounce_type:'', return_code:'', freq:f.Frequency||'',
       mtd_bounces:0, days_delinq:0, streak_len:0, severity_rank:100, sev_class:'none',
       group_order:99, last_pull:'', bucket:(f.Status==='DEFAULT'?'DEFAULT':'ACTIVE'),
@@ -2181,6 +2252,75 @@ function beaconCollectionsDetailFor(m){
   if (m.resolution_type==='spoke' && m.resolution_date){ const d=m.resolution_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Spoke to '+md+' — paying as normal'; }
   return '';
 }
+// ── MANUAL PAY (v163) ──────────────────────────────────────────────────────
+// Tracks deals that went OFF the auto-debit rail: the merchant abandoned the account we were
+// debiting and now self-remits on a schedule. Invisible to the bounce report (nothing to pull, so
+// nothing bounces) and not headed to legal — this is a separate tracking layer so they don't get
+// lost. It NEVER touches the deal's balance: real paydown still flows from Pinnacle via the daily
+// sync (with the usual one-day lag). This layer only tracks payment discipline — did the promised
+// payment arrive, when, how much, and are they on schedule.
+const MANUAL_PAY_CADENCES = { weekly:7, biweekly:14, monthly:30 };
+// advance a YYYY-MM-DD date by a cadence ('weekly'|'biweekly'|'monthly'|'everyN:<n>')
+function manualPayAdvance(iso, cadence){
+  const d = new Date(iso+'T12:00:00'); if(isNaN(d)) return iso;
+  if(cadence && cadence.indexOf('everyN:')===0){ const n=parseInt(cadence.slice(7),10)||7; d.setDate(d.getDate()+n); }
+  else if(cadence==='monthly'){ d.setMonth(d.getMonth()+1); }
+  else { d.setDate(d.getDate() + (MANUAL_PAY_CADENCES[cadence]||7)); }
+  return d.toISOString().slice(0,10);
+}
+function manualPayCadenceLabel(c){
+  if(!c) return '';
+  if(c==='weekly') return 'Weekly'; if(c==='biweekly') return 'Every 2 wks'; if(c==='monthly') return 'Monthly';
+  if(c.indexOf('everyN:')===0) return 'Every '+c.slice(7)+' days';
+  return c;
+}
+// is a manual-pay deal overdue? today has passed its next-due date with no payment logged for it.
+function manualPayIsLate(m){
+  if(!m.manual_pay_state || m.manual_pay_state==='DONE') return false;
+  if(!m.manual_pay_next_due) return false;
+  return bLocalToday() > m.manual_pay_next_due;
+}
+function manualPayTotal(m){ return (m.manual_pay_log||[]).reduce((s,e)=>s+(Number(e.amount)||0),0); }
+// the cross-app state string the Master Sheet pill reads
+function manualPayStateFor(m){
+  if(!m.manual_pay_state || m.manual_pay_state==='DONE') return '';
+  return manualPayIsLate(m) ? 'PAYMENT LATE' : 'MANUAL PAY';
+}
+// Set / update a deal's manual-pay plan. cadence, amount, nextDue provided by the operator.
+async function beaconSetManualPay(m, cadence, amount, nextDue){
+  m.manual_pay_state = 'ACTIVE';
+  m.manual_pay_cadence = cadence;
+  m.manual_pay_amount = Number(amount)||0;
+  m.manual_pay_next_due = nextDue;
+  if(!Array.isArray(m.manual_pay_log)) m.manual_pay_log = [];
+  await atPatch('Deals',[{id:m._rid, fields:{
+    ManualPayState:'ACTIVE', ManualPayCadence:cadence, ManualPayAmount:String(m.manual_pay_amount),
+    ManualPayNextDue:nextDue, ManualPayLog:JSON.stringify(m.manual_pay_log),
+    ManualPayStateXapp: manualPayStateFor(m)
+  }}]).catch(async()=>{ // if the xapp mirror field is missing, retry without it (loud, not silent)
+    console.warn('[beacon] ManualPayStateXapp write failed — retrying without it');
+    await atPatch('Deals',[{id:m._rid, fields:{ManualPayState:'ACTIVE', ManualPayCadence:cadence,
+      ManualPayAmount:String(m.manual_pay_amount), ManualPayNextDue:nextDue, ManualPayLog:JSON.stringify(m.manual_pay_log)}}]);
+  });
+}
+// Check off a received payment (amount REQUIRED). Appends to the log, auto-advances next-due by the
+// cadence unless an override date is given, keeps the deal ACTIVE.
+async function beaconLogManualPay(m, amount, receivedISO, overrideNextDue){
+  if(!Array.isArray(m.manual_pay_log)) m.manual_pay_log = [];
+  m.manual_pay_log.push({ date: receivedISO || bLocalToday(), amount: Number(amount)||0 });
+  m.manual_pay_next_due = overrideNextDue || manualPayAdvance(m.manual_pay_next_due || bLocalToday(), m.manual_pay_cadence);
+  m.manual_pay_state = 'ACTIVE';
+  await atPatch('Deals',[{id:m._rid, fields:{
+    ManualPayNextDue:m.manual_pay_next_due, ManualPayLog:JSON.stringify(m.manual_pay_log),
+    ManualPayState:'ACTIVE'
+  }}]);
+}
+// End a manual-pay plan (deal paid off, or returned to auto-debit).
+async function beaconEndManualPay(m){
+  m.manual_pay_state = 'DONE';
+  await atPatch('Deals',[{id:m._rid, fields:{ManualPayState:'DONE'}}]);
+}
+
 async function beaconPushResolution(m, todayISO){
   const typeMap={spoke:'Spoke to', lowered:'Lowered', paused:'Suspend Payment', legal:'Legal'};
   const atType=typeMap[m.resolution_type]; if(!atType) return;
@@ -2391,6 +2531,7 @@ async function beaconReload(){
   viewDate = TODAY_ISO; calMonth = TODAY_ISO.slice(0,7);
   document.getElementById("total-tracked").textContent = STATS.total_tracked;
   renderSidebar(); renderCalendar(); renderForDate(); updateCounters(); updateLegalBadge();
+  renderManualPay();  // v163: off-debit manual-pay deals section
   reconcileCollectionsStates();  // backfill CollectionsState for resolved deals (lowered/suspended/legal) so the Master Sheet shows the right pill
 }
 async function reconcileCollectionsStates(){
@@ -2424,6 +2565,10 @@ async function reconcileCollectionsStates(){
       // Hand the legal company across to the Master Sheet (shown on its Defaults tab)
       const _lc = ((typeof legalCases !== 'undefined' ? legalCases : []).find(x => x.lead_id === m.lead_id) || {}).legal_company || '';
       if ((m._legalCompany || '') !== _lc){ fields['LegalCompany'] = _lc; m._legalCompany = _lc; }
+      // v163: keep the Master Sheet's manual-pay pill current — recompute the cross-app state each load
+      // so a deal flips to PAYMENT LATE the moment it passes its next-due date, without needing an action.
+      const wantMp = manualPayStateFor(m);
+      if ((m._manualPayXapp || '') !== wantMp){ fields['ManualPayStateXapp'] = wantMp; m._manualPayXapp = wantMp; }
       if (Object.keys(fields).length) patches.push({id:m._rid, fields:fields});
     }
     if (!patches.length) return;
@@ -2433,14 +2578,14 @@ async function reconcileCollectionsStates(){
     }catch(err){
       const msg = String((err && err.message) || err);
       console.error('[beacon reconcile write failed]', msg);
-      if (/unknown field/i.test(msg) && /legalcompany/i.test(msg)){
-        // The LegalCompany column isn't in the Deals table yet. Write everything else so the
-        // collections pills still work, and say so out loud instead of failing silently.
+      if (/unknown field/i.test(msg) && (/legalcompany/i.test(msg) || /manualpay/i.test(msg))){
+        // A cross-app column isn't in the Deals table yet. Write everything else so the core pills
+        // still work, and say so out loud instead of failing silently.
         const stripped = patches
-          .map(p => { const f = Object.assign({}, p.fields); delete f.LegalCompany; return {id:p.id, fields:f}; })
+          .map(p => { const f = Object.assign({}, p.fields); delete f.LegalCompany; delete f.ManualPayStateXapp; return {id:p.id, fields:f}; })
           .filter(p => Object.keys(p.fields).length);
         if (stripped.length){ try{ await atPatch('Deals', stripped); }catch(e2){ console.error('[beacon reconcile retry]', e2); } }
-        showToast('\u26a0 Deals table needs a "LegalCompany" text field \u2014 legal firm can\'t reach the Master Sheet until it exists');
+        showToast('\u26a0 Deals table is missing a cross-app text field (LegalCompany / ManualPayStateXapp) \u2014 add it so the Master Sheet pill updates');
       } else {
         beaconWriteErr(err);
       }
@@ -5112,13 +5257,17 @@ function toggleResolveExpand(ev, leadId) {
       '<button class="menu-item legal-item" onclick="openLegalForm(' + leadId + ')">Send to legal / collections…</button>' +
       '<div class="menu-divider"></div>' +
       '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'paused\')">Resume payment…</button>' +
-      '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'lowered\')">Lowered payment…</button>';
+      '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'lowered\')">Lowered payment…</button>' +
+      '<div class="menu-divider"></div>' +
+      '<button class="menu-item" onclick="openManualPayForm(' + leadId + ')">Manual payment plan…</button>';
   } else {
     menuItemsHtml =
       '<button class="menu-item" onclick="setResolution(' + leadId + ', \'spoke\')">Spoke to — resuming as normal</button>' +
       '<div class="menu-divider"></div>' +
       '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'lowered\')">Lowered payments…</button>' +
       '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'paused\')">Suspend Payment…</button>' +
+      '<div class="menu-divider"></div>' +
+      '<button class="menu-item" onclick="openManualPayForm(' + leadId + ')">Manual payment plan…</button>' +
       '<div class="menu-divider"></div>' +
       '<button class="menu-item legal-item" onclick="openLegalForm(' + leadId + ')">Send to legal / collections…</button>';
   }
@@ -5463,8 +5612,111 @@ function updateTabBadges() {
 function updateLegalBadge() { updateTabBadges(); }
 
 // ===== Legal case form (capture flow from resolve menu) =====
-function openLegalForm(leadId) {
-  _legalFormLeadId = leadId;
+// ── MANUAL PAY UI (v163) ────────────────────────────────────────────────────
+let _manualPayLead = null, _manualPayCheckoffLead = null;
+// Render the Manual Payments board section — all deals with an active manual-pay plan.
+function renderManualPay(){
+  const sec = document.getElementById('manualpay-section');
+  const body = document.getElementById('manualpay-body');
+  if(!sec || !body) return;
+  const deals = (state||[]).filter(m => m.manual_pay_state && m.manual_pay_state!=='DONE');
+  if(!deals.length){ sec.style.display='none'; body.innerHTML=''; return; }
+  sec.style.display='';
+  // late first, then soonest due
+  deals.sort((a,b)=>{
+    const la=manualPayIsLate(a)?0:1, lb=manualPayIsLate(b)?0:1;
+    if(la!==lb) return la-lb;
+    return (a.manual_pay_next_due||'').localeCompare(b.manual_pay_next_due||'');
+  });
+  const nLate = deals.filter(manualPayIsLate).length;
+  document.getElementById('manualpay-subtitle').textContent =
+    deals.length+' deal'+(deals.length!==1?'s':'')+' on a plan'+(nLate?' · '+nLate+' LATE':' · all on track');
+  body.innerHTML = deals.map(m=>{
+    const late = manualPayIsLate(m);
+    const dueTxt = m.manual_pay_next_due ? fmtDate(m.manual_pay_next_due) : '—';
+    const statusChip = late
+      ? '<span class="streak-chip" style="background:#3a1114;color:#ff6b61">PAYMENT LATE</span>'
+      : '<span class="resolved-chip" style="background:#12261a;color:#3fb950">ON TRACK</span>';
+    return '<tr>'+
+      '<td><span class="m-name" style="font-weight:500">'+escapeHtml(m.name)+'</span></td>'+
+      '<td class="ctr">'+manualPayCadenceLabel(m.manual_pay_cadence)+'</td>'+
+      '<td class="ctr">$'+(m.manual_pay_amount||0).toFixed(2)+'</td>'+
+      '<td class="ctr'+(late?'" style="color:#ff6b61;font-weight:600':'')+'">'+dueTxt+'</td>'+
+      '<td class="ctr">$'+manualPayTotal(m).toFixed(2)+'</td>'+
+      '<td class="ctr">'+statusChip+'</td>'+
+      '<td class="ctr">'+
+        '<button class="mini-btn" onclick="openManualPayCheckoff('+m.lead_id+')" title="Log a received payment">✓ Log payment</button> '+
+        '<button class="mini-btn" onclick="openManualPayForm('+m.lead_id+')" title="Edit the plan">Edit</button> '+
+        '<button class="mini-btn" onclick="endManualPay('+m.lead_id+')" title="End the plan">End</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+}
+function manualPayCadenceChanged(){
+  const c=document.getElementById('manualpay-cadence').value;
+  document.getElementById('manualpay-everyn-wrap').style.display = (c==='everyN')?'block':'none';
+}
+function openManualPayForm(leadId){
+  const m = state.find(x=>x.lead_id===leadId); if(!m){ showToast('ERR: deal missing — hard refresh'); return; }
+  _manualPayLead = leadId;
+  document.getElementById('manualpay-merchant').textContent = m.name || '';
+  // prefill from any existing plan
+  const cad = m.manual_pay_cadence || 'weekly';
+  const sel = document.getElementById('manualpay-cadence');
+  if(cad.indexOf('everyN:')===0){ sel.value='everyN'; document.getElementById('manualpay-everyn').value=cad.slice(7); }
+  else sel.value = cad;
+  manualPayCadenceChanged();
+  document.getElementById('manualpay-amount').value = m.manual_pay_amount || '';
+  document.getElementById('manualpay-nextdue').value = m.manual_pay_next_due || bLocalToday();
+  document.getElementById('manualpay-overlay').classList.add('shown');
+}
+function closeManualPayForm(){ document.getElementById('manualpay-overlay').classList.remove('shown'); _manualPayLead=null; }
+async function submitManualPayForm(){
+  const m = state.find(x=>x.lead_id===_manualPayLead); if(!m) return;
+  let cad = document.getElementById('manualpay-cadence').value;
+  if(cad==='everyN'){ const n=parseInt(document.getElementById('manualpay-everyn').value,10); if(!n||n<1){ showToast('Enter a valid number of days'); return; } cad='everyN:'+n; }
+  const amt = parseFloat(document.getElementById('manualpay-amount').value);
+  const due = document.getElementById('manualpay-nextdue').value;
+  if(!(amt>0)){ showToast('Expected amount is required'); return; }
+  if(!due){ showToast('First payment due date is required'); return; }
+  try{
+    await beaconSetManualPay(m, cad, amt, due);
+    closeManualPayForm();
+    showToast('Manual pay plan set for '+m.name);
+    beaconReload();
+  }catch(e){ showToast('Could not save manual pay plan: '+(e.message||e)); }
+}
+function openManualPayCheckoff(leadId){
+  const m = state.find(x=>x.lead_id===leadId); if(!m){ showToast('ERR: deal missing'); return; }
+  _manualPayCheckoffLead = leadId;
+  document.getElementById('manualpay-checkoff-merchant').textContent = m.name || '';
+  document.getElementById('manualpay-checkoff-amount').value = m.manual_pay_amount || '';
+  document.getElementById('manualpay-checkoff-date').value = bLocalToday();
+  document.getElementById('manualpay-checkoff-nextdue').value = '';
+  document.getElementById('manualpay-checkoff-overlay').classList.add('shown');
+}
+function closeManualPayCheckoff(){ document.getElementById('manualpay-checkoff-overlay').classList.remove('shown'); _manualPayCheckoffLead=null; }
+async function submitManualPayCheckoff(){
+  const m = state.find(x=>x.lead_id===_manualPayCheckoffLead); if(!m) return;
+  const amt = parseFloat(document.getElementById('manualpay-checkoff-amount').value);
+  const recv = document.getElementById('manualpay-checkoff-date').value || bLocalToday();
+  const override = document.getElementById('manualpay-checkoff-nextdue').value || '';
+  if(!(amt>0)){ showToast('Amount received is required'); return; }
+  try{
+    await beaconLogManualPay(m, amt, recv, override);
+    closeManualPayCheckoff();
+    showToast('Logged $'+amt.toFixed(2)+' for '+m.name);
+    beaconReload();
+  }catch(e){ showToast('Could not log payment: '+(e.message||e)); }
+}
+async function endManualPay(leadId){
+  const m = state.find(x=>x.lead_id===leadId); if(!m) return;
+  if(!confirm('End the manual payment plan for '+m.name+'? It will drop off the Manual Payments list.')) return;
+  try{ await beaconEndManualPay(m); showToast('Manual pay ended for '+m.name); beaconReload(); }
+  catch(e){ showToast('Could not end plan: '+(e.message||e)); }
+}
+
+function openLegalForm(leadId) {  _legalFormLeadId = leadId;
   const m = state.find(x => x.lead_id === leadId);
   if (!m) return;
   document.getElementById("legal-form-merchant").textContent = m.name;
