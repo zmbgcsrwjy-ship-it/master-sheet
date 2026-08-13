@@ -515,6 +515,7 @@
   .cal-tag-stop { background: rgba(229,83,75,.18);   color:#ff8079; }
   .cal-tag-weekly { background: rgba(197,138,224,.20); color: var(--sev-wkly); }
   .cal-tag-nexthit { background: rgba(91,157,255,.18); color: #5b9dff; }
+  .cal-tag-manualpay { background: rgba(45,212,191,.18); color: #2dd4bf; }
   
   /* Heatmap red — only revocations drive it */
   .cal-cell.heat-1 { background: #FCEFEF; }
@@ -1272,7 +1273,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v163 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v164 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1322,6 +1323,7 @@
 <div class="tab-bar">
   <button class="tab-btn active" id="tab-daily-btn" onclick="showTab('daily')">Daily Collections<span class="badge" id="daily-count-badge">0</span></button>
   <button class="tab-btn" id="tab-legal-btn" onclick="showTab('legal')">Legal Cases</button>
+  <button class="tab-btn" id="tab-manualpay-btn" onclick="showTab('manualpay')">Manual Payments<span class="badge" id="manualpay-count-badge">0</span></button>
   <div class="tab-bar-actions">
     <input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">↩️ Bounce report sync</button><input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">🔄 Daily report sync</button><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme"><span class="theme-icon" id="theme-icon">🌙</span></button>
 <div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:9000;align-items:center;justify-content:center">
@@ -1556,6 +1558,32 @@
     <div class="rcode-row"><span class="rc-code">R37</span><span class="rc-def">Source Document Presented for Payment</span></div>
     <div class="rcode-row"><span class="rc-code">R39</span><span class="rc-def">Improper Source Document / Source Document Presented for Payment</span></div>
   </div>
+</div>
+
+<!-- Manual Payments tab (v164) — full management list of all off-debit tracked deals -->
+<div class="tab-panel" id="tab-manualpay">
+  <div class="section-title">
+    <div class="left">
+      <h2>Manual Payment Plans</h2>
+      <p>every deal self-remitting off the auto-debit rail · check off each payment, watch for late ones</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="matrix">
+      <thead><tr>
+        <th style="width:20%">Merchant</th>
+        <th class="ctr" style="width:9%">Cadence</th>
+        <th class="ctr" style="width:10%">Expected</th>
+        <th class="ctr" style="width:10%">Next due</th>
+        <th class="ctr" style="width:10%">Payments</th>
+        <th class="ctr" style="width:11%">Total remitted</th>
+        <th class="ctr" style="width:10%">Status</th>
+        <th class="ctr" style="width:20%">Action</th>
+      </tr></thead>
+      <tbody id="manualpay-tab-body"></tbody>
+    </table>
+  </div>
+  <div id="manualpay-tab-empty" class="watch-empty" style="display:none;padding:30px;text-align:center;color:var(--text-2)">No manual payment plans yet. Set one from a deal's Resolve menu → "Manual payment plan…"</div>
 </div>
 
 <!-- Legal case capture form (shown when user picks 'Sent to legal' from resolve menu) -->
@@ -2532,6 +2560,7 @@ async function beaconReload(){
   document.getElementById("total-tracked").textContent = STATS.total_tracked;
   renderSidebar(); renderCalendar(); renderForDate(); updateCounters(); updateLegalBadge();
   renderManualPay();  // v163: off-debit manual-pay deals section
+  renderManualPayTab();  // v164: full management tab + badge count
   reconcileCollectionsStates();  // backfill CollectionsState for resolved deals (lowered/suspended/legal) so the Master Sheet shows the right pill
 }
 async function reconcileCollectionsStates(){
@@ -2833,8 +2862,7 @@ function nextHitsOn(iso) {
     return nd.toISOString().slice(0,10) === iso;
   }).map(m => ({ name: m.name, lead_id: m.lead_id, balance: m.balance }));
 }
-function resumesOn(iso) {
-  const list = state.filter(m => 
+function resumesOn(iso) {  const list = state.filter(m => 
     (m.resolution_type === 'paused' || m.resolution_type === 'lowered') && 
     m.resume_date === iso
   ).map(m => ({
@@ -2859,6 +2887,11 @@ function resumesOn(iso) {
     });
   }
   return list;
+}
+// v164: manual-pay deals whose next payment is due on a given day — for the calendar.
+function manualPaysDueOn(iso) {
+  return state.filter(m => m.manual_pay_state && m.manual_pay_state!=='DONE' && m.manual_pay_next_due === iso)
+    .map(m => ({ name: m.name, lead_id: m.lead_id, amount: m.manual_pay_amount||0 }));
 }
 
 function isInFlight(m) {
@@ -3361,7 +3394,7 @@ function renderCalendar() {
     const dow = dateObj.getDay(); // 0 = Sun, 6 = Sat
     const isWeekend = (dow === 0 || dow === 6);
     // A cell has "data" if there's history OR it's today OR there are resumes (past or future)
-    const hasData = !!dayHist || isTodayCell || dayResumes.length > 0 || dayNextHits.length > 0;
+    const hasData = !!dayHist || isTodayCell || dayResumes.length > 0 || dayNextHits.length > 0 || manualPaysDueOn(iso).length > 0;
     
     if (isWeekend) cell.classList.add("weekend");
     else if (isFuture && dayResumes.length === 0 && dayNextHits.length === 0) cell.classList.add("future");
@@ -3399,6 +3432,15 @@ function renderCalendar() {
       nh.textContent = dayNextHits.length + " next hit";
       nh.title = 'Next expected weekly pull (spoke to) — ' + dayNextHits.map(x=>x.name).join(', ');
       _tags.appendChild(nh);
+    }
+    // v164: manual-pay deals due this day (can fall on weekends — self-remit, not an ACH pull)
+    const dayManualPays = manualPaysDueOn(iso);
+    if (dayManualPays.length > 0) {
+      const mp = document.createElement("span");
+      mp.className = "cal-tag cal-tag-manualpay";
+      mp.textContent = dayManualPays.length + " manual pay";
+      mp.title = 'Manual payment due — ' + dayManualPays.map(x=>x.name + ' ($' + (x.amount||0).toFixed(2) + ')').join(', ');
+      _tags.appendChild(mp);
     }
     if (!isWeekend && dayHist && dayHist.stats) {
       const stp = dayHist.stats.stop_count_today || 0;
@@ -5588,9 +5630,12 @@ function showTab(name) {
   currentTab = name;
   document.getElementById("tab-daily").classList.toggle("active", name === "daily");
   document.getElementById("tab-legal").classList.toggle("active", name === "legal");
+  document.getElementById("tab-manualpay").classList.toggle("active", name === "manualpay");
   document.getElementById("tab-daily-btn").classList.toggle("active", name === "daily");
   document.getElementById("tab-legal-btn").classList.toggle("active", name === "legal");
+  document.getElementById("tab-manualpay-btn").classList.toggle("active", name === "manualpay");
   if (name === "legal") renderLegalCases();
+  if (name === "manualpay") renderManualPayTab();
 }
 
 function updateTabBadges() {
@@ -5656,6 +5701,45 @@ function manualPayCadenceChanged(){
   const c=document.getElementById('manualpay-cadence').value;
   document.getElementById('manualpay-everyn-wrap').style.display = (c==='everyN')?'block':'none';
 }
+// Full management tab — every active manual-pay plan, with payment count + full history access.
+function renderManualPayTab(){
+  const body = document.getElementById('manualpay-tab-body');
+  const empty = document.getElementById('manualpay-tab-empty');
+  if(!body) return;
+  const deals = (state||[]).filter(m => m.manual_pay_state && m.manual_pay_state!=='DONE');
+  const badge = document.getElementById('manualpay-count-badge');
+  if(badge) badge.textContent = deals.length;
+  if(!deals.length){ body.innerHTML=''; if(empty) empty.style.display='block'; return; }
+  if(empty) empty.style.display='none';
+  deals.sort((a,b)=>{
+    const la=manualPayIsLate(a)?0:1, lb=manualPayIsLate(b)?0:1;
+    if(la!==lb) return la-lb;
+    return (a.manual_pay_next_due||'').localeCompare(b.manual_pay_next_due||'');
+  });
+  body.innerHTML = deals.map(m=>{
+    const late = manualPayIsLate(m);
+    const dueTxt = m.manual_pay_next_due ? fmtDate(m.manual_pay_next_due) : '\u2014';
+    const nPmts = (m.manual_pay_log||[]).length;
+    const statusChip = late
+      ? '<span class="streak-chip" style="background:#3a1114;color:#ff6b61">PAYMENT LATE</span>'
+      : '<span class="resolved-chip" style="background:#12261a;color:#3fb950">ON TRACK</span>';
+    return '<tr>'+
+      '<td><span class="m-name" style="font-weight:500">'+escapeHtml(m.name)+'</span></td>'+
+      '<td class="ctr">'+manualPayCadenceLabel(m.manual_pay_cadence)+'</td>'+
+      '<td class="ctr">$'+(m.manual_pay_amount||0).toFixed(2)+'</td>'+
+      '<td class="ctr'+(late?'" style="color:#ff6b61;font-weight:600':'')+'">'+dueTxt+'</td>'+
+      '<td class="ctr">'+nPmts+'</td>'+
+      '<td class="ctr">$'+manualPayTotal(m).toFixed(2)+'</td>'+
+      '<td class="ctr">'+statusChip+'</td>'+
+      '<td class="ctr">'+
+        '<button class="mini-btn" onclick="openManualPayCheckoff('+m.lead_id+')">✓ Log</button> '+
+        '<button class="mini-btn" onclick="openManualPayForm('+m.lead_id+')">Edit</button> '+
+        '<button class="mini-btn" onclick="endManualPay('+m.lead_id+')">End</button>'+
+      '</td>'+
+    '</tr>';
+  }).join('');
+}
+
 function openManualPayForm(leadId){
   const m = state.find(x=>x.lead_id===leadId); if(!m){ showToast('ERR: deal missing — hard refresh'); return; }
   _manualPayLead = leadId;
