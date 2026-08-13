@@ -1273,7 +1273,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v165 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v166 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1511,6 +1511,32 @@
   </div>
 </div>
 
+
+<!-- Manual Payments tab (v164) — full management list of all off-debit tracked deals -->
+<div class="tab-panel" id="tab-manualpay">
+  <div class="section-title">
+    <div class="left">
+      <h2>Manual Payment Plans</h2>
+      <p>every deal self-remitting off the auto-debit rail · check off each payment, watch for late ones</p>
+    </div>
+  </div>
+  <div class="table-wrap" id="manualpay-tab-tablewrap">
+    <table class="matrix">
+      <thead><tr>
+        <th style="width:20%">Merchant</th>
+        <th class="ctr" style="width:9%">Cadence</th>
+        <th class="ctr" style="width:10%">Expected</th>
+        <th class="ctr" style="width:10%">Next due</th>
+        <th class="ctr" style="width:10%">Payments</th>
+        <th class="ctr" style="width:11%">Total remitted</th>
+        <th class="ctr" style="width:10%">Status</th>
+        <th class="ctr" style="width:20%">Action</th>
+      </tr></thead>
+      <tbody id="manualpay-tab-body"></tbody>
+    </table>
+  </div>
+  <div id="manualpay-tab-empty" class="table-wrap" style="display:none;padding:48px 30px;text-align:center;color:var(--text-2);font-size:13px">No manual payment plans yet.<br>Set one from a deal's Resolve menu → "Manual payment plan…"</div>
+</div>
 </main>
 </div>
 
@@ -1558,32 +1584,6 @@
     <div class="rcode-row"><span class="rc-code">R37</span><span class="rc-def">Source Document Presented for Payment</span></div>
     <div class="rcode-row"><span class="rc-code">R39</span><span class="rc-def">Improper Source Document / Source Document Presented for Payment</span></div>
   </div>
-</div>
-
-<!-- Manual Payments tab (v164) — full management list of all off-debit tracked deals -->
-<div class="tab-panel" id="tab-manualpay">
-  <div class="section-title">
-    <div class="left">
-      <h2>Manual Payment Plans</h2>
-      <p>every deal self-remitting off the auto-debit rail · check off each payment, watch for late ones</p>
-    </div>
-  </div>
-  <div class="table-wrap" id="manualpay-tab-tablewrap">
-    <table class="matrix">
-      <thead><tr>
-        <th style="width:20%">Merchant</th>
-        <th class="ctr" style="width:9%">Cadence</th>
-        <th class="ctr" style="width:10%">Expected</th>
-        <th class="ctr" style="width:10%">Next due</th>
-        <th class="ctr" style="width:10%">Payments</th>
-        <th class="ctr" style="width:11%">Total remitted</th>
-        <th class="ctr" style="width:10%">Status</th>
-        <th class="ctr" style="width:20%">Action</th>
-      </tr></thead>
-      <tbody id="manualpay-tab-body"></tbody>
-    </table>
-  </div>
-  <div id="manualpay-tab-empty" class="table-wrap" style="display:none;padding:48px 30px;text-align:center;color:var(--text-2);font-size:13px">No manual payment plans yet.<br>Set one from a deal's Resolve menu → "Manual payment plan…"</div>
 </div>
 
 <!-- Legal case capture form (shown when user picks 'Sent to legal' from resolve menu) -->
