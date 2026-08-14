@@ -1284,7 +1284,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v170 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v171 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1393,6 +1393,15 @@
     <p id="resumes-panel-subtitle"></p>
   </div>
   <div class="resumes-list" id="resumes-list"></div>
+</div>
+
+<!-- v171: manual payments due on the viewed date (mirrors the resumes panel) -->
+<div class="resumes-panel" id="manualpay-date-panel" style="display:none;">
+  <div class="resumes-panel-header">
+    <h3>💵 Manual payments due</h3>
+    <p id="manualpay-date-subtitle"></p>
+  </div>
+  <div class="resumes-list" id="manualpay-date-list"></div>
 </div>
 
 <div class="section-title">
@@ -3348,10 +3357,11 @@ document.addEventListener("mouseout", e => {
 });
 function selectDate(iso) {
   const hasResumes = resumesOn(iso).length > 0;
-  const hasData = !!history[iso] || iso === TODAY_ISO || hasResumes;
+  const hasManualPay = manualPaysDueOn(iso).length > 0;   // v171: treat a manual-pay due date like a resume
+  const hasData = !!history[iso] || iso === TODAY_ISO || hasResumes || hasManualPay;
   if (!hasData) return;
-  // Allow future dates only if they have scheduled resumes
-  if (new Date(iso) > new Date(TODAY_ISO) && !hasResumes) return;
+  // Allow future dates only if they have scheduled resumes or a manual payment due
+  if (new Date(iso) > new Date(TODAY_ISO) && !hasResumes && !hasManualPay) return;
   viewDate = iso;
   renderCalendar();
   renderForDate();
@@ -3488,8 +3498,9 @@ function renderCalendar() {
     }
     
     
-    // Click handler — clickable if has data, not a weekend, not a future-no-resume day
-    if (!isWeekend && hasData && !(isFuture && dayResumes.length === 0 && dayNextHits.length === 0)) {
+    // Click handler — clickable if has data, not a weekend, not a future-no-resume day.
+    // v171: a future manual-pay due date is clickable too (like a resume date).
+    if (!isWeekend && hasData && !(isFuture && dayResumes.length === 0 && dayNextHits.length === 0 && dayManualPays.length === 0)) {
       cell.addEventListener("click", () => selectDate(iso));
     }
     // Hover tooltip — fires for cells with scheduled resumes OR stops on that day
@@ -3615,8 +3626,32 @@ function renderForDate() {
   } else {
     resPanel.style.display = "none";
   }
-  
-  // Update metrics & severity tiles for selected date
+
+  // v171: manual payments due on the viewed date
+  const dayManualPays = manualPaysDueOn(viewDate);
+  const mpPanel = document.getElementById("manualpay-date-panel");
+  const mpList = document.getElementById("manualpay-date-list");
+  const mpSub = document.getElementById("manualpay-date-subtitle");
+  if (mpPanel && dayManualPays.length > 0) {
+    mpPanel.style.display = "block";
+    mpSub.textContent = today ? "due today — check off each payment as it arrives"
+      : (isFutureView ? "scheduled for " + fmtLongDate(viewDate) : "was due " + fmtLongDate(viewDate));
+    mpList.innerHTML = "";
+    dayManualPays.forEach(x => {
+      const m = state.find(s => s.lead_id === x.lead_id);
+      const item = document.createElement("div");
+      item.className = "resume-item";
+      const cadence = m ? manualPayCadenceLabel(m.manual_pay_cadence) : '';
+      item.innerHTML = '<div class="resume-name">' + escapeHtml(x.name) + '</div>' +
+        '<div class="res-amt"><span class="res-amt-new">$' + (x.amount||0).toFixed(2) + '</span>' +
+        (cadence ? ' <span class="res-amt-old" style="text-decoration:none;color:var(--text-3)">· ' + cadence + '</span>' : '') + '</div>' +
+        '<button class="mini-btn" style="margin-left:auto" onclick="openManualPayCheckoff(' + x.lead_id + ')">✓ Log payment</button>';
+      item.style.display = 'flex'; item.style.alignItems = 'center'; item.style.gap = '10px';
+      mpList.appendChild(item);
+    });
+  } else if (mpPanel) {
+    mpPanel.style.display = "none";
+  }
   let stats;
   if (today) {
     stats = STATS;   // STATS.failed_pulls is already the correct today total (sum of bounce amounts)
