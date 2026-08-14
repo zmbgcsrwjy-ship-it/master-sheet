@@ -517,6 +517,10 @@
   .cal-tag-weekly { background: rgba(197,138,224,.20); color: var(--sev-wkly); }
   .cal-tag-nexthit { background: rgba(91,157,255,.18); color: #5b9dff; }
   .cal-tag-manualpay { background: rgba(45,212,191,.18); color: #2dd4bf; }
+  /* v169: white calendar-picker icon on manual-pay date inputs so it isn't invisible in dark mode */
+  #manualpay-nextdue::-webkit-calendar-picker-indicator,
+  #manualpay-checkoff-date::-webkit-calendar-picker-indicator,
+  #manualpay-checkoff-nextdue::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
   
   /* Heatmap red — only revocations drive it */
   .cal-cell.heat-1 { background: #FCEFEF; }
@@ -663,6 +667,12 @@
   
   .table-wrap { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-md), var(--shadow-inset); }
   table.matrix { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  /* v169: bigger, more readable font in the Manual Payments tab + section (scoped so the dense daily
+     bounce board is untouched) */
+  #tab-manualpay table.matrix, #manualpay-section table.matrix { font-size: 14.5px; }
+  #tab-manualpay table.matrix thead th, #manualpay-section table.matrix thead th { font-size: 13px; }
+  #tab-manualpay table.matrix td, #manualpay-section table.matrix td { padding-top: 10px; padding-bottom: 10px; }
+  body.compact #tab-manualpay table.matrix, body.compact #manualpay-section table.matrix { font-size: 14px; }
   table.matrix thead th { background: var(--section-header-grad); text-align: left; font-weight: 700; color: var(--text); padding: 9px 14px; font-size: 12px; letter-spacing: 0.02em; border-bottom: 0.5px solid var(--border); }
   table.matrix th.num, table.matrix td.num { text-align: right; }
   table.matrix th.ctr, table.matrix td.ctr { text-align: center; }
@@ -1140,7 +1150,7 @@
   .case-status-pill.active { background: var(--legal-active-bg); color: var(--legal-active); }
   .case-status-pill.stuck  { background: var(--legal-stuck-bg); color: var(--legal-stuck); }
   .case-status-pill.settled { background: var(--legal-settled-bg); color: var(--legal-settled); }
-  .case-merchant-name { font-weight: 600; }
+  .case-merchant-name { font-weight: 600; font-size: 14.5px; }   /* v169: a touch larger name; other cells unaffected */
   .case-owner-name { font-size: 11px; color: var(--text-2); }
   .case-chevron { display: inline-block; font-size: 11px; color: var(--text-3); transition: transform 0.15s; user-select: none; line-height: 1; }
   tr.case-row.expanded .case-chevron { transform: rotate(90deg); color: var(--text); }
@@ -1274,7 +1284,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v168 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v169 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1642,6 +1652,7 @@
     <div class="legal-form-grid">
       <div><label>Cadence<span class="req">*</span></label>
         <select id="manualpay-cadence" onchange="manualPayCadenceChanged()">
+          <option value="daily">Daily (business days)</option>
           <option value="weekly">Weekly</option>
           <option value="biweekly">Every 2 weeks</option>
           <option value="monthly">Monthly</option>
@@ -2292,14 +2303,17 @@ const MANUAL_PAY_CADENCES = { weekly:7, biweekly:14, monthly:30 };
 // advance a YYYY-MM-DD date by a cadence ('weekly'|'biweekly'|'monthly'|'everyN:<n>')
 function manualPayAdvance(iso, cadence){
   const d = new Date(iso+'T12:00:00'); if(isNaN(d)) return iso;
-  if(cadence && cadence.indexOf('everyN:')===0){ const n=parseInt(cadence.slice(7),10)||7; d.setDate(d.getDate()+n); }
+  if(cadence==='daily'){ // next business day — skip Sat/Sun
+    do { d.setDate(d.getDate()+1); } while(d.getDay()===0 || d.getDay()===6);
+  }
+  else if(cadence && cadence.indexOf('everyN:')===0){ const n=parseInt(cadence.slice(7),10)||7; d.setDate(d.getDate()+n); }
   else if(cadence==='monthly'){ d.setMonth(d.getMonth()+1); }
   else { d.setDate(d.getDate() + (MANUAL_PAY_CADENCES[cadence]||7)); }
   return d.toISOString().slice(0,10);
 }
 function manualPayCadenceLabel(c){
   if(!c) return '';
-  if(c==='weekly') return 'Weekly'; if(c==='biweekly') return 'Every 2 wks'; if(c==='monthly') return 'Monthly';
+  if(c==='daily') return 'Daily'; if(c==='weekly') return 'Weekly'; if(c==='biweekly') return 'Every 2 wks'; if(c==='monthly') return 'Monthly';
   if(c.indexOf('everyN:')===0) return 'Every '+c.slice(7)+' days';
   return c;
 }
@@ -3486,7 +3500,7 @@ function renderCalendar() {
       ? dayHist.bounce_events.filter(ev => !(ev.sev_class === 'stop' || ev.bounce_type === 'Expected Payment Missing' || STOP_RCODES.indexOf(ev.return_code) >= 0) && !ev._carriedStop)
       : [];
     if (!isWeekend && (dayResumes.length > 0 || dayStops.length > 0 || dayBounces.length > 0 || dayNextHits.length > 0)) {
-      cell.addEventListener("mouseenter", e => showCalTooltip(e.currentTarget, iso, dayResumes, dayStops, dayBounces, dayNextHits));
+      cell.addEventListener("mouseenter", e => showCalTooltip(e.currentTarget, iso, dayResumes, dayStops, dayBounces, dayNextHits, dayManualPays));
       cell.addEventListener("mouseleave", hideCalTooltip);
     }
     
@@ -3496,9 +3510,9 @@ function renderCalendar() {
 
 // Singleton tooltip element — created once, repositioned/repopulated as cells are hovered
 let _calTooltipEl = null;
-function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits) {
-  resumes = resumes || []; stops = stops || []; bounces = bounces || []; nextHits = nextHits || [];
-  if (!resumes.length && !stops.length && !bounces.length && !nextHits.length) return;
+function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits, manualPays) {
+  resumes = resumes || []; stops = stops || []; bounces = bounces || []; nextHits = nextHits || []; manualPays = manualPays || [];
+  if (!resumes.length && !stops.length && !bounces.length && !nextHits.length && !manualPays.length) return;
   if (!_calTooltipEl) { _calTooltipEl = document.createElement("div"); _calTooltipEl.className = "cal-tooltip"; document.body.appendChild(_calTooltipEl); }
   const rowFor = (ev, detailCls, detail) => {
     const live = state.find(s => s.lead_id === ev.lead_id);
@@ -3523,6 +3537,10 @@ function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits) {
   if (nextHits.length) {
     html += '<div class="tt-subhead">\u2197 ' + nextHits.length + ' next hit</div>';
     html += nextHits.map(x => rowFor({name:x.name,lead_id:x.lead_id},'','next weekly pull')).join("");
+  }
+  if (manualPays.length) {
+    html += '<div class="tt-subhead">\ud83d\udcb5 ' + manualPays.length + ' manual pay due</div>';
+    html += manualPays.map(x => rowFor({name:x.name,lead_id:x.lead_id},'','$'+(x.amount||0).toFixed(2)+' due')).join("");
   }
   _calTooltipEl.innerHTML = html;
   const rect = cell.getBoundingClientRect();
@@ -5665,7 +5683,11 @@ function renderManualPay(){
   const sec = document.getElementById('manualpay-section');
   const body = document.getElementById('manualpay-body');
   if(!sec || !body) return;
-  const deals = (state||[]).filter(m => m.manual_pay_state && m.manual_pay_state!=='DONE');
+  // v169: this in-context section shows ONLY deals whose payment is due today or overdue
+  // (next-due <= today). The full list lives in the Manual Payments tab.
+  const today = bLocalToday();
+  const deals = (state||[]).filter(m => m.manual_pay_state && m.manual_pay_state!=='DONE'
+    && m.manual_pay_next_due && m.manual_pay_next_due <= today);
   if(!deals.length){ sec.style.display='none'; body.innerHTML=''; return; }
   sec.style.display='';
   // late first, then soonest due
