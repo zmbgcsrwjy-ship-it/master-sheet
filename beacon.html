@@ -517,6 +517,11 @@
   .cal-tag-weekly { background: rgba(197,138,224,.20); color: var(--sev-wkly); }
   .cal-tag-nexthit { background: rgba(91,157,255,.18); color: #5b9dff; }
   .cal-tag-manualpay { background: rgba(45,212,191,.18); color: #2dd4bf; }
+  /* v172: sidebar upcoming manual-pay items — teal to match the calendar tag */
+  .upcoming-manualpay { border-left: 2px solid #2dd4bf; }
+  .mp-dot { width: 7px; height: 7px; border-radius: 50%; background: #2dd4bf; display: inline-block; flex: none; }
+  .name.mp-name { color: #2dd4bf; }
+  .upcoming-resume-badge.mp-late { background: rgba(229,83,75,.18); color: #ff6b61; }
   /* v169: white calendar-picker icon on manual-pay date inputs so it isn't invisible in dark mode */
   #manualpay-nextdue::-webkit-calendar-picker-indicator,
   #manualpay-checkoff-date::-webkit-calendar-picker-indicator,
@@ -1284,7 +1289,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v171 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v172 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1957,7 +1962,7 @@ function beaconReconstruct(raw, todayISO){
       mtd_bounces:0, days_delinq:0, streak_len:0, severity_rank:100, sev_class:'none',
       group_order:99, last_pull:'', bucket:(f.Status==='DEFAULT'?'DEFAULT':'ACTIVE'),
       hit_date:'', return_date:'', contacted_today:false, contact_time:'',
-      notes:'', notes_log:[], resolution_type:'', resolution_date:'', resume_date:'',
+      notes:'', notes_log:[], resolution_type:'', resolution_date:'', resume_date:'', resolution_history:[],
       lowered_amount:0, original_freq:'', original_bounce_amt:0, original_return_code:'',
       manual_freq:'', rep:f.Rep||'', iso:f.ISO||'', _freqField:f.Frequency||'', _collectionsState:f.CollectionsState||'', _legalCompany:f.LegalCompany||'',
       clawback_state:f.ClawbackState||'', _bounceDates:[], _stopDates:[],
@@ -2054,6 +2059,12 @@ function beaconReconstruct(raw, todayISO){
       m.resume_date = f['Resume Date']||'';
       m.lowered_amount = (payload&&payload.amount)||0;
       if (payload&&payload.orig){ m.original_freq=payload.orig.freq||''; m.original_bounce_amt=payload.orig.amt||0; m.original_return_code=payload.orig.code||''; }
+      // v172: record every resolution action in a permanent per-date history that SURVIVES expiry.
+      // The live resolution can later be cleared (v157: they paid → tag drops off the active board),
+      // but a resolution set on a past date must still show on THAT date's historical view — it's a
+      // record of what we did that day. The historical render reads this instead of live state.
+      if (!Array.isArray(m.resolution_history)) m.resolution_history = [];
+      m.resolution_history.push({ date: dISO, type: m.resolution_type, resume_date: m.resume_date, lowered_amount: m.lowered_amount });
       // v157 + v158: a resolution goes STALE only once the merchant pays again AFTER the arrangement —
       // a clear STRICTLY after the anchor proves they honored it (a spoke-to they paid, a lowered amount
       // they paid). The strict > avoids expiring off a pre-lowering full payment stamped the same day.
@@ -3822,7 +3833,9 @@ function renderUpcomingPanel() {
   const upList = document.getElementById("list-upcoming");
   if (!upList) return;
   upList.innerHTML = "";
-  if (upcoming.length === 0) {
+  const mpAny = state.some(m => m.manual_pay_state && m.manual_pay_state !== 'DONE'
+    && m.manual_pay_next_due && daysBetween(TODAY_ISO, m.manual_pay_next_due) <= 30);
+  if (upcoming.length === 0 && !mpAny) {
     upList.parentElement.style.display = "none";
     return;
   }
@@ -3874,6 +3887,38 @@ function renderUpcomingPanel() {
     });
     upList.appendChild(card);
   });
+
+  // v172: upcoming MANUAL PAYMENTS due in the next 30 days (incl. overdue), teal to match the
+  // calendar tag so they're distinguishable at a glance.
+  const mpUpcoming = state.filter(m => m.manual_pay_state && m.manual_pay_state !== 'DONE'
+    && m.manual_pay_next_due && daysBetween(TODAY_ISO, m.manual_pay_next_due) <= 30);
+  if (mpUpcoming.length){
+    upList.parentElement.style.display = "";
+    mpUpcoming.sort((a,b) => new Date(a.manual_pay_next_due) - new Date(b.manual_pay_next_due));
+    mpUpcoming.forEach(m => {
+      const days = daysBetween(TODAY_ISO, m.manual_pay_next_due);
+      const late = days < 0;
+      const card = document.createElement("div");
+      card.className = "sidebar-card upcoming upcoming-manualpay";
+      card.style.cursor = "pointer";
+      card.dataset.leadId = m.lead_id;
+      const whenTxt = late ? Math.abs(days)+'d overdue' : (days === 0 ? 'due today' : 'in '+days+'d');
+      card.innerHTML =
+        '<div class="upcoming-name-row">' +
+          '<span class="mp-dot" title="Manual payment"></span>' +
+          '<span class="name mp-name">' + escapeHtml(m.name) + '</span>' +
+          (late ? '<span class="upcoming-resume-badge mp-late">LATE</span>' : '') +
+        '</div>' +
+        '<div class="detail">Manual pay <strong>$' + (m.manual_pay_amount||0).toFixed(2) + '</strong> ' +
+          manualPayCadenceLabel(m.manual_pay_cadence).toLowerCase() + ' · ' + fmtDate(m.manual_pay_next_due) + ' (' + whenTxt + ')</div>';
+      card.addEventListener("click", () => {
+        calMonth = m.manual_pay_next_due.slice(0, 7);
+        selectDate(m.manual_pay_next_due);
+        const cw = document.querySelector(".calendar-wrap"); if(cw) cw.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      upList.appendChild(card);
+    });
+  }
 }
 
 // =============================================================
@@ -4616,20 +4661,29 @@ function renderMainTable() {
       // but the merchant currently in state may have been resolved later. We want
       // to show that retrospective context (green tint + resolution chip).
       const live = state.find(s => s.lead_id === e.lead_id);
-      const hasResolution = live && live.resolution_type;
-      // The resolution applies to THIS row if it was set on or after this date
-      // (a 5/11 resolution applies retrospectively to a 5/8 bounce — that's the
-      // whole point of the "you got the bounce, you acted on it" flow).
-      const resAppliesHere = hasResolution && live.resolution_date && live.resolution_date >= viewDate;
+      // v172: prefer the RECORDED resolution history — a resolution set on/after this date must show
+      // on this date's view even if it has since expired (they paid → live state cleared it). Fall
+      // back to live state for resolutions that haven't been recorded to history yet (same session).
+      let histRes = null;
+      if (live && Array.isArray(live.resolution_history) && live.resolution_history.length){
+        // the latest resolution that was set on or after the viewed date applies retrospectively here
+        const applicable = live.resolution_history.filter(r => r.date >= viewDate);
+        if (applicable.length) histRes = applicable[applicable.length-1];
+      }
+      const liveApplies = live && live.resolution_type && live.resolution_date && live.resolution_date >= viewDate;
+      const resAppliesHere = !!histRes || liveApplies;
+      const rType = histRes ? histRes.type : (liveApplies ? live.resolution_type : '');
+      const rDate = histRes ? histRes.date : (liveApplies ? live.resolution_date : '');
+      const rResume = histRes ? histRes.resume_date : (liveApplies ? live.resume_date : '');
+      const rLowered = histRes ? histRes.lowered_amount : (liveApplies ? live.lowered_amount : 0);
       return {
         ...e,
         _displayClass: e.sev_class,
         _displayOrder: e.group_order || 9,
-        // Inherit resolution fields from live state so chip and styling render correctly
-        resolution_type: resAppliesHere ? live.resolution_type : '',
-        resolution_date: resAppliesHere ? live.resolution_date : '',
-        resume_date: resAppliesHere ? live.resume_date : '',
-        lowered_amount: resAppliesHere ? live.lowered_amount : 0,
+        resolution_type: resAppliesHere ? rType : '',
+        resolution_date: resAppliesHere ? rDate : '',
+        resume_date: resAppliesHere ? rResume : '',
+        lowered_amount: resAppliesHere ? rLowered : 0,
         _inflight: resAppliesHere,
         bounced_today: true,
       };
