@@ -379,6 +379,27 @@
   .tab-bar-actions button.primary { background: var(--text); color: var(--surface); border-color: var(--text); }
   .tab-bar-actions button.primary:hover { background: var(--text-hover); }
   .tab-bar-actions .btn-sub { color: var(--text-3); font-weight: 400; margin-left: 2px; }
+  /* v174: proactive deal search — find any deal and apply a resolution as if it bounced */
+  .deal-search-wrap { position: relative; display: inline-block; }
+  #deal-search-input { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); font: inherit; font-size: 13px; padding: 7px 12px; border-radius: var(--r-md); width: 210px; transition: width 0.15s, border-color 0.15s; }
+  #deal-search-input:focus { outline: none; border-color: #539bf5; width: 260px; }
+  .deal-search-results { display: none; position: absolute; top: calc(100% + 4px); right: 0; width: 320px; max-height: 340px; overflow-y: auto; background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.45); z-index: 400; padding: 4px; }
+  .deal-search-results.shown { display: block; }
+  .deal-search-item { padding: 9px 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .deal-search-item:hover, .deal-search-item.active { background: var(--surface-2); }
+  .deal-search-item .dsi-name { font-weight: 600; font-size: 13px; color: var(--text); }
+  .deal-search-item .dsi-meta { font-size: 11px; color: var(--text-3); white-space: nowrap; }
+  .deal-search-empty { padding: 14px 12px; color: var(--text-3); font-size: 12px; text-align: center; }
+  /* the resolve popover reuses the exact resolve-menu markup so all resolution fns work unchanged */
+  #deal-resolve-popover { display: none; position: fixed; z-index: 500; }
+  #deal-resolve-popover.shown { display: block; }
+  #deal-resolve-popover .resolve-menu { background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: 8px; padding: 8px; width: 340px; box-shadow: 0 16px 50px rgba(0,0,0,0.5); }
+  #deal-resolve-popover .resolve-menu button.menu-item { display: block; width: 100%; text-align: left; background: transparent; border: 0; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 5px; cursor: pointer; color: var(--text); }
+  #deal-resolve-popover .resolve-menu button.menu-item:hover { background: var(--surface-2); }
+  #deal-resolve-popover .resolve-menu button.menu-item.legal-item { color: #FF6B61; font-weight: 600; }
+  #deal-resolve-popover .resolve-menu .menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
+  #deal-resolve-popover .resolve-menu .dp-header { font-size: 12px; color: var(--text-2); padding: 4px 10px 8px; border-bottom: 0.5px solid var(--border); margin-bottom: 4px; }
+  #deal-resolve-popover .resolve-menu .dp-header strong { color: var(--text); font-size: 13px; }
   .tab-bar-actions button.primary .btn-sub { color: rgba(255,255,255,0.55); }
   
   .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
@@ -1291,7 +1312,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v173 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v174 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1343,7 +1364,7 @@
   <button class="tab-btn" id="tab-legal-btn" onclick="showTab('legal')">Legal Cases</button>
   <button class="tab-btn" id="tab-manualpay-btn" onclick="showTab('manualpay')">Manual Payments<span class="badge" id="manualpay-count-badge">0</span></button>
   <div class="tab-bar-actions">
-    <input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">↩️ Bounce report sync</button><input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">🔄 Daily report sync</button><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme"><span class="theme-icon" id="theme-icon">🌙</span></button>
+    <input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">↩️ Bounce report sync</button><input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">🔄 Daily report sync</button><span class="deal-search-wrap"><input type="text" id="deal-search-input" placeholder="🔍 Find a deal…" autocomplete="off" oninput="onDealSearchInput()" onfocus="onDealSearchInput()" /><div class="deal-search-results" id="deal-search-results"></div></span><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme"><span class="theme-icon" id="theme-icon">🌙</span></button>
 <div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:9000;align-items:center;justify-content:center">
   <div style="background:#141b2d;border:1px solid #2a3550;border-radius:14px;padding:28px;width:min(640px,92vw);box-shadow:0 18px 60px rgba(0,0,0,.5)">
     <div id="sync-modal-title" style="font-size:19px;font-weight:700;color:#e6edf3;margin-bottom:4px"></div>
@@ -1704,6 +1725,8 @@
 </div>
 
 <div class="save-toast" id="toast"></div>
+<!-- v174: floating resolve popover for proactively resolving a searched (non-bouncing) deal -->
+<div id="deal-resolve-popover"></div>
 <div id="sync-progress" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(8,12,20,.72);align-items:center;justify-content:center;backdrop-filter:blur(2px)">
   <div style="background:#141b2d;border:1px solid #2c3a57;border-radius:14px;padding:26px 30px;min-width:320px;text-align:center;box-shadow:0 18px 60px rgba(0,0,0,.5)">
     <div id="sync-progress-spin" style="width:34px;height:34px;border:3px solid #2c3a57;border-top-color:#539bf5;border-radius:50%;margin:0 auto 16px;animation:bxspin .8s linear infinite"></div>
@@ -5464,6 +5487,96 @@ document.addEventListener("click", e => {
   document.querySelectorAll("tr.resolve-expand").forEach(r => r.remove());
 });
 
+// ── PROACTIVE DEAL SEARCH (v174) ────────────────────────────────────────────
+// Find ANY deal by name (active, paid-off, legal — everything in the book) and apply a resolution
+// to it exactly as if it had bounced. The popover builds the SAME resolve-menu markup the bounce
+// board uses (same -<leadId> element IDs), so setResolution / showDateRow / openManualPayForm /
+// openLegalForm / confirmDateResolution all work unchanged and everything flows downstream
+// (calendar resume pill, Master Sheet pill, broken-promise logic, resolution history) identically.
+function onDealSearchInput(){
+  const inp = document.getElementById('deal-search-input');
+  const box = document.getElementById('deal-search-results');
+  if(!inp || !box) return;
+  const q = (inp.value||'').trim().toLowerCase();
+  if(!q){ box.classList.remove('shown'); box.innerHTML=''; return; }
+  const matches = (state||[])
+    .filter(m => (m.name||'').toLowerCase().includes(q))
+    .sort((a,b)=> (a.name||'').localeCompare(b.name||''))
+    .slice(0, 12);
+  if(!matches.length){ box.innerHTML = '<div class="deal-search-empty">No deals match &quot;'+escapeHtml(q)+'&quot;</div>'; box.classList.add('shown'); return; }
+  box.innerHTML = matches.map(m=>{
+    let meta = m.status || 'ACTIVE';
+    if(m.resolution_type) meta = prettyResType(m.resolution_type).toUpperCase();
+    else if(m.manual_pay_state && m.manual_pay_state!=='DONE') meta = 'MANUAL PAY';
+    else if(m.legalCase) meta = 'LEGAL';
+    return '<div class="deal-search-item" onclick="openDealResolve('+m.lead_id+')">'+
+      '<span class="dsi-name">'+escapeHtml(m.name)+'</span>'+
+      '<span class="dsi-meta">'+escapeHtml(meta)+'</span>'+
+    '</div>';
+  }).join('');
+  box.classList.add('shown');
+}
+// Open the resolve popover for a searched deal — builds the identical resolve-menu the board uses.
+function openDealResolve(leadId){
+  const m = state.find(x => x.lead_id === leadId);
+  if(!m){ showToast('ERR: deal missing — hard refresh'); return; }
+  const menuItemsHtml =
+    '<button class="menu-item" onclick="setResolution(' + leadId + ', \'spoke\')">Spoke to — resuming as normal</button>' +
+    '<div class="menu-divider"></div>' +
+    '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'lowered\')">Lowered payments…</button>' +
+    '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'paused\')">Suspend Payment…</button>' +
+    '<div class="menu-divider"></div>' +
+    '<button class="menu-item" onclick="openManualPayForm(' + leadId + ')">Manual payment plan…</button>' +
+    '<div class="menu-divider"></div>' +
+    '<button class="menu-item legal-item" onclick="openLegalForm(' + leadId + ')">Send to legal / collections…</button>';
+  const clearHtml = m.resolution_type
+    ? '<div class="menu-divider"></div><button class="menu-item" onclick="clearResolution(' + leadId + ')" style="color: var(--text-2);">Clear resolution</button>'
+    : '';
+  const pop = document.getElementById('deal-resolve-popover');
+  pop.innerHTML =
+    '<div class="resolve-menu" id="resolve-menu-' + leadId + '">' +
+      '<div class="dp-header">Resolve <strong>' + escapeHtml(m.name) + '</strong></div>' +
+      menuItemsHtml +
+      '<div class="date-row" id="date-row-' + leadId + '">' +
+        '<label>Resume date</label>' +
+        '<div class="mini-cal" id="mini-cal-' + leadId + '"></div>' +
+        '<input type="hidden" id="resume-' + leadId + '" />' +
+        '<div class="lowered-amt-row" id="lowered-amt-row-' + leadId + '">' +
+          '<label>New daily payment</label>' +
+          '<div class="amt-input-wrap"><span class="amt-prefix">$</span>' +
+            '<input type="number" id="lowered-amt-' + leadId + '" placeholder="0.00" step="0.01" min="0.01" />' +
+          '</div>' +
+          '<div class="amt-hint" id="lowered-amt-hint-' + leadId + '">amount to pull each business day until the original payment resumes</div>' +
+        '</div>' +
+        '<button class="confirm" id="confirm-btn-' + leadId + '" onclick="confirmDateResolution(' + leadId + ')" disabled>Pick a date</button>' +
+      '</div>' +
+      clearHtml +
+    '</div>';
+  const inp = document.getElementById('deal-search-input');
+  const r = inp.getBoundingClientRect();
+  pop.style.top = (r.bottom + 6) + 'px';
+  pop.style.right = (window.innerWidth - r.right) + 'px';
+  pop.classList.add('shown');
+  document.getElementById('deal-search-results').classList.remove('shown');
+}
+function closeDealResolve(){
+  const pop = document.getElementById('deal-resolve-popover');
+  if(pop){ pop.classList.remove('shown'); pop.innerHTML=''; }
+}
+// clear the search box + results + popover after a resolution is applied
+function _clearDealSearch(){
+  closeDealResolve();
+  const inp = document.getElementById('deal-search-input'); if(inp) inp.value='';
+  const box = document.getElementById('deal-search-results'); if(box){ box.classList.remove('shown'); box.innerHTML=''; }
+}
+document.addEventListener('click', e => {
+  if (e.target.closest('#deal-resolve-popover')) return;
+  if (e.target.closest('.deal-search-wrap')) return;
+  closeDealResolve();
+  const box = document.getElementById('deal-search-results');
+  if(box) box.classList.remove('shown');
+});
+
 function setResolution(leadId, type) {
   const m = state.find(x => x.lead_id === leadId);
   if (!m) return;
@@ -5479,6 +5592,7 @@ function setResolution(leadId, type) {
   renderCalendar();
   updateCounters();
   showToast("Marked: " + (type === 'spoke' ? 'spoke to' : type));
+  _clearDealSearch();
 }
 
 let _pendingDateType = {};
@@ -5686,6 +5800,7 @@ function confirmDateResolution(leadId) {
     ? "Lowered to $" + loweredAmt.toFixed(2) + "/day until " + fmtDate(dateInput.value)
     : prettyResType(type) + " · resume " + fmtDate(dateInput.value);
   showToast(msg);
+  _clearDealSearch();
 }
 
 function clearResolution(leadId) {
@@ -5863,6 +5978,7 @@ function renderManualPayTab(){
 
 function openManualPayForm(leadId){
   const m = state.find(x=>x.lead_id===leadId); if(!m){ showToast('ERR: deal missing — hard refresh'); return; }
+  closeDealResolve();
   _manualPayLead = leadId;
   document.getElementById('manualpay-merchant').textContent = m.name || '';
   // prefill from any existing plan
@@ -5924,6 +6040,7 @@ async function endManualPay(leadId){
 function openLegalForm(leadId) {  _legalFormLeadId = leadId;
   const m = state.find(x => x.lead_id === leadId);
   if (!m) return;
+  closeDealResolve();
   document.getElementById("legal-form-merchant").textContent = m.name;
   document.getElementById("legal-form-owner").value = m.owner_name || "";
   document.getElementById("legal-form-phone").value = bxFmtPhone(m.owner_phone || "");
