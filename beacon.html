@@ -522,6 +522,8 @@
   .mp-dot { width: 7px; height: 7px; border-radius: 50%; background: #2dd4bf; display: inline-block; flex: none; }
   .name.mp-name { color: #2dd4bf; }
   .upcoming-resume-badge.mp-late { background: rgba(229,83,75,.18); color: #ff6b61; }
+  .upcoming-resume-badge.mp-due { background: rgba(45,212,191,.20); color: #2dd4bf; }
+  .mp-label { color: #ffffff; font-weight: 700; }
   /* v169: white calendar-picker icon on manual-pay date inputs so it isn't invisible in dark mode */
   #manualpay-nextdue::-webkit-calendar-picker-indicator,
   #manualpay-checkoff-date::-webkit-calendar-picker-indicator,
@@ -1289,7 +1291,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v172 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v173 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3888,8 +3890,8 @@ function renderUpcomingPanel() {
     upList.appendChild(card);
   });
 
-  // v172: upcoming MANUAL PAYMENTS due in the next 30 days (incl. overdue), teal to match the
-  // calendar tag so they're distinguishable at a glance.
+  // v173: upcoming MANUAL PAYMENTS — sorted soonest-due first (upcoming up top, later dates lower).
+  // Teal to match the calendar tag; "Manual pay" is bold white so it clearly isn't a regular debit.
   const mpUpcoming = state.filter(m => m.manual_pay_state && m.manual_pay_state !== 'DONE'
     && m.manual_pay_next_due && daysBetween(TODAY_ISO, m.manual_pay_next_due) <= 30);
   if (mpUpcoming.length){
@@ -3898,18 +3900,23 @@ function renderUpcomingPanel() {
     mpUpcoming.forEach(m => {
       const days = daysBetween(TODAY_ISO, m.manual_pay_next_due);
       const late = days < 0;
+      const bdUntil = bdDiff(new Date(TODAY_ISO + "T00:00:00"), new Date(m.manual_pay_next_due + "T00:00:00"));
       const card = document.createElement("div");
       card.className = "sidebar-card upcoming upcoming-manualpay";
       card.style.cursor = "pointer";
       card.dataset.leadId = m.lead_id;
       const whenTxt = late ? Math.abs(days)+'d overdue' : (days === 0 ? 'due today' : 'in '+days+'d');
+      // DUE IN N BD badge — same trigger as the resume badge (within 1 business day)
+      let dueBadge = '';
+      if (late) dueBadge = '<span class="upcoming-resume-badge mp-late">LATE</span>';
+      else if (bdUntil >= 0 && bdUntil <= 1) dueBadge = '<span class="upcoming-resume-badge mp-due">DUE IN ' + bdUntil + ' BD</span>';
       card.innerHTML =
         '<div class="upcoming-name-row">' +
           '<span class="mp-dot" title="Manual payment"></span>' +
           '<span class="name mp-name">' + escapeHtml(m.name) + '</span>' +
-          (late ? '<span class="upcoming-resume-badge mp-late">LATE</span>' : '') +
+          dueBadge +
         '</div>' +
-        '<div class="detail">Manual pay <strong>$' + (m.manual_pay_amount||0).toFixed(2) + '</strong> ' +
+        '<div class="detail"><strong class="mp-label">Manual pay</strong> <strong>$' + (m.manual_pay_amount||0).toFixed(2) + '</strong> ' +
           manualPayCadenceLabel(m.manual_pay_cadence).toLowerCase() + ' · ' + fmtDate(m.manual_pay_next_due) + ' (' + whenTxt + ')</div>';
       card.addEventListener("click", () => {
         calMonth = m.manual_pay_next_due.slice(0, 7);
