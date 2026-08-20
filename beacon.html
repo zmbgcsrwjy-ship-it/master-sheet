@@ -1341,7 +1341,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v181 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v182 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2346,7 +2346,16 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
 // ---------- MUTATION WRITERS (append-only Actions + CollectionsState) ----------
 function beaconCollectionsStateFor(m){
   if (m.resolution_type==='legal') return 'LEGAL';
-  if (m.resolution_type==='paused') return m.resume_date ? 'RESUME SCHEDULED' : 'SUSPENDED';
+  if (m.resolution_type==='paused'){
+    // v182: a suspended deal that bounces ON/AFTER its resume date has broken the arrangement — the
+    // payment resumed and failed. Surface it as BOUNCING on the Master Sheet, matching the board's
+    // broken-promise logic (isBroken: paused → broken when hit_date >= resume_date). Without this the
+    // pill stayed stuck on SUSPENDED/RESUME SCHEDULED even after the resumed payment bounced.
+    const lastBounce=(m._bounceDates||[]).slice(-1)[0]||'';
+    const cleared=m.last_cleared||'';
+    if (m.resume_date && lastBounce && lastBounce >= m.resume_date && !(cleared && cleared > lastBounce)) return 'BOUNCING';
+    return m.resume_date ? 'RESUME SCHEDULED' : 'SUSPENDED';
+  }
   if (m.resolution_type==='lowered') return 'LOWERED';
   if (m.resolution_type==='spoke'){
     // v137: "spoke to — resuming as normal" shows RESUME NORMAL on the Master Sheet so a deal that
@@ -2364,7 +2373,12 @@ function beaconCollectionsStateFor(m){
   return m.bounced_today ? 'BOUNCING' : 'OK';
 }
 function beaconCollectionsDetailFor(m){
-  if (m.resolution_type==='paused' && m.resume_date){ const d=m.resume_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Resume '+md; }
+  if (m.resolution_type==='paused'){
+    const lastBounce=(m._bounceDates||[]).slice(-1)[0]||'';
+    const cleared=m.last_cleared||'';
+    if (m.resume_date && lastBounce && lastBounce >= m.resume_date && !(cleared && cleared > lastBounce)) return 'Bounced after resume';
+    if (m.resume_date){ const d=m.resume_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Resume '+md; }
+  }
   if (m.resolution_type==='lowered' && m.lowered_amount) return 'Lowered to $'+Number(m.lowered_amount).toLocaleString()+'/day';
   if (m.resolution_type==='spoke' && m.resolution_date){ const d=m.resolution_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Spoke to '+md+' — paying as normal'; }
   return '';
