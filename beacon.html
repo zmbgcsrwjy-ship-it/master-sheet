@@ -393,23 +393,32 @@
   /* the resolve popover reuses the exact resolve-menu markup so all resolution fns work unchanged */
   #deal-resolve-popover { display: none; position: fixed; z-index: 500; }
   #deal-resolve-popover.shown { display: block; }
-  #deal-resolve-popover .resolve-menu { background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: 8px; padding: 8px; width: 340px; box-shadow: 0 16px 50px rgba(0,0,0,0.5); }
-  #deal-resolve-popover .resolve-menu button.menu-item { display: block; width: 100%; text-align: left; background: transparent; border: 0; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 5px; cursor: pointer; color: var(--text); }
-  #deal-resolve-popover .resolve-menu button.menu-item:hover { background: var(--surface-2); }
-  #deal-resolve-popover .resolve-menu button.menu-item.legal-item { color: #FF6B61; font-weight: 600; }
-  #deal-resolve-popover .resolve-menu .menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
-  #deal-resolve-popover .resolve-menu .dp-header { font-size: 12px; color: var(--text-2); padding: 4px 10px 8px; border-bottom: 0.5px solid var(--border); margin-bottom: 4px; }
-  #deal-resolve-popover .resolve-menu .dp-header strong { color: var(--text); font-size: 13px; }
-  /* v175: hide the date/amount inputs until Lowered or Suspend is picked (same as the bounce board) */
-  #deal-resolve-popover .resolve-menu .date-row { padding: 8px 10px; display: none; }
-  #deal-resolve-popover .resolve-menu .date-row.shown { display: block; }
-  #deal-resolve-popover .resolve-menu .date-row > label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
-  #deal-resolve-popover .resolve-menu .lowered-amt-row { display: none; margin-top: 10px; }
-  #deal-resolve-popover .resolve-menu .lowered-amt-row.shown { display: block; }
+  /* The popover reuses the bounce-board look by aliasing .resolve-expand-host to .resolve-expand.
+     Only the outer box (width/shadow) and the popover-only header/top-back differ. */
+  #deal-resolve-popover .resolve-expand-host { background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: 8px; box-shadow: 0 16px 50px rgba(0,0,0,0.5); }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu { display: block; background: var(--surface); border: 0; border-radius: 8px; padding: 8px; width: 340px; margin: 0; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu button.menu-item { display: block; width: 100%; text-align: left; background: transparent; border: 0; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 5px; cursor: pointer; color: var(--text); }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu button.menu-item:hover { background: var(--surface-2); }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu button.menu-item.legal-item { color: #FF6B61; font-weight: 600; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .date-row { padding: 8px 10px; display: none; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .date-row.shown { display: block; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .date-row > label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .date-row button.confirm { margin-top: 10px; width: 100%; background: var(--text); color: var(--surface); border: 0; padding: 7px 10px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .date-row button.confirm:disabled { background: var(--text-3); cursor: not-allowed; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .lowered-amt-row { padding: 8px 10px 0; display: none; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .lowered-amt-row.shown { display: block; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .lowered-amt-row label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .lowered-amt-row .amt-input-wrap { position: relative; display: flex; align-items: center; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .lowered-amt-row .amt-prefix { position: absolute; left: 10px; color: var(--text-2); font-size: 13px; pointer-events: none; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .lowered-amt-row input { width: 100%; font: inherit; font-size: 13px; padding: 7px 10px 7px 22px; border: 0.5px solid var(--border-strong); border-radius: 6px; background: var(--surface); color: var(--text); box-sizing: border-box; }
+  #deal-resolve-popover .resolve-expand-host .resolve-menu .lowered-amt-row .amt-hint { font-size: 11px; color: var(--text-3); margin-top: 4px; font-style: italic; }
+  #deal-resolve-popover .dp-header { font-size: 12px; color: var(--text-2); padding: 4px 10px 8px; border-bottom: 0.5px solid var(--border); margin-bottom: 4px; }
+  #deal-resolve-popover .dp-header strong { color: var(--text); font-size: 13px; }
   #deal-resolve-popover .dp-back { display: block; width: 100%; text-align: left; background: transparent; border: 0; font: inherit; font-size: 12px; color: var(--text-3); padding: 6px 10px 8px; cursor: pointer; }
   #deal-resolve-popover .dp-back:hover { color: var(--text); }
-  /* when the date-picker step is active, hide the top back + header so only the in-step Back shows */
-  #deal-resolve-popover .resolve-menu:has(.date-row.shown) > .dp-back:first-child,
+  /* in the date-picker step, hide the popover's top back + header so only the top-left in-step Back shows */
+  #deal-resolve-popover .resolve-menu:has(.date-row.shown) > .dp-back,
   #deal-resolve-popover .resolve-menu:has(.date-row.shown) > .dp-header { display: none; }
   .tab-bar-actions button.primary .btn-sub { color: rgba(255,255,255,0.55); }
   
@@ -1035,6 +1044,9 @@
   .resolve-expand .resolve-menu .menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
   .resolve-expand .resolve-menu .date-row { padding: 8px 10px; display: none; }
   .resolve-expand .resolve-menu .date-row.shown { display: block; }
+  /* v176: top-left back button inside the date-picker step, shared by the board + search popover */
+  .date-row .date-row-back { display: inline-block; background: transparent; border: 0; font: inherit; font-size: 12px; color: var(--text-3); padding: 0 0 8px; cursor: pointer; }
+  .date-row .date-row-back:hover { color: var(--text); }
   .resolve-expand .resolve-menu .date-row > label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
   .resolve-expand .resolve-menu .date-row button.confirm { margin-top: 10px; width: 100%; background: var(--text); color: var(--surface); border: 0; padding: 7px 10px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
   .resolve-expand .resolve-menu .date-row button.confirm:disabled { background: var(--text-3); cursor: not-allowed; }
@@ -1323,7 +1335,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v175 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v176 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -5472,6 +5484,7 @@ function toggleResolveExpand(ev, leadId) {
     '<div class="resolve-menu" id="resolve-menu-' + leadId + '">' +
       menuItemsHtml +
       '<div class="date-row" id="date-row-' + leadId + '">' +
+        '<button class="date-row-back" onclick="hideDateRow(' + leadId + ')" title="Back to resolutions">‹ Back</button>' +
         '<label>Resume date</label>' +
         '<div class="mini-cal" id="mini-cal-' + leadId + '"></div>' +
         '<input type="hidden" id="resume-' + leadId + '" />' +
@@ -5544,12 +5557,14 @@ function openDealResolve(leadId){
     ? '<div class="menu-divider"></div><button class="menu-item" onclick="clearResolution(' + leadId + ')" style="color: var(--text-2);">Clear resolution</button>'
     : '';
   const pop = document.getElementById('deal-resolve-popover');
+  // Wrap in .resolve-expand so it inherits the EXACT bounce-board resolve styling (identical look).
   pop.innerHTML =
-    '<div class="resolve-menu" id="resolve-menu-' + leadId + '">' +
+    '<div class="resolve-expand-host"><div class="resolve-menu" id="resolve-menu-' + leadId + '">' +
       '<button class="dp-back" onclick="dealResolveBackToList()">‹ Back to search</button>' +
       '<div class="dp-header">Resolve <strong>' + escapeHtml(m.name) + '</strong></div>' +
       menuItemsHtml +
       '<div class="date-row" id="date-row-' + leadId + '">' +
+        '<button class="date-row-back" onclick="hideDateRow(' + leadId + ')" title="Back to resolutions">‹ Back</button>' +
         '<label>Resume date</label>' +
         '<div class="mini-cal" id="mini-cal-' + leadId + '"></div>' +
         '<input type="hidden" id="resume-' + leadId + '" />' +
@@ -5561,10 +5576,9 @@ function openDealResolve(leadId){
           '<div class="amt-hint" id="lowered-amt-hint-' + leadId + '">amount to pull each business day until the original payment resumes</div>' +
         '</div>' +
         '<button class="confirm" id="confirm-btn-' + leadId + '" onclick="confirmDateResolution(' + leadId + ')" disabled>Pick a date</button>' +
-        '<button class="dp-back" onclick="dealResolveBackToMenu(' + leadId + ')" style="text-align:center;margin-top:4px">‹ Back</button>' +
       '</div>' +
       clearHtml +
-    '</div>';
+    '</div></div>';
   const inp = document.getElementById('deal-search-input');
   const r = inp.getBoundingClientRect();
   pop.style.top = (r.bottom + 6) + 'px';
@@ -5628,8 +5642,20 @@ let _pendingDateType = {};
 // Track mini-calendar state per lead (which month is being viewed in the picker)
 let _miniCalMonth = {};
 
-function showDateRow(leadId, type) {
-  try {
+// v176: back out of the date-picker step to the resolution menu (works for both the bounce-board
+// expand row and the search popover — same element IDs).
+function hideDateRow(leadId) {
+  const menu = document.getElementById("resolve-menu-" + leadId);
+  if (!menu) return;
+  menu.querySelectorAll(".menu-item").forEach(b => b.style.display = "");
+  menu.querySelectorAll(".menu-divider").forEach(b => b.style.display = "");
+  const dr = document.getElementById("date-row-" + leadId); if (dr) dr.classList.remove("shown");
+  const ar = document.getElementById("lowered-amt-row-" + leadId); if (ar) ar.classList.remove("shown");
+  // restore the popover's top back/header if present
+  const topBack = menu.querySelector(".dp-back"); if (topBack) topBack.style.display = "";
+  const hdr = menu.querySelector(".dp-header"); if (hdr) hdr.style.display = "";
+}
+function showDateRow(leadId, type) {  try {
     _pendingDateType[leadId] = type;
     const menu = document.getElementById("resolve-menu-" + leadId);
     if (!menu) { showToast("ERR: menu missing — wrong version? Hard refresh (Ctrl+F5)"); return; }
