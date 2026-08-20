@@ -95,6 +95,8 @@
   .bx-density { display:inline-flex; border:1px solid #2c3a57; border-radius:7px; overflow:hidden; margin-left:10px; vertical-align:middle; }
   .tab-bar-actions .bx-density button { background:#16203a; color:#7c89a5; border:none; padding:3px 8px; font-size:10px; cursor:pointer; font-weight:600; border-radius:0; }
   .tab-bar-actions .bx-density button.on { background:#539bf5; color:#fff; }
+  .brief-controls .bx-density button { background:#16203a; color:#7c89a5; border:none; padding:5px 10px; font-size:11px; cursor:pointer; font-weight:600; border-radius:0; }
+  .brief-controls .bx-density button.on { background:#539bf5; color:#fff; }
   .layout.collapsed { grid-template-columns: 44px 1fr; }
   
   .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 14px; overflow-y: auto; overflow-x: hidden; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; }
@@ -346,7 +348,11 @@
   .bx-side-logo .build-tag { font-size: 11px; color: var(--text-2); display: inline; margin-top: 0; font-family: inherit; letter-spacing: normal; }
   .layout.collapsed .bx-side-logo { display: none; }
   .layout.collapsed #bx-claw-alert { display: none !important; }
-  header.brief-header { display: flex; justify-content: flex-end; align-items: flex-end; gap: 24px; margin-bottom: 8px; }
+  header.brief-header { display: flex; justify-content: flex-end; align-items: center; gap: 24px; margin-bottom: 8px; }
+  .brief-controls { display: flex; align-items: center; gap: 8px; }
+  .brief-controls .bx-density { display: inline-flex; border-radius: var(--r-md); overflow: hidden; border: 0.5px solid var(--border-strong); }
+  .brief-controls .theme-toggle { background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: var(--r-md); cursor: pointer; padding: 5px 9px; font-size: 14px; line-height: 1; color: var(--text); }
+  .brief-controls .theme-toggle:hover { background: var(--surface-2); }
   .brief-title h1 { 
     font-size: 34px; 
     font-weight: 700; 
@@ -382,7 +388,7 @@
   /* v174: proactive deal search — find any deal and apply a resolution as if it bounced */
   .deal-search-wrap { position: relative; display: inline-block; }
   #deal-search-input { background: var(--surface); border: 0.5px solid var(--border-strong); color: var(--text); font: inherit; font-size: 13px; padding: 7px 12px; border-radius: var(--r-md); width: 210px; transition: width 0.15s, border-color 0.15s; }
-  #deal-search-input:focus { outline: none; border-color: #539bf5; width: 260px; }
+  #deal-search-input:focus { outline: none; border-color: #539bf5; }
   .deal-search-results { display: none; position: absolute; top: calc(100% + 4px); right: 0; width: 320px; max-height: 340px; overflow-y: auto; background: var(--surface); border: 0.5px solid var(--border-strong); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.45); z-index: 400; padding: 4px; }
   .deal-search-results.shown { display: block; }
   .deal-search-item { padding: 9px 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1335,7 +1341,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v176 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v177 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1376,6 +1382,9 @@
 <main class="main">
 
 <header class="brief-header">
+  <div class="brief-controls">
+    <span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme"><span class="theme-icon" id="theme-icon">🌙</span></button>
+  </div>
   <div class="brief-date">
     <span id="display-date"></span>
     <span class="time" id="display-time">Morning brief</span>
@@ -1387,7 +1396,7 @@
   <button class="tab-btn" id="tab-legal-btn" onclick="showTab('legal')">Legal Cases</button>
   <button class="tab-btn" id="tab-manualpay-btn" onclick="showTab('manualpay')">Manual Payments<span class="badge" id="manualpay-count-badge">0</span></button>
   <div class="tab-bar-actions">
-    <input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">↩️ Bounce report sync</button><input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">🔄 Daily report sync</button><span class="deal-search-wrap"><input type="text" id="deal-search-input" placeholder="🔍 Find a deal…" autocomplete="off" oninput="onDealSearchInput()" onfocus="onDealSearchInput()" /><div class="deal-search-results" id="deal-search-results"></div></span><span class="bx-density"><button id="bx-cozy" onclick="setBxDensity('cozy')">Comfortable</button><button id="bx-compact" onclick="setBxDensity('compact')">Compact</button></span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Switch theme"><span class="theme-icon" id="theme-icon">🌙</span></button>
+    <input type="file" id="bounce-file" accept=".xlsx" style="display:none" onchange="syncBounceReport(this.files[0])"><button onclick="openSyncModal('bounce')">↩️ Bounce report sync</button><input type="file" id="daily-file" accept=".xlsx" style="display:none" onchange="syncDailyReport(this.files[0])"><button onclick="openSyncModal('daily')">🔄 Daily report sync</button><span class="deal-search-wrap"><input type="text" id="deal-search-input" placeholder="🔍 Find a deal…" autocomplete="off" oninput="onDealSearchInput()" onfocus="onDealSearchInput()" /><div class="deal-search-results" id="deal-search-results"></div></span>
 <div id="sync-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:9000;align-items:center;justify-content:center">
   <div style="background:#141b2d;border:1px solid #2a3550;border-radius:14px;padding:28px;width:min(640px,92vw);box-shadow:0 18px 60px rgba(0,0,0,.5)">
     <div id="sync-modal-title" style="font-size:19px;font-weight:700;color:#e6edf3;margin-bottom:4px"></div>
