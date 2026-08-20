@@ -313,7 +313,7 @@
   .us-action-btn.primary:hover { background: var(--text-hover); }
   .us-notes-panel { margin-top: 8px; display: none; }
   .us-notes-panel.shown { display: block; }
-  .us-notes-ta { width: 100%; min-height: 46px; font: inherit; font-size: 11px; padding: 7px 9px; border: 0.5px solid var(--border-strong); border-radius: 5px; background: var(--surface); color: var(--text); resize: vertical; box-sizing: border-box; }
+  .us-notes-ta { width: 100%; min-height: 44px; font: inherit; font-size: 11px; padding: 7px 9px; border: 0.5px solid var(--border-strong); border-radius: 5px; background: var(--surface); color: var(--text); resize: vertical; box-sizing: border-box; }
   .us-notes-ta:focus { outline: none; border-color: var(--text); }
   .us-notes-panel .us-confirm { margin-top: 6px; width: auto; align-self: flex-start; background: var(--text); color: var(--surface); border: 0; padding: 5px 14px; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
   .us-resolve-panel { margin-top: 8px; padding-top: 10px; border-top: 0.5px solid var(--border); display: none; }
@@ -863,12 +863,9 @@
   .mname-click:hover { text-decoration: underline; text-underline-offset: 2px; }
   .minfo-expand { background: var(--surface-2) !important; border-left: 3px solid var(--border-strong) !important; }
   .minfo-expand td { padding: 10px 16px !important; }
-  .minfo-panel { display: grid; grid-template-columns: 1fr 1.25fr; gap: 20px; align-items: start; }
-  .minfo-panel .minfo-details { flex-direction: column; gap: 5px; align-items: stretch; }
-  .minfo-panel .minfo-details .minfo-dot { display: none; }
-  .minfo-panel .minfo-details .minfo-item { white-space: normal; display: flex; justify-content: space-between; border-bottom: 0.5px solid var(--border); padding-bottom: 4px; }
-  .minfo-note-history { max-height: 120px; overflow-y: auto; padding-right: 8px; }
-  .minfo-note-editor { margin-top: 10px; }
+  .minfo-panel { display: grid; grid-template-columns: 0.7fr 1.6fr; gap: 20px; align-items: start; }
+  .minfo-note-history { max-height: 110px; overflow-y: auto; padding-right: 8px; }
+  .minfo-note-editor { margin-top: 12px; }
   .minfo-note-editor .us-confirm { margin-top: 6px; }
   .minfo-panel .minfo-section { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 6px; }
   .minfo-panel .minfo-line { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 13px; color: var(--text); }
@@ -1344,7 +1341,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v178 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v179 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2798,18 +2795,6 @@ function merchantInfoInnerHtml(m){
   if(m.owner_email) c.push('<span class="minfo-item"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a></span>');
   if(legalCase && legalCase.legal_company) c.push('<span class="minfo-item"><span class="minfo-lbl">Legal co.</span><span style="color:#FF6B61;font-weight:600">' + legalCase.legal_company + '</span></span>');
   const contactHtml = '<div class="minfo-section">Contact</div><div class="minfo-line">' + (c.length ? c.join('<span class="minfo-dot">·</span>') : '<span class="minfo-empty">No contact saved on the Master Sheet for this deal.</span>') + '</div>';
-  // v178: fill the previously-empty left column with compact deal details so it's useful, not dead space.
-  const pctPaid = (typeof m.pct_paid === 'number') ? (m.pct_paid <= 1 ? m.pct_paid*100 : m.pct_paid) : 0;
-  const di = [];
-  di.push('<span class="minfo-item"><span class="minfo-lbl">Status</span>' + (m.status||'ACTIVE') + '</span>');
-  if(m.balance) di.push('<span class="minfo-item"><span class="minfo-lbl">Balance</span>$' + Math.round(m.balance).toLocaleString() + '</span>');
-  di.push('<span class="minfo-item"><span class="minfo-lbl">Paid</span>' + pctPaid.toFixed(0) + '%</span>');
-  if(m.freq) di.push('<span class="minfo-item"><span class="minfo-lbl">Freq</span>' + m.freq + '</span>');
-  if(m.funded) di.push('<span class="minfo-item"><span class="minfo-lbl">Funded</span>' + fmtDate(m.funded) + '</span>');
-  if(m.last_cleared) di.push('<span class="minfo-item"><span class="minfo-lbl">Last pay</span>' + fmtDate(m.last_cleared) + '</span>');
-  if(m.paid_mtd) di.push('<span class="minfo-item"><span class="minfo-lbl">Paid MTD</span>$' + Math.round(m.paid_mtd).toLocaleString() + '</span>');
-  if(m.rep) di.push('<span class="minfo-item"><span class="minfo-lbl">Rep</span>' + m.rep + '</span>');
-  const detailsHtml = '<div class="minfo-section" style="margin-top:14px">Deal</div><div class="minfo-line minfo-details">' + di.join('<span class="minfo-dot">·</span>') + '</div>';
   // Notes — a live editor for today plus the joined history (deal notes + legal case)
   const todayEntry = (m.notes_log || []).find(e => e.date_iso === TODAY_ISO);
   const todayVal = todayEntry ? todayEntry.text : '';
@@ -2841,7 +2826,7 @@ function merchantInfoInnerHtml(m){
     ? '<div class="minfo-note-history">' + entries.map(e => '<div class="minfo-note"><div class="minfo-note-date">' + fmtDate(e.date) + (e.legal ? ' <span style="color:#FF6B61">· legal</span>' : '') + '</div><div>' + e.text.replace(/</g,'&lt;') + '</div></div>').join('') + '</div>'
     : '<div class="minfo-empty">No earlier notes.</div>';
   const notesHtml = '<div class="minfo-section">Notes' + (legalCase ? ' <span style="color:#FF6B61;font-weight:600">· incl. legal history</span>' : '') + '</div>' + histHtml + editorHtml;
-  return '<div>' + contactHtml + detailsHtml + '</div><div>' + notesHtml + '</div>';
+  return '<div>' + contactHtml + '</div><div>' + notesHtml + '</div>';
 }
 function showResumeInfo(leadId, itemEl){
   const next = itemEl.nextElementSibling;
