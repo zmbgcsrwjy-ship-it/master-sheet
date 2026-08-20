@@ -1341,7 +1341,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v180 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v181 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2988,6 +2988,16 @@ function manualPaysDueOn(iso) {
 
 function isInFlight(m) {
   if (!m.bounced_today) return false;
+  // v181: a bounce whose hit date is on/before a resolution we set is HANDLED — even if that
+  // resolution has since expired because they paid (v157 drops it to reduce clutter). We recorded
+  // every resolution in resolution_history (survives expiry), so fall back to it: if the current
+  // bounce predates or coincides with a recorded resolution, and there's no live resolution, it's a
+  // late-arriving bounce for a period we already handled. (A bounce AFTER the resolution is a broken
+  // promise and is handled by isBroken, not suppressed here.)
+  if (!m.resolution_type && m.hit_date && Array.isArray(m.resolution_history) && m.resolution_history.length) {
+    const covered = m.resolution_history.some(r => r.date && m.hit_date <= r.date);
+    if (covered) return true;
+  }
   if (!m.resolution_type) return false;
   // v87: a SUSPENSION stays "in flight" (still recognized as resolved) for its whole active window —
   // from when it was set until the resume date. A pull that bounces during an active suspension is
@@ -4684,16 +4694,6 @@ function renderMainTable() {
       const isLegalStill = m.resolution_type === "legal" || hasOpenLegalCase(m.lead_id);
       const broken = isBroken(m);
       const inflight = isInFlight(m);
-      // TEMP DIAG v180 — remove after: dump ELBOMBAZO's real fields to see why it's not showing handled
-      if (/BOMBAZO/i.test(m.name||'')) {
-        console.log('🌮 ELBOMBAZO DIAG:', JSON.stringify({
-          name:m.name, bounced_today:m.bounced_today, hit_date:m.hit_date,
-          resolution_type:m.resolution_type, resolution_date:m.resolution_date,
-          resume_date:m.resume_date, last_cleared:m.last_cleared,
-          streak_len:m.streak_len, sev_class:m.sev_class,
-          broken:broken, inflight:inflight
-        }, null, 2));
-      }
       // Display order: STOPS (1) → CONSEC (2) → WEEKLY (3) → NEW (4) — operational priority first.
       // Then a gap, then BROKEN PROMISES (8) and SENT TO LEGAL STILL BOUNCING (9) at the bottom
       // as separate "closed-loop" sections that need a different mental mode to action.
