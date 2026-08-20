@@ -453,7 +453,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Master Sheet now shows Beacon’s manual-pay pill: a teal MANUAL PAY tag on deals paying off the auto-debit rail on a manual schedule, turning to a red PAY LATE tag when a scheduled payment is past due. Separate track from the collections pill — a deal can show both.">build 149</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook tab: written-off deals now also show their bounce/collections tag (BOUNCING / STOP PMT / suspended / lowered) so you can see how the deal died; and still-paying suspended deals show the resume date on the pill (SUSPENDED · 7/14), matching the All Deals tab.">build 150</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3518,7 +3518,11 @@ function renderOutlook(){
     const loserLines = losers.length
       ? losers.slice().sort((a,b)=>lossOf(b)-lossOf(a)).map(d=>{
           const tag = (d.collections_state||'').toUpperCase()==='LEGAL' ? '<span class="tag legal">legal</span>' : '<span class="tag default">default</span>';
-          return `<div class="ol-row"><span class="ol-namecell"><span class="nm">${esc0(d.merchant)}</span><span class="ol-tags">${tag}</span></span>${balCell(d)}${pctBar(d)}<span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
+          // build 150: written-off deals also show their bounce/collections tag (BOUNCING / STOP PMT
+          // / suspended / lowered) so you can see how the deal died, not just that it's written off.
+          // Skip when the state is LEGAL — the "legal" write-off tag already covers that.
+          const csTag = (d.collections_state||'').toUpperCase()==='LEGAL' ? '' : olCsChip(d);
+          return `<div class="ol-row"><span class="ol-namecell"><span class="nm">${esc0(d.merchant)}</span><span class="ol-tags">${tag}${csTag}</span></span>${balCell(d)}${pctBar(d)}<span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
         }).join('')
       : '<div class="ol-empty-col">Nothing written off \u2014 clean month so far.</div>';
 
@@ -3576,8 +3580,14 @@ function olCsChip(d){
   const hasStop = bounceByLead[d.lead_id] && bounceByLead[d.lead_id].hasStop;
   let col, label=s;
   if(s==='LEGAL'){ col='#6b7885'; }
-  else if(s==='BOUNCING'){ col=hasStop?'#e5534b':'#539bf5'; }
-  else if(s==='SUSPENDED'||s==='RESUME SCHEDULED'){ col='#d4a72c'; label='SUSPENDED'; }
+  else if(s==='BOUNCING'){ col=hasStop?'#e5534b':'#539bf5'; label=hasStop?'STOP PMT':'BOUNCING'; }
+  else if(s==='SUSPENDED'||s==='RESUME SCHEDULED'){
+    col='#d4a72c';
+    // build 150: lift the resume date onto the pill so Outlook matches All Deals ("SUSPENDED · 7/14")
+    const detail=d.collections_detail||'';
+    const resumeOn = s==='RESUME SCHEDULED' ? ((detail.match(/^Resume\s+(.+)$/)||[])[1]||'') : '';
+    label='SUSPENDED'+(resumeOn?' · '+resumeOn:'');
+  }
   else if(s==='RESUME NORMAL'){ col='#2ea043'; label='RESUME NORM'; }
   else if(s==='LOWERED'){ col='#2dd4bf'; }
   else col='#888';
