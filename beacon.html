@@ -1341,7 +1341,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v182 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v183 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3060,7 +3060,12 @@ function isBroken(m) {
     return false;
   }
   if (m.resolution_type === 'lowered') {
-    // v162: lowered = reduced payment due now. Bouncing it is always the break; resume_date ignored.
+    // v183: lowered means the reduced payment is due now — bouncing it is the break. BUT only a bounce
+    // dated STRICTLY AFTER we lowered counts: a bounce on/before the lowering is a normal-debit pull that
+    // already fired before we lowered (the lowering was RESPONDING to it), not a break of the lowered
+    // agreement. (CAPNDAVE bounced 8/19, we lowered 8/20 → not broken. A same-day bounce is the pre-
+    // lowering pull too → not broken. LUXDOG bounced the lowered amount days after → broken.)
+    if (m.hit_date && m.resolution_date) return new Date(m.hit_date) > new Date(m.resolution_date);
     return true;
   }
   return false;
