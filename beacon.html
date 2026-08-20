@@ -400,6 +400,17 @@
   #deal-resolve-popover .resolve-menu .menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
   #deal-resolve-popover .resolve-menu .dp-header { font-size: 12px; color: var(--text-2); padding: 4px 10px 8px; border-bottom: 0.5px solid var(--border); margin-bottom: 4px; }
   #deal-resolve-popover .resolve-menu .dp-header strong { color: var(--text); font-size: 13px; }
+  /* v175: hide the date/amount inputs until Lowered or Suspend is picked (same as the bounce board) */
+  #deal-resolve-popover .resolve-menu .date-row { padding: 8px 10px; display: none; }
+  #deal-resolve-popover .resolve-menu .date-row.shown { display: block; }
+  #deal-resolve-popover .resolve-menu .date-row > label { font-size: 11px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+  #deal-resolve-popover .resolve-menu .lowered-amt-row { display: none; margin-top: 10px; }
+  #deal-resolve-popover .resolve-menu .lowered-amt-row.shown { display: block; }
+  #deal-resolve-popover .dp-back { display: block; width: 100%; text-align: left; background: transparent; border: 0; font: inherit; font-size: 12px; color: var(--text-3); padding: 6px 10px 8px; cursor: pointer; }
+  #deal-resolve-popover .dp-back:hover { color: var(--text); }
+  /* when the date-picker step is active, hide the top back + header so only the in-step Back shows */
+  #deal-resolve-popover .resolve-menu:has(.date-row.shown) > .dp-back:first-child,
+  #deal-resolve-popover .resolve-menu:has(.date-row.shown) > .dp-header { display: none; }
   .tab-bar-actions button.primary .btn-sub { color: rgba(255,255,255,0.55); }
   
   .metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px; }
@@ -1312,7 +1323,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v174 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v175 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3448,6 +3459,7 @@ function renderCalendar() {
     const dayHist = history[iso];
     const dayResumes = resumesOn(iso);
     const dayNextHits = nextHitsOn(iso);
+    const dayManualPays = manualPaysDueOn(iso);
     const isFuture = new Date(iso) > new Date(TODAY_ISO);
     const isTodayCell = iso === TODAY_ISO;
     // Weekend detection — using local date construction to avoid TZ shift
@@ -3458,7 +3470,7 @@ function renderCalendar() {
     const hasData = !!dayHist || isTodayCell || dayResumes.length > 0 || dayNextHits.length > 0 || manualPaysDueOn(iso).length > 0;
     
     if (isWeekend) cell.classList.add("weekend");
-    else if (isFuture && dayResumes.length === 0 && dayNextHits.length === 0) cell.classList.add("future");
+    else if (isFuture && dayResumes.length === 0 && dayNextHits.length === 0 && dayManualPays.length === 0) cell.classList.add("future");
     else if (!hasData) cell.classList.add("no-data");
     if (iso === viewDate) cell.classList.add("selected");
     if (isTodayCell) cell.classList.add("today");
@@ -3495,7 +3507,6 @@ function renderCalendar() {
       _tags.appendChild(nh);
     }
     // v164: manual-pay deals due this day (can fall on weekends — self-remit, not an ACH pull)
-    const dayManualPays = manualPaysDueOn(iso);
     if (dayManualPays.length > 0) {
       const mp = document.createElement("span");
       mp.className = "cal-tag cal-tag-manualpay";
@@ -5535,6 +5546,7 @@ function openDealResolve(leadId){
   const pop = document.getElementById('deal-resolve-popover');
   pop.innerHTML =
     '<div class="resolve-menu" id="resolve-menu-' + leadId + '">' +
+      '<button class="dp-back" onclick="dealResolveBackToList()">‹ Back to search</button>' +
       '<div class="dp-header">Resolve <strong>' + escapeHtml(m.name) + '</strong></div>' +
       menuItemsHtml +
       '<div class="date-row" id="date-row-' + leadId + '">' +
@@ -5549,6 +5561,7 @@ function openDealResolve(leadId){
           '<div class="amt-hint" id="lowered-amt-hint-' + leadId + '">amount to pull each business day until the original payment resumes</div>' +
         '</div>' +
         '<button class="confirm" id="confirm-btn-' + leadId + '" onclick="confirmDateResolution(' + leadId + ')" disabled>Pick a date</button>' +
+        '<button class="dp-back" onclick="dealResolveBackToMenu(' + leadId + ')" style="text-align:center;margin-top:4px">‹ Back</button>' +
       '</div>' +
       clearHtml +
     '</div>';
@@ -5562,6 +5575,22 @@ function openDealResolve(leadId){
 function closeDealResolve(){
   const pop = document.getElementById('deal-resolve-popover');
   if(pop){ pop.classList.remove('shown'); pop.innerHTML=''; }
+}
+// Back from the resolve popover to the search results dropdown.
+function dealResolveBackToList(){
+  closeDealResolve();
+  onDealSearchInput();
+  const box = document.getElementById('deal-search-results'); if(box) box.classList.add('shown');
+}
+// Back from the date-picker step to the resolution menu (un-hide the menu items, hide the date row).
+function dealResolveBackToMenu(leadId){
+  const menu = document.getElementById('resolve-menu-' + leadId);
+  if(!menu) return;
+  menu.querySelectorAll('.menu-item').forEach(b => b.style.display = '');
+  menu.querySelectorAll('.menu-divider').forEach(b => b.style.display = '');
+  const dr = document.getElementById('date-row-' + leadId); if(dr) dr.classList.remove('shown');
+  const ar = document.getElementById('lowered-amt-row-' + leadId); if(ar) ar.classList.remove('shown');
+  const bk = menu.querySelector('.dp-back'); if(bk) bk.style.display = '';
 }
 // clear the search box + results + popover after a resolution is applied
 function _clearDealSearch(){
