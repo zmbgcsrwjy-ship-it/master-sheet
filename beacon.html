@@ -1341,7 +1341,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v183 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v184 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3025,7 +3025,16 @@ function isInFlight(m) {
   // "suspend then resume at a lower amount" option, so operators use Lowered for that case too. A
   // lowered payment that bounces is therefore ALWAYS a broken promise, never expected noise, and the
   // resume_date on the record is ignored for lowered (it only governs a pure Suspension/pause).
-  if (m.resolution_type === 'lowered') return false;   // lowered is active now → a bounce is a break, never in-flight
+  // v184: a LOWERED deal's bounce is HANDLED (in-flight) if it's dated on/before the lowering — that's
+  // a normal-debit pull that fired before we lowered, and the lowering was responding to it. Only a
+  // bounce STRICTLY AFTER the lowering is a live break (handled by isBroken). This mirrors the isBroken
+  // gate so a freshly-lowered deal with a pre-lowering bounce shows green/handled, not unresolved.
+  // (CAPNDAVE lowered 8/20, bounce 8/20 → handled. LUXDOG bounced the lowered amount days later → not
+  // in-flight, isBroken flags it.) resume_date is ignored for lowered.
+  if (m.resolution_type === 'lowered') {
+    if (!m.hit_date || !m.resolution_date) return true;
+    return new Date(m.hit_date) <= new Date(m.resolution_date);
+  }
   // Spoke, or a paused/lowered with no resume date: in-flight only if the pull already happened
   // on or before we resolved. <= so same-day resolutions count — the pull couldn't be undone.
   if (!m.hit_date || !m.resolution_date) return false;
