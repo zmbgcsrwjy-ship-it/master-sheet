@@ -1341,7 +1341,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v184 · live</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked · <span class="build-tag">v185 · live</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1743,11 +1743,12 @@
 <div class="legal-form-overlay" id="manualpay-checkoff-overlay">
   <div class="legal-form-modal">
     <h3>Log received payment</h3>
-    <p class="form-merchant">Recording a payment from <strong id="manualpay-checkoff-merchant"></strong>. Amount required. The next due date rolls forward by the cadence — override it below if needed.</p>
+    <p class="form-merchant">Recording a payment from <strong id="manualpay-checkoff-merchant"></strong>. Amount required. The next due date rolls forward by the cadence — override the date or the next payment amount below if needed.</p>
     <div class="legal-form-grid">
       <div><label>Amount received<span class="req">*</span></label><input type="number" id="manualpay-checkoff-amount" min="0" step="0.01" placeholder="0.00" /></div>
       <div><label>Received on</label><input type="date" id="manualpay-checkoff-date" /></div>
-      <div class="full"><label>Next due (override — leave to auto-advance)</label><input type="date" id="manualpay-checkoff-nextdue" /></div>
+      <div><label>Next payment amount</label><input type="number" id="manualpay-checkoff-nextamt" min="0" step="0.01" placeholder="0.00" /></div>
+      <div><label>Next due (override — leave to auto-advance)</label><input type="date" id="manualpay-checkoff-nextdue" /></div>
     </div>
     <div class="legal-form-actions">
       <button class="legal-cancel" onclick="closeManualPayCheckoff()">Cancel</button>
@@ -6115,6 +6116,7 @@ function openManualPayCheckoff(leadId){
   document.getElementById('manualpay-checkoff-merchant').textContent = m.name || '';
   document.getElementById('manualpay-checkoff-amount').value = m.manual_pay_amount || '';
   document.getElementById('manualpay-checkoff-date').value = bLocalToday();
+  document.getElementById('manualpay-checkoff-nextamt').value = m.manual_pay_amount || '';  // v185: prefill next amt = current expected
   document.getElementById('manualpay-checkoff-nextdue').value = '';
   document.getElementById('manualpay-checkoff-overlay').classList.add('shown');
 }
@@ -6124,9 +6126,15 @@ async function submitManualPayCheckoff(){
   const amt = parseFloat(document.getElementById('manualpay-checkoff-amount').value);
   const recv = document.getElementById('manualpay-checkoff-date').value || bLocalToday();
   const override = document.getElementById('manualpay-checkoff-nextdue').value || '';
+  const nextAmt = parseFloat(document.getElementById('manualpay-checkoff-nextamt').value);
   if(!(amt>0)){ showToast('Amount received is required'); return; }
   try{
     await beaconLogManualPay(m, amt, recv, override);
+    // v185: if the next-payment amount was changed, update the plan's expected amount going forward
+    if(nextAmt>0 && nextAmt!==m.manual_pay_amount){
+      m.manual_pay_amount = nextAmt;
+      await atPatch('Deals',[{id:m._rid, fields:{ManualPayAmount:String(nextAmt)}}]);
+    }
     closeManualPayCheckoff();
     showToast('Logged $'+amt.toFixed(2)+' for '+m.name);
     beaconReload();
