@@ -451,6 +451,10 @@ select.badge:hover{filter:brightness(1.2)}
 #panel-review .rv-summary{font-size:14px}
 #panel-review .rv-mini{font-size:11px}
 #panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
+/* build 157: center every Monthly column (header + data together) except the Month name column */
+#panel-monthly thead th,#panel-monthly tbody td{text-align:center}
+#panel-monthly thead th:first-child,#panel-monthly tbody td:first-child{text-align:left}
+#panel-monthly tbody td .m-edit{text-align:center;margin:0 auto}
 #panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
 .kb-edit{width:92px;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:inherit}
@@ -496,7 +500,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="More breathing room in the dashboard metric cards so the label, value, and sublabel aren’t crowded after the font bump.">build 156</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Monthly tab: all columns now centered (header and data aligned together) except the Month name column, including the Legal and Clawback input cells.">build 157</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3695,8 +3699,8 @@ async function renderMonthly(){
     const style=r.isTotal?'font-weight:700;background:var(--bg3)':'';
     const manualCells=r.isTotal
       ? `<td style="${style}${nz(r.legal)?';color:var(--red)':''}">${fmt$(r.legal)}</td><td style="${style}${nz(r.clawback)?';color:#5eead4':''}">${fmt$(r.clawback)}</td>`
-      : `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.legal?fmt$(r.legal):''}" placeholder="$0.00" style="width:92px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${nz(r.legal)?'var(--red)':'var(--text)'};padding:4px 8px;font-size:12px;text-align:left" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Legal',(this.value||'').replace(/[^0-9.]/g,''))"></td>`+
-        `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.clawback?fmt$(r.clawback):''}" placeholder="$0.00" style="width:92px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:12px;text-align:left" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Clawback',(this.value||'').replace(/[^0-9.]/g,''))"></td>`;
+      : `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.legal?fmt$(r.legal):''}" placeholder="$0.00" style="width:92px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${nz(r.legal)?'var(--red)':'var(--text)'};padding:4px 8px;font-size:12px;text-align:center" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Legal',(this.value||'').replace(/[^0-9.]/g,''))"></td>`+
+        `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.clawback?fmt$(r.clawback):''}" placeholder="$0.00" style="width:92px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:12px;text-align:center" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Clawback',(this.value||'').replace(/[^0-9.]/g,''))"></td>`;
     return `<tr>
       <td style="${style};white-space:nowrap">${r.label}</td>
       <td style="${style}">${r.tdf}</td><td style="${style}">${r.nw}</td><td style="${style}">${r.rf}</td>
