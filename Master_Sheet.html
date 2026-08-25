@@ -48,18 +48,18 @@ body.compact .sidebar-logo,body.compact .sidebar-nav,body.compact .sidebar-nav-b
 .sb-toggle:hover{color:var(--text);background:var(--bg2)}
 .sidebar-logo{padding:14px 16px 12px;border-bottom:1px solid var(--border)}
 .sidebar-logo h1{font-size:16px;font-weight:700}
-.sidebar-logo span{font-size:11px;color:var(--text3);display:block;margin-top:3px;line-height:1.35}
+.sidebar-logo span{font-size:12px;color:var(--text3);display:block;margin-top:3px;line-height:1.35}
 .sidebar-nav{padding:12px 8px}
 .sidebar-nav-bottom{padding:6px 8px;margin-top:auto;border-top:1px solid var(--border)}
 .nav-outlook-bottom{color:var(--green)}
 .nav-outlook-bottom.active{background:var(--green-bg)}
-.nav-section{font-size:10px;font-weight:700;color:var(--text3);padding:10px 10px 4px;letter-spacing:.08em;text-transform:uppercase}
-.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);font-size:13px;color:var(--text2);cursor:pointer;margin-bottom:1px;transition:all .15s;user-select:none}
+.nav-section{font-size:11px;font-weight:700;color:var(--text3);padding:10px 10px 4px;letter-spacing:.08em;text-transform:uppercase}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);font-size:14px;color:var(--text2);cursor:pointer;margin-bottom:1px;transition:all .15s;user-select:none}
 .nav-item:hover{background:var(--bg3);color:var(--text)}
 .nav-item.active{background:var(--bg3);color:var(--text);font-weight:600}
 .nav-badge{margin-left:auto;font-size:10px;padding:2px 7px;border-radius:20px;font-weight:700}
 .sidebar-bottom{padding:12px;border-top:1px solid var(--border)}
-.sidebar-chip{font-size:11px;color:var(--text3);padding:5px 8px;cursor:pointer;border-radius:var(--radius-sm);transition:background .15s;display:flex;align-items:center;gap:5px}
+.sidebar-chip{font-size:12px;color:var(--text3);padding:5px 8px;cursor:pointer;border-radius:var(--radius-sm);transition:background .15s;display:flex;align-items:center;gap:5px}
 .sidebar-chip:hover{background:var(--bg3);color:var(--text2)}
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .topbar{padding:16px 24px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
@@ -418,11 +418,38 @@ select.badge:hover{filter:brightness(1.2)}
 #panel-allocator #alloc-body .pif-table td{font-size:13.5px !important}
 #panel-pif .panel-header h3,#panel-defaults .panel-header h3,#panel-clawback .panel-header h3,#panel-monthly .panel-header h3,#panel-pnl .panel-header h3,#panel-outlook .panel-header h3,#panel-review .panel-header h3,#panel-allocator .panel-header h3{font-size:14.5px}
 #panel-pif .panel-header span,#panel-pif .panel-header label,#panel-pif .panel-header select,#panel-pif .panel-header input,#panel-defaults .panel-header span,#panel-defaults .panel-header select,#panel-clawback .panel-header span,#panel-monthly .panel-header span,#panel-monthly .panel-header select,#panel-monthly .panel-header input,#panel-pnl .panel-header span,#panel-outlook .panel-header span,#panel-outlook .panel-header select,#panel-review .panel-header span,#panel-review .panel-header select,#panel-allocator .panel-header span,#panel-allocator #alloc-head{font-size:13px !important}
-/* review uses .rv-table, outlook uses .ol-row divs (not real tables) — target them explicitly */
-#panel-review .rv-table th{font-size:12px !important}
-#panel-review .rv-table td{font-size:13.5px !important}
-#panel-outlook .ol-row,#panel-outlook .ol-namecell,#panel-outlook .ol-row .v{font-size:13.5px !important}
-#panel-outlook .ol-head,#panel-outlook .ol-col-h{font-size:13px !important}
+/* build 153: thorough per-element font bump for Outlook + Portfolio Review (every readable class). */
+#panel-outlook .ol-intro{font-size:13px}
+#panel-outlook .ol-month{font-size:14px}
+#panel-outlook .ol-chip .n{font-size:14px}
+#panel-outlook .ol-chip .k{font-size:10px}
+#panel-outlook .ol-col-h{font-size:12px}
+#panel-outlook .ol-row{font-size:13.5px}
+#panel-outlook .ol-row .ol-bal{font-size:12.5px}
+#panel-outlook .ol-row .ol-pct{font-size:12px}
+#panel-outlook .ol-namecell{font-size:13.5px}
+#panel-outlook .ol-row .v{font-size:13.5px}
+#panel-outlook .ol-tags .tag{font-size:10.5px}
+#panel-outlook .ol-empty-col{font-size:13px}
+#panel-outlook .ol-foot{font-size:12.5px}
+#panel-outlook .ol-verdict-lbl{font-size:10px}
+#panel-review .rv-select{font-size:13px}
+#panel-review .rv-asof{font-size:12px}
+#panel-review .rv-hero-txt p{font-size:14px}
+#panel-review .rv-kpi .k{font-size:11px}
+#panel-review .rv-kpi .s{font-size:12px}
+#panel-review .rv-sec-h .n{font-size:16px}
+#panel-review .rv-sec-h .sub{font-size:12.5px}
+#panel-review .rv-sec-lead{font-size:13.5px}
+#panel-review .rv-table{font-size:13.5px}
+#panel-review .rv-table th{font-size:11.5px}
+#panel-review .rv-table td{font-size:13.5px}
+#panel-review .rv-find{font-size:13.5px}
+#panel-review .rv-legend{font-size:12px}
+#panel-review .rv-metric .mk{font-size:11px}
+#panel-review .rv-metric .mn{font-size:12px}
+#panel-review .rv-summary{font-size:14px}
+#panel-review .rv-mini{font-size:11px}
 #panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
 #panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
@@ -469,7 +496,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Rolled the larger REFI-eligible font sizing out to the PIF, defaults, clawback, monthly, PNL, outlook, portfolio review, and allocator tabs; moved the REFI balance-threshold filter to the far left of its filter row.">build 152</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Bigger sidebar nav fonts (view list, VIEWS label, chips, subtitle). Also includes build 153: thorough Outlook/Portfolio Review font pass, REFI eligible shows All-Deals collections tags, and legal deals excluded from REFI.">build 154</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -484,7 +511,7 @@ select.badge:hover{filter:brightness(1.2)}
         <div class="nav-item" onclick="loadDeals()">↻ Refresh</div>
       </div>
       <div class="sidebar-nav-bottom">
-        <div class="nav-item nav-outlook-bottom" id="nav-outlook" onclick="setView('outlook')">📈 Outlook <span style="margin-left:auto;font-size:10px;color:var(--text3);font-weight:500">month analysis</span></div>
+        <div class="nav-item nav-outlook-bottom" id="nav-outlook" onclick="setView('outlook')">📈 Outlook <span style="margin-left:auto;font-size:11px;color:var(--text3);font-weight:500">month analysis</span></div>
         <div class="nav-item nav-review-bottom" id="nav-review" onclick="setView('review')">🩺 Portfolio review</div>
       </div>
       <div class="sidebar-bottom">
@@ -2083,7 +2110,8 @@ function sortRenewal(key){
   renderRenewal();
 }
 function renderRenewal(){
-  const all=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0);
+  // build 153: exclude legal deals (defaulted already out via status filter).
+  const all=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0&&(d.collections_state||'').toUpperCase()!=='LEGAL');
   const body=document.getElementById('renewal-body'),empty=document.getElementById('renewal-empty'),wrap=document.getElementById('renewal-table-wrap');
   const repSel=document.getElementById('refi-rep-filter'),isoSel=document.getElementById('refi-iso-filter');
   const showIgnored=document.getElementById('refi-show-ignored') && document.getElementById('refi-show-ignored').checked;
@@ -2113,7 +2141,7 @@ function renderRenewal(){
   const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
   body.innerHTML=rows.map(d=>`<tr${d.refi_ignored?' style="opacity:.5"':''}>
     <td style="white-space:nowrap;color:var(--text3)">${fmtDate(d.date_funded)}</td>
-    <td style="font-weight:600">${dealNameHtml(d)}${bounceBadges(d)}</td>
+    <td style="font-weight:600">${dealNameHtml(d)}${bounceBadges(d)}${csChip(d)}${manualPayChip(d)}</td>
     <td>${fmt$(d.balance)}</td>
     <td class="${(d.pnl||0)>=0?'val-green':(d.pct_paid||0)>=0.5?'val-amber':'val-red'}" style="font-weight:700">${Math.round((d.pct_paid||0)*100)}%</td>
     <td style="color:var(--text3)">${d.iso||'—'}</td>
