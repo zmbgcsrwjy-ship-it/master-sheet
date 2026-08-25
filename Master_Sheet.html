@@ -408,10 +408,21 @@ select.badge:hover{filter:brightness(1.2)}
 #panel-renewal tbody td,#panel-defaults tbody td{padding:5px 12px}
 #panel-renewal thead th,#panel-defaults thead th{padding:7px 12px;font-size:11px;font-weight:600;text-transform:none;letter-spacing:normal;background:var(--bg2)}
 /* build 151: larger, easier-to-read font in the REFI eligible panel (headers, rows, and the filter controls) */
+/* build 152: extended the same sizing to PIF, defaults, clawback, monthly, PNL, outlook, review, allocator */
 #panel-renewal thead th{font-size:13px}
 #panel-renewal tbody td{font-size:13.5px}
 #panel-renewal .panel-header h3{font-size:14.5px}
 #panel-renewal .panel-header span,#panel-renewal .panel-header label,#panel-renewal .panel-header select,#panel-renewal .panel-header input{font-size:13px !important}
+#panel-pif thead th,#panel-defaults thead th,#panel-clawback thead th,#panel-monthly thead th,#panel-pnl thead th,#panel-outlook thead th,#panel-review thead th,#panel-allocator thead th,#panel-allocator #alloc-body .pif-table th{font-size:13px !important}
+#panel-pif tbody td,#panel-defaults tbody td,#panel-clawback tbody td,#panel-monthly tbody td,#panel-pnl tbody td,#panel-outlook tbody td,#panel-review tbody td,#panel-allocator tbody td,#panel-allocator #alloc-body .pif-table{font-size:13.5px !important}
+#panel-allocator #alloc-body .pif-table td{font-size:13.5px !important}
+#panel-pif .panel-header h3,#panel-defaults .panel-header h3,#panel-clawback .panel-header h3,#panel-monthly .panel-header h3,#panel-pnl .panel-header h3,#panel-outlook .panel-header h3,#panel-review .panel-header h3,#panel-allocator .panel-header h3{font-size:14.5px}
+#panel-pif .panel-header span,#panel-pif .panel-header label,#panel-pif .panel-header select,#panel-pif .panel-header input,#panel-defaults .panel-header span,#panel-defaults .panel-header select,#panel-clawback .panel-header span,#panel-monthly .panel-header span,#panel-monthly .panel-header select,#panel-monthly .panel-header input,#panel-pnl .panel-header span,#panel-outlook .panel-header span,#panel-outlook .panel-header select,#panel-review .panel-header span,#panel-review .panel-header select,#panel-allocator .panel-header span,#panel-allocator #alloc-head{font-size:13px !important}
+/* review uses .rv-table, outlook uses .ol-row divs (not real tables) — target them explicitly */
+#panel-review .rv-table th{font-size:12px !important}
+#panel-review .rv-table td{font-size:13.5px !important}
+#panel-outlook .ol-row,#panel-outlook .ol-namecell,#panel-outlook .ol-row .v{font-size:13.5px !important}
+#panel-outlook .ol-head,#panel-outlook .ol-col-h{font-size:13px !important}
 #panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
 #panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
@@ -458,7 +469,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="REFI eligible panel: larger, easier-to-read font on the table headers, rows, and the filter controls (rep/ISO/threshold).">build 151</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="Rolled the larger REFI-eligible font sizing out to the PIF, defaults, clawback, monthly, PNL, outlook, portfolio review, and allocator tabs; moved the REFI balance-threshold filter to the far left of its filter row.">build 152</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -612,10 +623,10 @@ select.badge:hover{filter:brightness(1.2)}
         </div>
         <div class="panel" id="panel-renewal" style="display:none">
           <div class="panel-header"><h3>REFI eligible</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span>Balances at ≥ <input id="refi-threshold-input" type="number" min="1" max="100" step="1" value="50" style="width:52px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:12px;text-align:center" onchange="saveThreshold(this.value)">% paid · shared setting</span>
             <select id="refi-rep-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All reps</option></select>
             <select id="refi-iso-filter" onchange="renderRenewal()" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">All ISOs</option></select>
             <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--text3)"><input type="checkbox" id="refi-show-ignored" onchange="renderRenewal()" style="cursor:pointer">show ignored</label>
-            <span>Balances at ≥ <input id="refi-threshold-input" type="number" min="1" max="100" step="1" value="50" style="width:52px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:2px 4px;font-size:12px;text-align:center" onchange="saveThreshold(this.value)">% paid · shared setting</span>
           </span></div>
           <div class="table-wrap" id="renewal-table-wrap">
             <table>
