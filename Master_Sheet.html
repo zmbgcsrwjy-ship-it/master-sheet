@@ -407,6 +407,11 @@ select.badge:hover{filter:brightness(1.2)}
 #panel-renewal table,#panel-defaults table{font-size:12px}
 #panel-renewal tbody td,#panel-defaults tbody td{padding:5px 12px}
 #panel-renewal thead th,#panel-defaults thead th{padding:7px 12px;font-size:11px;font-weight:600;text-transform:none;letter-spacing:normal;background:var(--bg2)}
+/* build 151: larger, easier-to-read font in the REFI eligible panel (headers, rows, and the filter controls) */
+#panel-renewal thead th{font-size:13px}
+#panel-renewal tbody td{font-size:13.5px}
+#panel-renewal .panel-header h3{font-size:14.5px}
+#panel-renewal .panel-header span,#panel-renewal .panel-header label,#panel-renewal .panel-header select,#panel-renewal .panel-header input{font-size:13px !important}
 #panel-renewal th:first-child,#panel-renewal td:first-child{text-align:center}
 #panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
@@ -453,7 +458,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable · <b style="color:var(--text2)" title="Outlook tab: written-off deals now also show their bounce/collections tag (BOUNCING / STOP PMT / suspended / lowered) so you can see how the deal died; and still-paying suspended deals show the resume date on the pill (SUSPENDED · 7/14), matching the All Deals tab.">build 150</b></span>
+        <span>Powered by Airtable · <b style="color:var(--text2)" title="REFI eligible panel: larger, easier-to-read font on the table headers, rows, and the filter controls (rep/ISO/threshold).">build 151</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
