@@ -455,6 +455,34 @@ select.badge:hover{filter:brightness(1.2)}
 #panel-monthly thead th,#panel-monthly tbody td{text-align:center}
 #panel-monthly thead th:first-child,#panel-monthly tbody td:first-child{text-align:left}
 #panel-monthly tbody td .m-edit{text-align:center;margin:0 auto}
+/* build 160: center specific columns (header + data together) in REFI eligible, defaults, clawback, PNL */
+/* REFI eligible: Date Funded(1), Balance(3), % Paid(4), Lead ID(7), Funder(8) */
+#panel-renewal thead th:nth-child(1),#panel-renewal tbody td:nth-child(1),
+#panel-renewal thead th:nth-child(3),#panel-renewal tbody td:nth-child(3),
+#panel-renewal thead th:nth-child(4),#panel-renewal tbody td:nth-child(4),
+#panel-renewal thead th:nth-child(7),#panel-renewal tbody td:nth-child(7),
+#panel-renewal thead th:nth-child(8),#panel-renewal tbody td:nth-child(8){text-align:center}
+/* Defaults: Date Funded(1), Legal co(5), Funded(6), RTR(7), Balance(8), %Paid(9), Term(10), Max Loss(11), PNL(12) */
+#panel-defaults thead th:nth-child(1),#panel-defaults tbody td:nth-child(1),
+#panel-defaults thead th:nth-child(5),#panel-defaults tbody td:nth-child(5),
+#panel-defaults thead th:nth-child(6),#panel-defaults tbody td:nth-child(6),
+#panel-defaults thead th:nth-child(7),#panel-defaults tbody td:nth-child(7),
+#panel-defaults thead th:nth-child(8),#panel-defaults tbody td:nth-child(8),
+#panel-defaults thead th:nth-child(9),#panel-defaults tbody td:nth-child(9),
+#panel-defaults thead th:nth-child(10),#panel-defaults tbody td:nth-child(10),
+#panel-defaults thead th:nth-child(11),#panel-defaults tbody td:nth-child(11),
+#panel-defaults thead th:nth-child(12),#panel-defaults tbody td:nth-child(12){text-align:center}
+/* Clawback eligible: Date Funded(1), Commission at risk(5), Bounces(6), Code(7), Status(8), Days Left(9), Actions(10) */
+/* Clawed back:       Date Funded(1), Amount Clawed(5), Bounces(6), Code(7), Actions(8) */
+#panel-clawback thead th:nth-child(1),#panel-clawback tbody td:nth-child(1),
+#panel-clawback thead th:nth-child(5),#panel-clawback tbody td:nth-child(5),
+#panel-clawback thead th:nth-child(6),#panel-clawback tbody td:nth-child(6),
+#panel-clawback thead th:nth-child(7),#panel-clawback tbody td:nth-child(7),
+#panel-clawback thead th:nth-child(8),#panel-clawback tbody td:nth-child(8),
+#panel-clawback thead th:nth-child(9),#panel-clawback tbody td:nth-child(9),
+#panel-clawback thead th:nth-child(10),#panel-clawback tbody td:nth-child(10){text-align:center}
+/* PNL: everything except Item(1) — Total PNL(2), Our End(3), Settled(4), Available(5), Sal(6), Matt(7) */
+#panel-pnl thead th:nth-child(n+2),#panel-pnl tbody td:nth-child(n+2){text-align:center}
 #panel-defaults th:first-child,#panel-defaults td:first-child{text-align:center}
 #panel-book tbody tr:hover td:nth-child(1),#panel-book tbody tr:hover td:nth-child(2){background:var(--bg3)}
 .kb-edit{width:92px;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:inherit}
@@ -500,7 +528,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Removed the one-off Reconcile-from-export repair tool (button, modal, and code) — no longer needed. Regular CRM import untouched. Removed the backfill diagnostic; the import notice now accurately distinguishes filling missing funding dates from refreshing last-paid dates.">build 159</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Centered specific columns (header + data together) in REFI eligible, Defaults, Clawback, and PNL — matching the Monthly tab treatment. Name/Item columns stay left.">build 160</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
