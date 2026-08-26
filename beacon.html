@@ -1341,7 +1341,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v188</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v189</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2392,6 +2392,10 @@ function beaconCollectionsDetailFor(m){
 // sync (with the usual one-day lag). This layer only tracks payment discipline — did the promised
 // payment arrive, when, how much, and are they on schedule.
 const MANUAL_PAY_CADENCES = { weekly:7, biweekly:14, monthly:30 };
+// v189: business days after a legal-send during which a balance drop is a pending-payment tail
+// (ACH already in flight when we shut off pulls), NOT a legal-team recovery. After this window the
+// then-current balance is locked as the recovery baseline. See refreshLegalCaseBalances.
+const LEGAL_PENDING_BD = 5;
 // advance a YYYY-MM-DD date by a cadence ('weekly'|'biweekly'|'monthly'|'everyN:<n>')
 function manualPayAdvance(iso, cadence){
   const d = new Date(iso+'T12:00:00'); if(isNaN(d)) return iso;
@@ -6308,16 +6312,37 @@ function refreshLegalCaseBalances() {
     c.current_balance = m.balance;
     c.current_pct_paid = m.pct_paid;
     c.current_balance_date = TODAY_ISO;
+    // v189: PENDING-TAIL WINDOW. When a deal is sent to legal, ACH is shut off on our end, but
+    // payments already in flight can still clear for a few days afterward. Those are NOT legal-team
+    // recoveries — they're pending pulls settling. So for the first LEGAL_PENDING_BD business days
+    // after the send date, any balance drop is treated as a pending tail (shown as "no recovery").
+    // Once the window closes we lock the then-current balance as recovery_baseline, and ALL future
+    // recovery is measured from that baseline — so the pending drop never counts, permanently.
+    const bdSinceSend = bdDiff(new Date(c.sent_date || TODAY_ISO), new Date(TODAY_ISO));
+    c.in_pending_window = (bdSinceSend <= LEGAL_PENDING_BD);
+    if (!c.in_pending_window && (typeof c.recovery_baseline !== "number")) {
+      // first refresh past the window — lock the settled balance as the baseline for recovery
+      c.recovery_baseline = m.balance;
+    }
     // Only money collected AFTER the deal was sent to legal counts as a legal-team recovery.
     // The balance drop since send is the ceiling on what can be credited to the case.
     const sinceSend = Math.max(0, (c.balance_at_send || 0) - (m.balance || 0));
     const sentYM = String(c.sent_date || '').slice(0, 7);
     const curYM  = String(TODAY_ISO).slice(0, 7);
     c.collected_since_send = sinceSend;
-    // Sent today / this month → strip out whatever they paid before it went to legal.
-    // Sent in an earlier month → every payment in this period is already post-legal.
-    c.paid_today_on_case = (c.sent_date === TODAY_ISO) ? Math.min(m.paid_today || 0, sinceSend) : (m.paid_today || 0);
-    c.paid_mtd_on_case   = (sentYM === curYM)          ? Math.min(m.paid_mtd   || 0, sinceSend) : (m.paid_mtd   || 0);
+    // v189: during the pending-tail window, nothing is credited as a legal collection (today or MTD) —
+    // those clears are in-flight pulls settling, not the firm's work. After the window, collections are
+    // capped by the drop from the recovery baseline so pending tails never inflate the legal totals.
+    const recoveredFromBaseline = (typeof c.recovery_baseline === "number") ? Math.max(0, c.recovery_baseline - (m.balance || 0)) : 0;
+    if (c.in_pending_window) {
+      c.paid_today_on_case = 0;
+      c.paid_mtd_on_case = 0;
+    } else {
+      // Sent today / this month → strip out whatever they paid before it went to legal.
+      // Sent in an earlier month → every payment in this period is already post-legal.
+      c.paid_today_on_case = (c.sent_date === TODAY_ISO) ? Math.min(m.paid_today || 0, recoveredFromBaseline) : (m.paid_today || 0);
+      c.paid_mtd_on_case   = (sentYM === curYM)          ? Math.min(m.paid_mtd   || 0, recoveredFromBaseline) : (m.paid_mtd   || 0);
+    }
     // Detect newly-zero balance (PIF event)
     if (prevBalance > 0 && m.balance <= 0 && !c.pif_notified) {
       newlyZero.push(c);
@@ -6532,15 +6557,22 @@ function currentBalCellHtml(c) {
   }
   
   const current = c.current_balance;
-  const recovered = sent - current;
   const isZero = current <= 0;
-  
+
   let amountClass = "bal-amount";
   if (isZero) amountClass += " zero";
-  
+
+  // v189: recovery is measured from the post-window baseline (settled balance), not the send balance,
+  // so pending-payment tails that cleared in the first LEGAL_PENDING_BD days never count as recovery.
+  // During the pending window we don't credit any drop — it's shown as pending, not recovery.
+  const baseline = (typeof c.recovery_baseline === "number") ? c.recovery_baseline : sent;
+  const recovered = baseline - current;
+
   let subHtml;
-  if (recovered > 0) {
-    const pct = sent > 0 ? Math.round((recovered / sent) * 100) : 0;
+  if (c.in_pending_window) {
+    subHtml = '<div class="bal-sub none">no recovery · pending</div>';
+  } else if (recovered > 0) {
+    const pct = baseline > 0 ? Math.round((recovered / baseline) * 100) : 0;
     subHtml = '<div class="bal-sub recovered">↓ ' + fmt$(recovered) + ' (' + pct + '%)</div>';
   } else if (c.balance_stale) {
     subHtml = '<div class="bal-sub stale">stale · ' + fmtDate(c.current_balance_date || c.sent_date) + '</div>';
