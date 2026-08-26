@@ -109,7 +109,7 @@ body.compact .sidebar-logo,body.compact .sidebar-nav,body.compact .sidebar-nav-b
 #alloc-body .pif-table th{font-size:11px;padding:8px 12px}
 #alloc-body .alloc-grouprow td{padding:9px 12px}
 #alloc-body .alloc-iso-name{font-size:13.5px;font-weight:700}
-#alloc-body .alloc-grp-sub{font-size:12px;font-weight:400;color:var(--text3)}
+#alloc-body .alloc-grp-sub{font-size:13px;font-weight:400;color:var(--text3)}
 #alloc-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text3)}
 /* build 48: subtle on-theme scrollbars (replaces the bright browser default) */
 ::-webkit-scrollbar{width:10px;height:10px}
@@ -528,7 +528,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Centered specific columns (header + data together) in REFI eligible, Defaults, Clawback, and PNL — matching the Monthly tab treatment. Name/Item columns stay left.">build 160</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Allocator: deal names now match REFI merchant styling (dealNameHtml + weight 600, so co-funded/weekly colors show); renamed the Deal column to Merchant; bigger Paid / Mark all paid buttons; group-subtotal dollar amounts sized closer to the row amounts.">build 161</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2395,7 +2395,7 @@ function renderAllocator(){
   let h=`<table class="pif-table"><colgroup>
     <col style="width:8%"><col style="width:15%"><col style="width:6%"><col style="width:12%"><col style="width:9%"><col style="width:6%"><col style="width:11%"><col style="width:6%"><col style="width:8%"><col style="width:8%"><col style="width:11%">
   </colgroup><thead><tr>
-    <th class="pif-c">Date Funded</th><th>Deal</th><th>Rep</th><th>ISO</th>
+    <th class="pif-c">Date Funded</th><th>Merchant</th><th>Rep</th><th>ISO</th>
     <th class="pif-c">Commission</th><th class="pif-c">Comm %</th><th class="pif-c">ISO Commission</th><th class="pif-c">ISO %</th><th class="pif-c">To HHC (1.5%)</th><th class="pif-c">MSC (1.5%)</th><th class="pif-c">Action</th>
   </tr></thead><tbody>`;
   allocGroupKeys.forEach((key,gi)=>{
@@ -2404,12 +2404,12 @@ function renderAllocator(){
     const gSend=grp.reduce((s,r)=>s+r.isoComm,0), gKbOurs=grp.reduce((s,r)=>s+r.kbOurs,0), gKbHhc=grp.reduce((s,r)=>s+r.kbHhc,0);
     const label=isNo?'No ISO — your commission, nothing to send out':key;
     const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+(isoClr?`<b style="color:${isoClr}">${fmt$(gSend)}</b>`:fmt$(gSend))} · HHC ${fmt$(gKbHhc)} · MSC ${fmt$(gKbOurs)}`;
-    h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="11"><span class="alloc-iso-name"${isoClr?` style="color:${isoClr}"`:''}>${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 10px;font-size:11px;cursor:pointer">Mark all paid</button></td></tr>`;
+    h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="11"><span class="alloc-iso-name"${isoClr?` style="color:${isoClr}"`:''}>${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:3px 12px;font-size:12.5px;cursor:pointer">Mark all paid</button></td></tr>`;
     grp.forEach(r=>{
       const rowClr = r.hasIso ? allocIsoColor(r.d.iso) : '';
       h+=`<tr>
         <td class="pif-c pif-dim">${fmtDate(r.d.date_funded)}</td>
-        <td>${r.d.merchant}</td>
+        <td style="font-weight:600">${dealNameHtml(r.d)}</td>
         <td class="pif-dim">${r.d.rep||'—'}</td>
         <td${rowClr?` style="font-weight:600;color:${rowClr}"`:' class="pif-dim"'}>${r.hasIso?r.d.iso:'<span style="'+dim+'">—</span>'}</td>
         <td class="pif-c">${fmt$(r.d.comm_amount)}</td>
@@ -2418,7 +2418,7 @@ function renderAllocator(){
         <td class="pif-c pif-dim">${r.isoPct!=null?r.isoPct.toFixed(1)+'%':'—'}</td>
         <td class="pif-c" style="color:#c9a15a">${fmt$(r.kbHhc)}</td>
         <td class="pif-c" style="color:var(--green)">${fmt$(r.kbOurs)}</td>
-        <td class="pif-c"><button onclick="markAllocPaid('${r.d._id}')" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:2px 12px;font-size:11px;cursor:pointer">Paid</button></td>
+        <td class="pif-c"><button onclick="markAllocPaid('${r.d._id}')" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:3px 14px;font-size:12.5px;cursor:pointer">Paid</button></td>
       </tr>`;
     });
   });
