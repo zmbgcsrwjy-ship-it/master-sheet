@@ -500,7 +500,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Monthly tab: all columns now centered (header and data aligned together) except the Month name column, including the Legal and Clawback input cells.">build 157</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Diagnostic + fix for the CRM-import backfill notice: it now says accurately whether it is filling missing funding dates or refreshing last-paid dates (previously always said funding dates even when the real trigger was a last-cleared refresh).">build 158</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1348,7 +1348,11 @@ async function importCrmExport(file){
         if(ex && ex._id && !/^pending-/.test(String(ex._id))){
           const df=(r._df && !String(ex.date_funded||'').trim()) ? r._df : null;            // fill missing funding date
           const lc=(lcFieldOk && r._lc && r._lc!==String(ex.last_cleared||'')) ? r._lc : null; // refresh last-paid date
-          if(df||lc) backfills.push({id:ex._id, df, lc, deal:ex});
+          if(df||lc){
+            backfills.push({id:ex._id, df, lc, deal:ex});
+            // TEMP DIAG build 158 — show WHY each deal backfills (missing date vs last-cleared refresh)
+            console.log('🔧 BACKFILL:', ex.merchant, '| reason:', df?('missing funding date (existing="'+(ex.date_funded||'')+'" → export="'+r._df+'")'):'', lc?('last-cleared refresh (existing="'+(ex.last_cleared||'')+'" → export="'+r._lc+'")'):'');
+          }
         }
         continue;
       }
@@ -1358,7 +1362,11 @@ async function importCrmExport(file){
     if(newRows.length){
       const names=newRows.map(r=>'\u2022 '+String(r[C.merch]).trim()+'  ('+(r._df||'NO DATE')+' \u00b7 $'+money(r[C.funded]).toLocaleString()+')');
       const preview=names.slice(0,15).join('\n')+(names.length>15?'\n\u2026 and '+(names.length-15)+' more':'');
-      const bfNote=backfills.length?('\n\nAlso filling missing funding dates on '+backfills.length+' existing deal'+(backfills.length!==1?'s':'')+'.'):'';
+      const nDf=backfills.filter(b=>b.df).length, nLc=backfills.filter(b=>b.lc).length;
+      const bfParts=[];
+      if(nDf) bfParts.push('filling missing funding date'+(nDf!==1?'s':'')+' on '+nDf+' deal'+(nDf!==1?'s':''));
+      if(nLc) bfParts.push('refreshing the last-paid date on '+nLc+' deal'+(nLc!==1?'s':''));
+      const bfNote=bfParts.length?('\n\nAlso '+bfParts.join(' and ')+'.'):'';
       if(!confirm('CRM export: '+newRows.length+' deal'+(newRows.length!==1?'s':'')+' not on the book yet:\n\n'+preview+bfNote+'\n\nAdd '+(newRows.length!==1?'them':'it')+' now?')) return;
     }
     showLoading((newRows.length?('Importing '+newRows.length+' deal'+(newRows.length!==1?'s':'')+' from CRM'):'Updating funding dates')+'...');
