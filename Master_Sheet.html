@@ -500,7 +500,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Diagnostic + fix for the CRM-import backfill notice: it now says accurately whether it is filling missing funding dates or refreshing last-paid dates (previously always said funding dates even when the real trigger was a last-cleared refresh).">build 158</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Removed the one-off Reconcile-from-export repair tool (button, modal, and code) — no longer needed. Regular CRM import untouched. Removed the backfill diagnostic; the import notice now accurately distinguishes filling missing funding dates from refreshing last-paid dates.">build 159</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -520,8 +520,6 @@ select.badge:hover{filter:brightness(1.2)}
       </div>
       <div class="sidebar-bottom">
         <div class="sidebar-chip" id="sync-info">⏱ Not synced yet</div>
-        <div class="sidebar-chip" onclick="document.getElementById('reconcile-file').click()" title="Fix existing deals whose funded / payback / factor / book funded are off from the old grossed-up import. Upload the current CRM export — it rewrites only the funding-math fields on matched deals, after you confirm, using the exact figures from the export.">🔧 Reconcile from export</div>
-        <input type="file" id="reconcile-file" accept=".csv" style="display:none" onchange="reconcileFromExport(this.files[0]); this.value='';">
         <div class="sidebar-chip" onclick="updateCredentials()">🔑 Credentials active ✓</div>
       </div>
     </div>
@@ -760,18 +758,6 @@ select.badge:hover{filter:brightness(1.2)}
   </div>
 </div>
 
-<!-- RECONCILE FROM EXPORT MODAL (build 120) -->
-<div id="audit-modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeAuditModal()">
-  <div class="modal" style="max-width:720px" onclick="event.stopPropagation()">
-    <div class="modal-title">🔧 Reconcile from export</div>
-    <div class="modal-sub" id="audit-sub">Comparing the deals on your book to the export and correcting funded / payback / factor / book funded where they drifted.</div>
-    <div id="audit-body" style="max-height:50vh;overflow:auto;margin:10px 0"></div>
-    <div class="modal-footer" id="audit-footer">
-      <button class="btn" onclick="closeAuditModal()">Cancel</button>
-      <button class="btn btn-green" id="audit-apply" style="display:none" onclick="applyReconcile()">Fix these deals</button>
-    </div>
-  </div>
-</div>
 
 <!-- DEAL FORM MODAL -->
 <div id="modal-bg" class="modal-bg" style="display:none" onclick="if(event.target===this)closeModal()">
@@ -1348,11 +1334,7 @@ async function importCrmExport(file){
         if(ex && ex._id && !/^pending-/.test(String(ex._id))){
           const df=(r._df && !String(ex.date_funded||'').trim()) ? r._df : null;            // fill missing funding date
           const lc=(lcFieldOk && r._lc && r._lc!==String(ex.last_cleared||'')) ? r._lc : null; // refresh last-paid date
-          if(df||lc){
-            backfills.push({id:ex._id, df, lc, deal:ex});
-            // TEMP DIAG build 158 — show WHY each deal backfills (missing date vs last-cleared refresh)
-            console.log('🔧 BACKFILL:', ex.merchant, '| reason:', df?('missing funding date (existing="'+(ex.date_funded||'')+'" → export="'+r._df+'")'):'', lc?('last-cleared refresh (existing="'+(ex.last_cleared||'')+'" → export="'+r._lc+'")'):'');
-          }
+          if(df||lc) backfills.push({id:ex._id, df, lc, deal:ex});
         }
         continue;
       }
@@ -1487,110 +1469,6 @@ function hideLoading() { document.getElementById('loading-overlay').style.displa
 // build 29: CRM import + daily sync use a drop-zone modal
 function openCrmModal(){ var i=document.getElementById('crm-file'); if(i)i.value=''; var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); document.getElementById('crm-modal-bg').style.display='flex'; }
 function closeCrmModal(){ var m=document.getElementById('crm-modal-bg'); if(m)m.style.display='none'; }
-// build 120: Reconcile from export — fixes existing deals whose funding math drifted under the old
-// grossed-up importer. Reads the CURRENT CRM export, matches on-book deals by Lead ID, recomputes the
-// exact figures (funded slice whole $, RTR cents, factor exact, on-book book% full precision, book
-// funded = funded × book%/100, commission), and patches ONLY those funding-math fields after you
-// confirm. It never touches status, balance/paid, collections, clawback, notes, or dates — those are
-// owned by the daily sync and Beacon. Read-only until you press "Fix these deals".
-let _reconcilePlan = null;
-function closeAuditModal(){ const m=document.getElementById('audit-modal-bg'); if(m)m.style.display='none'; _reconcilePlan=null; }
-async function reconcileFromExport(file){
-  if(!file) return;
-  let rows, C, money;
-  try{
-    const text = await file.text();
-    const wb = XLSX.read(text, {type:'string'});
-    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, raw:false});
-    const h = rows[0].map(x=>String(x||'').trim().toLowerCase());
-    const ci = n=>h.findIndex(x=>x===n);
-    C = {lead:ci('lead id'), merch:ci('merchant'), bookpct:ci('book %'), dealpct:ci('deal %'),
-         ffee:ci('funding fee'), ofee:ci('origination fee'), comm:ci('commission'),
-         funded:ci('funded'), purch:ci('purchased')};
-    if(C.lead<0||C.merch<0||C.funded<0||C.purch<0){ showNotice('That does not look like the CRM deals export — headers not recognized.','error'); return; }
-    money = s=>parseFloat(String(s==null?'':s).replace(/[$,]/g,''))||0;
-  }catch(e){ showNotice('Could not read that file — is it the CRM .csv export?','error'); return; }
-
-  // Index export rows by Lead ID
-  const exportByLead=new Map();
-  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r||!r[C.merch]) continue; const L=String(r[C.lead]||'').trim(); if(L&&!exportByLead.has(L)) exportByLead.set(L,r); }
-
-  const changes=[], unmatched=[];
-  for(const d of deals){
-    const L=String(d.lead_id||'').trim(); if(!L) continue;
-    const r=exportByLead.get(L); if(!r) continue;   // only deals present in this export
-    let dealPct = C.dealpct>=0 ? money(r[C.dealpct]) : 100; if(!dealPct) dealPct=100; if(dealPct<=1.5) dealPct*=100; if(dealPct>100) dealPct=100;
-    let csvBook=money(r[C.bookpct]); if(!csvBook) csvBook=100; if(csvBook<=1.5) csvBook*=100; if(csvBook>100) csvBook=100;
-    const scale = dealPct>0 ? 100/dealPct : 1;
-    const ourFunded=money(r[C.funded]), ourPurch=money(r[C.purch]), ourComm=money(r[C.comm]);
-    const funded=Math.round(ourFunded*scale);               // whole deal size
-    const rtr=Math.round(ourPurch*scale*100)/100;           // whole deal RTR
-    const factor=ourFunded? Math.round(ourPurch/ourFunded*10000)/10000 : 0;
-    const bookpct=dealPct*csvBook/100;                      // combined, full precision
-    const bookFunded=Math.round(ourFunded*csvBook/100*100)/100;
-    const ffee=money(r[C.ffee]), ofee=money(r[C.ofee]), fees=ffee+ofee;
-    const comm=Math.round(ourComm*scale*100)/100;
-    const ml=calcML(funded,bookpct,fees,comm);
-    // What's stored now vs what it should be
-    const cur={funded:d.funded||0, rtr:d.rtr||0, factor:d.factor||0, bookpct:d.book_pct||0, bookFunded:d.book_funded||0, comm:d.comm_amount||0};
-    const drift = Math.abs(cur.funded-funded)>=0.005 || Math.abs(cur.rtr-rtr)>=0.005 ||
-                  Math.abs(cur.factor-factor)>=0.0005 || Math.abs(cur.bookFunded-bookFunded)>=0.005 ||
-                  Math.abs(cur.bookpct-bookpct)>=0.0005 || Math.abs(cur.comm-comm)>=0.005;
-    if(!drift) continue;
-    const fields={ Funded:funded, RTR:rtr, Factor:factor, BookPct:bookpct, BookFunded:bookFunded,
-                   DDFee:ffee, OrigFee:ofee, BankFees:fees, CommAmount:comm,
-                   CommPct: funded? Math.round(comm/funded*10000)/100 : 0, MaxLoss:ml };
-    changes.push({ id:d._id, merchant:d.merchant, cur, next:{funded,rtr,factor,bookpct,bookFunded,comm}, fields });
-  }
-  changes.sort((a,b)=>Math.abs((b.cur.bookFunded-b.next.bookFunded))-Math.abs((a.cur.bookFunded-a.next.bookFunded)));
-
-  const sub=document.getElementById('audit-sub'), body=document.getElementById('audit-body'), apply=document.getElementById('audit-apply');
-  if(!changes.length){
-    sub.textContent='Everything already matches the export — nothing to reconcile.';
-    body.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3)">✓ All deals are exact.</div>';
-    apply.style.display='none'; _reconcilePlan=null;
-  }else{
-    sub.textContent=changes.length+' deal'+(changes.length!==1?'s':'')+' will be corrected from the export. Review the changes, then press "Fix these deals". Only funding math changes — status, balances, notes, and collections are untouched.';
-    body.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:11.5px">'+
-      '<thead><tr style="text-align:left;color:var(--text3)">'+
-      '<th style="padding:5px 7px">Merchant</th><th style="padding:5px 7px">Funded</th>'+
-      '<th style="padding:5px 7px">Factor</th><th style="padding:5px 7px">Book %</th>'+
-      '<th style="padding:5px 7px">Book funded</th></tr></thead><tbody>'+
-      changes.map(c=>{
-        const chg=(a,b,fmt)=>a===b?fmt(b):('<span style="color:var(--text3);text-decoration:line-through">'+fmt(a)+'</span> <span style="color:#5eead4">'+fmt(b)+'</span>');
-        const pct=v=>(+v).toFixed(4).replace(/\.?0+$/,'')+'%';
-        return '<tr style="border-top:0.5px solid var(--border)">'+
-          '<td style="padding:5px 7px;font-weight:600">'+esc0(c.merchant)+'</td>'+
-          '<td style="padding:5px 7px">'+chg(c.cur.funded,c.next.funded,fmt$)+'</td>'+
-          '<td style="padding:5px 7px">'+chg(c.cur.factor,c.next.factor,v=>(+v).toFixed(4).replace(/\.?0+$/,''))+'</td>'+
-          '<td style="padding:5px 7px">'+chg(c.cur.bookpct,c.next.bookpct,pct)+'</td>'+
-          '<td style="padding:5px 7px">'+chg(c.cur.bookFunded,c.next.bookFunded,fmt$)+'</td>'+
-        '</tr>';
-      }).join('')+'</tbody></table>';
-    apply.style.display='';
-    _reconcilePlan=changes;
-  }
-  document.getElementById('audit-modal-bg').style.display='flex';
-}
-async function applyReconcile(){
-  if(!_reconcilePlan || !_reconcilePlan.length){ closeAuditModal(); return; }
-  const plan=_reconcilePlan;
-  const apply=document.getElementById('audit-apply'); apply.disabled=true; apply.textContent='Fixing…';
-  try{
-    for(let i=0;i<plan.length;i+=10){
-      const batch=plan.slice(i,i+10).map(c=>({id:c.id, fields:c.fields}));
-      await atFetch('PATCH','',{records:batch, typecast:true});
-    }
-    // Update the in-memory deals so the UI reflects the fix immediately, then recompute derived values.
-    for(const c of plan){ const d=deals.find(x=>x._id===c.id); if(d){ d.funded=c.next.funded; d.rtr=c.next.rtr; d.factor=c.next.factor; d.book_pct=c.next.bookpct; d.book_funded=c.next.bookFunded; d.comm_amount=c.next.comm; } }
-    closeAuditModal();
-    showNotice('Reconciled '+plan.length+' deal'+(plan.length!==1?'s':'')+' from the export. Refreshing…','success',5000);
-    if(typeof loadDeals==='function') await loadDeals(); else if(typeof render==='function') render();
-  }catch(e){
-    apply.disabled=false; apply.textContent='Fix these deals';
-    showNotice('Could not write the fixes: '+(e&&e.message?e.message:e),'error',8000);
-  }
-}
 function handleCrmDrop(e){ e.preventDefault(); var z=document.getElementById('crm-zone'); if(z)z.classList.remove('drag'); var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return; if(!(f.name||'').toLowerCase().endsWith('.csv')){ showNotice('CRM import expects a .csv file.','error'); return; } closeCrmModal(); importCrmExport(f); }
 function openDailyModal(){ var i=document.getElementById('daily-input'); if(i)i.value=''; var z=document.getElementById('daily-zone'); if(z)z.classList.remove('drag'); document.getElementById('daily-modal-bg').style.display='flex'; }
 function closeDailyModal(){ var m=document.getElementById('daily-modal-bg'); if(m)m.style.display='none'; }
