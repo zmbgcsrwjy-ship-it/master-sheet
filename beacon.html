@@ -564,6 +564,7 @@
   .cal-tag-weekly { background: rgba(197,138,224,.20); color: var(--sev-wkly); }
   .cal-tag-nexthit { background: rgba(91,157,255,.18); color: #5b9dff; }
   .cal-tag-manualpay { background: rgba(45,212,191,.18); color: #2dd4bf; }
+  .cal-tag-manualpaid { background: rgba(45,212,191,.09); color: rgba(45,212,191,.72); }
   /* v172: sidebar upcoming manual-pay items — teal to match the calendar tag */
   .upcoming-manualpay { border-left: 2px solid #2dd4bf; }
   .mp-dot { width: 7px; height: 7px; border-radius: 50%; background: #2dd4bf; display: inline-block; flex: none; }
@@ -1341,7 +1342,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v190</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v191</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3004,6 +3005,19 @@ function manualPaysDueOn(iso) {
   return state.filter(m => m.manual_pay_state && m.manual_pay_state!=='DONE' && m.manual_pay_next_due === iso)
     .map(m => ({ name: m.name, lead_id: m.lead_id, amount: m.manual_pay_amount||0 }));
 }
+// v191: logged manual payments that landed on this date (from the pay log). These stay put on the
+// calendar as a history — the "due" tag moves forward to the next due date, but each date we actually
+// received a payment keeps a "✓ paid" tag so the schedule reads as a running record, not a single marker.
+function manualPaysPaidOn(iso) {
+  const out = [];
+  (state||[]).forEach(m => {
+    if (!Array.isArray(m.manual_pay_log)) return;
+    m.manual_pay_log.forEach(e => {
+      if (e && e.date === iso) out.push({ name: m.name, lead_id: m.lead_id, amount: Number(e.amount)||0 });
+    });
+  });
+  return out;
+}
 
 function isInFlight(m) {
   if (!m.bounced_today) return false;
@@ -3531,7 +3545,7 @@ function renderCalendar() {
     const dow = dateObj.getDay(); // 0 = Sun, 6 = Sat
     const isWeekend = (dow === 0 || dow === 6);
     // A cell has "data" if there's history OR it's today OR there are resumes (past or future)
-    const hasData = !!dayHist || isTodayCell || dayResumes.length > 0 || dayNextHits.length > 0 || manualPaysDueOn(iso).length > 0;
+    const hasData = !!dayHist || isTodayCell || dayResumes.length > 0 || dayNextHits.length > 0 || manualPaysDueOn(iso).length > 0 || manualPaysPaidOn(iso).length > 0;
     
     if (isWeekend) cell.classList.add("weekend");
     else if (isFuture && dayResumes.length === 0 && dayNextHits.length === 0 && dayManualPays.length === 0) cell.classList.add("future");
@@ -3578,6 +3592,15 @@ function renderCalendar() {
       mp.title = 'Manual payment due — ' + dayManualPays.map(x=>x.name + ' ($' + (x.amount||0).toFixed(2) + ')').join(', ');
       _tags.appendChild(mp);
     }
+    // v191: past logged manual payments stay on their date as a "✓ paid" history tag
+    const dayManualPaid = manualPaysPaidOn(iso);
+    if (dayManualPaid.length > 0) {
+      const mpp = document.createElement("span");
+      mpp.className = "cal-tag cal-tag-manualpaid";
+      mpp.textContent = "✓ " + dayManualPaid.length + " paid";
+      mpp.title = 'Manual payment received — ' + dayManualPaid.map(x=>x.name + ' ($' + (x.amount||0).toFixed(2) + ')').join(', ');
+      _tags.appendChild(mpp);
+    }
     if (!isWeekend && dayHist && dayHist.stats) {
       const stp = dayHist.stats.stop_count_today || 0;
       if (stp > 0) {
@@ -3622,7 +3645,7 @@ function renderCalendar() {
       ? dayHist.bounce_events.filter(ev => !(ev.sev_class === 'stop' || ev.bounce_type === 'Expected Payment Missing' || STOP_RCODES.indexOf(ev.return_code) >= 0) && !ev._carriedStop)
       : [];
     if ((!isWeekend && (dayResumes.length > 0 || dayStops.length > 0 || dayBounces.length > 0 || dayNextHits.length > 0)) || dayManualPays.length > 0) {
-      cell.addEventListener("mouseenter", e => showCalTooltip(e.currentTarget, iso, dayResumes, dayStops, dayBounces, dayNextHits, dayManualPays));
+      cell.addEventListener("mouseenter", e => showCalTooltip(e.currentTarget, iso, dayResumes, dayStops, dayBounces, dayNextHits, dayManualPays, dayManualPaid));
       cell.addEventListener("mouseleave", hideCalTooltip);
     }
     
@@ -3632,9 +3655,9 @@ function renderCalendar() {
 
 // Singleton tooltip element — created once, repositioned/repopulated as cells are hovered
 let _calTooltipEl = null;
-function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits, manualPays) {
-  resumes = resumes || []; stops = stops || []; bounces = bounces || []; nextHits = nextHits || []; manualPays = manualPays || [];
-  if (!resumes.length && !stops.length && !bounces.length && !nextHits.length && !manualPays.length) return;
+function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits, manualPays, manualPaid) {
+  resumes = resumes || []; stops = stops || []; bounces = bounces || []; nextHits = nextHits || []; manualPays = manualPays || []; manualPaid = manualPaid || [];
+  if (!resumes.length && !stops.length && !bounces.length && !nextHits.length && !manualPays.length && !manualPaid.length) return;
   if (!_calTooltipEl) { _calTooltipEl = document.createElement("div"); _calTooltipEl.className = "cal-tooltip"; document.body.appendChild(_calTooltipEl); }
   const rowFor = (ev, detailCls, detail) => {
     const live = state.find(s => s.lead_id === ev.lead_id);
@@ -3663,6 +3686,10 @@ function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits, manualPays
   if (manualPays.length) {
     html += '<div class="tt-subhead">\ud83d\udcb5 ' + manualPays.length + ' manual pay due</div>';
     html += manualPays.map(x => rowFor({name:x.name,lead_id:x.lead_id},'','$'+(x.amount||0).toFixed(2)+' due')).join("");
+  }
+  if (manualPaid.length) {
+    html += '<div class="tt-subhead">\u2713 ' + manualPaid.length + ' manual pay received</div>';
+    html += manualPaid.map(x => rowFor({name:x.name,lead_id:x.lead_id},'','$'+(x.amount||0).toFixed(2)+' paid')).join("");
   }
   _calTooltipEl.innerHTML = html;
   const rect = cell.getBoundingClientRect();
