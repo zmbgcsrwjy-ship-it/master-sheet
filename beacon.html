@@ -1342,7 +1342,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v191</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v192</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2313,6 +2313,14 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       // suppress calendar re-stamping (below) for ongoing stops, but for a legal deal bouncing on TODAY
       // we let the record through so bounced_today can light up the watch-list row.
       const legalToday = inLegal && bDay===bLocalToday();
+      if (/HAPPYANGEL/i.test(b.merchant||m.deal.merchant||'')) {
+        console.log('🍼 HAPPYANGELS SKIP DIAG:', JSON.stringify({
+          merchant:b.merchant, bDay, returnCode:b.returnCode, isStop:_isStop,
+          priorStops, lastStop, resumed, handled, resolution_type:m.deal.resolution_type,
+          last_cleared:m.deal.last_cleared, resume_date:m.deal.resume_date, brokeResume, legalToday,
+          WILL_SKIP: !!(lastStop && !brokeResume && !legalToday && (handled || !resumed))
+        }, null, 2));
+      }
       if (lastStop && !brokeResume && !legalToday && (handled || !resumed)){ skipped.push(key+' (ongoing/handled stop)'); continue; }
       (batchStops[m.deal._rid]=batchStops[m.deal._rid]||[]).push(bDay);
     }
