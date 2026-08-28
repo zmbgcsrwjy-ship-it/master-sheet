@@ -1342,7 +1342,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v192</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v193</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2305,7 +2305,6 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       const priorStops=[...(m.deal._stopDates||[]), ...(batchStops[m.deal._rid]||[])].filter(d=>d && d<bDay).sort();
       const lastStop=priorStops.length?priorStops[priorStops.length-1]:null;
       const resumed=lastStop && m.deal.last_cleared && m.deal.last_cleared>lastStop;
-      const handled=!!m.deal.resolution_type;  // sent to legal / suspended / etc. — already handled
       const inLegal=(m.deal.resolution_type==='legal');  // v150: legal deals must stay visible while still hitting
       const brokeResume=m.deal.resume_date && bDay>=m.deal.resume_date;  // agreed resume passed, still stopping → surface
       // v150: a legal deal that keeps getting hit TODAY should still surface as "LEGAL · STILL HITTING"
@@ -2313,15 +2312,14 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       // suppress calendar re-stamping (below) for ongoing stops, but for a legal deal bouncing on TODAY
       // we let the record through so bounced_today can light up the watch-list row.
       const legalToday = inLegal && bDay===bLocalToday();
-      if (/HAPPYANGEL/i.test(b.merchant||m.deal.merchant||'')) {
-        console.log('🍼 HAPPYANGELS SKIP DIAG:', JSON.stringify({
-          merchant:b.merchant, bDay, returnCode:b.returnCode, isStop:_isStop,
-          priorStops, lastStop, resumed, handled, resolution_type:m.deal.resolution_type,
-          last_cleared:m.deal.last_cleared, resume_date:m.deal.resume_date, brokeResume, legalToday,
-          WILL_SKIP: !!(lastStop && !brokeResume && !legalToday && (handled || !resumed))
-        }, null, 2));
-      }
-      if (lastStop && !brokeResume && !legalToday && (handled || !resumed)){ skipped.push(key+' (ongoing/handled stop)'); continue; }
+      // v193: a stop that RESUMED since its last stop (a payment cleared after the last stop) is a NEW
+      // stop, not the same persistent one — surface it even if the deal is "handled" (lowered/suspended).
+      // The old `(handled || !resumed)` skipped these because handled short-circuited, which hid
+      // HAPPYANGELS: it lowered, resumed (paid 8/27), then stopped AGAIN on 8/28 — a broken arrangement
+      // that must show. We now skip only genuine ongoing stops (no resume since the last stop). Suspended
+      // deals still hidden while paused (they don't resume mid-pause); brokeResume still surfaces on the
+      // agreed resume date; legal still handled via legalToday + the legal path.
+      if (lastStop && !brokeResume && !legalToday && !resumed){ skipped.push(key+' (ongoing stop, no resume since)'); continue; }
       (batchStops[m.deal._rid]=batchStops[m.deal._rid]||[]).push(bDay);
     }
     const sev = _isStop ? 'STOP' : (b.consec>1?'CONSEC':'NEW');
