@@ -1342,7 +1342,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v193</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v194</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2314,12 +2314,18 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       const legalToday = inLegal && bDay===bLocalToday();
       // v193: a stop that RESUMED since its last stop (a payment cleared after the last stop) is a NEW
       // stop, not the same persistent one — surface it even if the deal is "handled" (lowered/suspended).
-      // The old `(handled || !resumed)` skipped these because handled short-circuited, which hid
-      // HAPPYANGELS: it lowered, resumed (paid 8/27), then stopped AGAIN on 8/28 — a broken arrangement
-      // that must show. We now skip only genuine ongoing stops (no resume since the last stop). Suspended
-      // deals still hidden while paused (they don't resume mid-pause); brokeResume still surfaces on the
-      // agreed resume date; legal still handled via legalToday + the legal path.
-      if (lastStop && !brokeResume && !legalToday && !resumed){ skipped.push(key+' (ongoing stop, no resume since)'); continue; }
+      // HAPPYANGELS: lowered, resumed (paid 8/27), then stopped AGAIN on 8/28 — a broken arrangement
+      // that must show. We skip only genuine ongoing stops (no resume since the last stop). Suspended
+      // deals still hidden while paused; brokeResume surfaces on the resume date; legal via legalToday.
+      // v194 SAFETY NET: a skip here only suppresses a DUPLICATE calendar stamp — it must NEVER make a
+      // deal vanish from the report. We only skip when the deal already has a prior stop record that
+      // will still render it (carried-forward open stop). If skipping would orphan the deal (no existing
+      // record to surface it), we let the record through instead. RULE: an uploaded deal always appears.
+      const hasExistingStopRecord = (m.deal._stopDates||[]).some(d => d && d < bDay);
+      const wouldSkip = (lastStop && !brokeResume && !legalToday && !resumed);
+      if (wouldSkip && hasExistingStopRecord){ skipped.push(key+' (ongoing stop — already visible via prior record)'); continue; }
+      // if wouldSkip but there is NO existing record to carry it, fall through and create the record
+      // so the deal cannot disappear (defensive — covers any future edge the skip conditions miss).
       (batchStops[m.deal._rid]=batchStops[m.deal._rid]||[]).push(bDay);
     }
     const sev = _isStop ? 'STOP' : (b.consec>1?'CONSEC':'NEW');
