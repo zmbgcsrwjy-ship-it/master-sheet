@@ -1345,7 +1345,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v199</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v200</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2501,8 +2501,21 @@ async function beaconPushClear(m, todayISO){
     'When':todayISO+'T17:00:00.000Z', 'Type':'Note', 'Note':JSON.stringify({v:1,kind:'clear'}), 'By':BEACON_CFG.user }}]);
   await atPatch('Deals',[{id:m._rid, fields:{'CollectionsState':beaconCollectionsStateFor(m), 'CollectionsDetail':beaconCollectionsDetailFor(m)}}]);
 }
-async function beaconPushNote(m, todayISO, noteRidMap){
-  const entry=(m.notes_log||[]).find(e=>e.date_iso===todayISO);
+// v200: append a system-generated note to a deal (used when a stop auto-resets a broken resolution)
+// and persist it. Merges into today's note entry so it shows in the deal's note history.
+async function beaconAppendAutoNote(m, text){
+  if (!m || !text) return;
+  if (!Array.isArray(m.notes_log)) m.notes_log = [];
+  const today = TODAY_ISO;
+  const existing = m.notes_log.find(e => e.date_iso === today);
+  if (existing){
+    if (!(existing.text||'').includes(text)) existing.text = ((existing.text||'').trim() + '\n' + text).trim();
+  } else {
+    m.notes_log.push({ date_iso: today, text, logged_at: new Date().toISOString(), _system:true });
+  }
+  try { await beaconPushNote(m, today); } catch(e){}
+}
+async function beaconPushNote(m, todayISO, noteRidMap){  const entry=(m.notes_log||[]).find(e=>e.date_iso===todayISO);
   if (!entry || !String(entry.text).trim()) return;
   const mapKey=m.lead_id+'|'+todayISO;
   if (noteRidMap[mapKey]){
@@ -2699,10 +2712,37 @@ async function beaconReload(){
   reconcileCollectionsStates();  // backfill CollectionsState for resolved deals (lowered/suspended/legal) so the Master Sheet shows the right pill
 }
 async function reconcileCollectionsStates(){
+  let _brokeResetHappened = false;
   try{
     const patches=[];
     for (const m of state){
       const fields = {};
+      // v200: a STOP that broke the resolution resets it to blank. The deal needs a FRESH resolution
+      // (a closed account or re-stop after lowering isn't "handled" anymore), so we clear the live
+      // resolution and drop it from the resume sidebar. The BROKE tag still shows because it's driven
+      // by resolution_history (durable), and a "was lowered" note is stamped so the history is kept.
+      const brokeStop = (m.open_stop || m.sev_class === 'stop') && m.resolution_type && isBroken(m);
+      if (brokeStop && !m._brokeReset){
+        // snapshot what it WAS, for the note + the tag
+        const wasType = m.resolution_type, wasAmt = m.lowered_amount||0;
+        if (!Array.isArray(m.resolution_history)) m.resolution_history = [];
+        // ensure the broken resolution is in history so the BROKE tag survives the reset
+        if (!m.resolution_history.some(r => r.date === m.resolution_date && r.type === wasType)){
+          m.resolution_history.push({ date: m.resolution_date, type: wasType, resume_date: m.resume_date||'', lowered_amount: wasAmt });
+        }
+        m._brokeReset = { type: wasType, amount: wasAmt, date: m.resolution_date };  // drives the BROKE tag this session
+        _brokeResetHappened = true;
+        // reset the live resolution — now unresolved, needs new action
+        m.resolution_type = ''; m.resolution_date = ''; m.resume_date = ''; m.lowered_amount = 0;
+        // stamp a durable note so the "was lowered" history is visible on the deal
+        const noteTxt = 'Auto: ' + prettyResType(wasType) + (wasAmt?(' ($'+wasAmt.toFixed(2)+'/day)'):'') + ' broke on a stop — resolution reset, needs a new one.';
+        try { beaconAppendAutoNote(m, noteTxt); } catch(e){}
+        fields['CollectionsState'] = 'BOUNCING';
+        fields['CollectionsDetail'] = 'Stop broke ' + prettyResType(wasType).toLowerCase();
+        m._collectionsState = 'BOUNCING';
+        // clear the resolution action in Airtable (mirrors clearResolution's write)
+        try { await beaconPushClear(m, TODAY_ISO); } catch(e){}
+      }
       if (m.resolution_type){
         const want = beaconCollectionsStateFor(m);
         if (want && want !== 'OK' && (m._collectionsState||'') !== want){
@@ -2755,6 +2795,12 @@ async function reconcileCollectionsStates(){
       }
     }
   }catch(e){ console.error('[beacon reconcile]', e); }
+  // v200: if any deal's resolution was reset by a stop this cycle, re-render so the board/sidebar
+  // reflect it immediately (reconcile runs after the first render). The BROKE tag persists via
+  // _brokeReset; the deal now shows unresolved and drops out of the upcoming-resume sidebar.
+  if (_brokeResetHappened){
+    try { renderForDate(); renderSidebar(); renderCalendar(); updateCounters(); } catch(e){ console.error('[beacon broke-reset rerender]', e); }
+  }
 }
 async function syncBounceReport(file){
   if (!file) return;
@@ -5086,10 +5132,12 @@ function buildRow(m, editable) {
     // On past-date views, the action label on the right makes this chip redundant.
     chips += '<span class="inflight-chip">' + prettyResType(m.resolution_type) + '</span>';
   }
-  else if (m._broken) {
-    // v197: a broken resolution shows the BROKE label. A broken STOP keeps its stop code chip too,
-    // since it stays in the stop bucket (the BROKE label rides alongside, not instead).
-    chips += '<span class="streak-chip">BROKE ' + (m.resolution_type === 'spoke' ? 'CONTACT' : prettyResType(m.resolution_type).toUpperCase()) + '</span>';
+  else if (m._broken || m._brokeReset) {
+    // v197/v200: a broken resolution shows the BROKE label. After a stop auto-resets the resolution
+    // (v200), the live resolution_type is blank, so pull the broken type from _brokeReset. The label
+    // rides alongside the stop code chip; the deal is now unresolved and needs a fresh resolution.
+    const brokeType = (m.resolution_type || (m._brokeReset && m._brokeReset.type) || '');
+    chips += '<span class="streak-chip">BROKE ' + (brokeType === 'spoke' ? 'CONTACT' : prettyResType(brokeType).toUpperCase()) + '</span>';
     if (m.sev_class === "stop" || m.open_stop) chips += codeChip(m.return_code, m.bounce_type);
   }
   else if (m.sev_class === "stop") chips += codeChip(m.return_code, m.bounce_type);
