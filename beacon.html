@@ -99,7 +99,10 @@
   .brief-controls .bx-density button.on { background:#539bf5; color:#fff; }
   .layout.collapsed { grid-template-columns: 44px 1fr; }
   
-  .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 14px; overflow-y: auto; overflow-x: hidden; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; }
+  .sidebar { background: var(--surface); border-right: 0.5px solid var(--border-strong); padding: 24px 18px; padding-top: 14px; overflow: hidden; position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; }
+  /* v199: header (logo + refresh) stays fixed; only this middle region scrolls; claw alert pins below it */
+  .sidebar-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; margin-right: -6px; padding-right: 6px; }
+  .bx-side-logo, #bx-refresh-btn { flex: 0 0 auto; }
   .layout.collapsed .sidebar { padding: 24px 6px; padding-top: 50px; }
   .layout.collapsed .sidebar > *:not(.sidebar-toggle):not(#bx-refresh-btn) { display: none; }
   .sidebar-toggle { position: absolute; top: 14px; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: var(--surface-2); border: 0.5px solid var(--border-strong); border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; color: var(--text-2); z-index: 2; }
@@ -901,7 +904,7 @@
   .code-chip { display: inline-block; padding: 2px 7px; border-radius: 4px; background: var(--sev-stop-bg); color: var(--sev-stop); font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.03em; }
   .code-chip.epm { background: #EFEAE0; color: #5B3A0B; }
   /* v142: account errors are as severe as a stop but signal OUR-SIDE doc issue — same red fill, dashed edge so they read as "different reason". */
-  .code-chip.acct { border: 1px dashed var(--sev-stop); }
+  .code-chip.acct { background: rgba(245,158,11,.16); color: #f5b23c; border: 1px solid rgba(245,158,11,.5); }
   .code-chip.plain { background: var(--surface-2); color: var(--text-2); font-weight: 600; }
   .streak-chip { display: inline-block; padding: 2px 7px; border-radius: 4px; background: #FBEAEA; color: #B7261C; font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.02em; }
   .weekly-chip { display: inline-block; padding: 3px 9px; border-radius: 4px; background: #FBEAEA; color: #B7261C; font-size: 13px; font-weight: 800; margin-right: 8px; letter-spacing: 0.02em; }
@@ -1342,10 +1345,11 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v198</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v199</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
+  <div class="sidebar-scroll">
   <div class="watch-list">
     <div class="watch-list-header">
       <span class="watch-list-title">Watch List</span>
@@ -1377,7 +1381,8 @@
     <h2>📅 Upcoming · next 30 days</h2>
     <div id="list-upcoming"></div>
   </div>
-  <div id="bx-claw-alert" title="Deals whose clawback window closes within 7 days — claw them from the Master Sheet before they age out" style="display:none;flex-direction:column;gap:2px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.14);color:#f5b23c;border:1px solid rgba(245,158,11,.42);font-size:12px;font-weight:700;margin-top:auto;position:sticky;bottom:0;z-index:2;line-height:1.4"></div>
+  </div>
+  <div id="bx-claw-alert" title="Deals whose clawback window closes within 7 days — claw them from the Master Sheet before they age out" style="display:none;flex-direction:column;gap:2px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,.14);color:#f5b23c;border:1px solid rgba(245,158,11,.42);font-size:12px;font-weight:700;margin-top:12px;flex:0 0 auto;z-index:2;line-height:1.4"></div>
 </aside>
 
 <main class="main">
@@ -5100,7 +5105,7 @@ function buildRow(m, editable) {
     } else {
       resTxt = prettyResType(m.resolution_type) + (m.resume_date ? ' · resume ' + fmtDate(m.resume_date) : '');
     }
-    chips += '<span class="resolved-chip">' + resTxt + '</span>';
+    chips += '<span class="resolved-chip" title="' + resTxt.replace(/"/g,'&quot;') + '">' + resTxt + '</span>';
   }
   
   const _nameCls = 'merchant-name mname-click' + (isWeeklyDeal(m) ? ' wk-board-name' : '');
