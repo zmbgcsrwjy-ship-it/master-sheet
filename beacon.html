@@ -1345,7 +1345,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v200</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v201</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -4052,8 +4052,21 @@ function renderUpcomingPanel() {
     return;
   }
   upList.parentElement.style.display = "";
-  upcoming.sort((a,b) => new Date(a.resume_date) - new Date(b.resume_date));
-  upcoming.forEach(m => {
+
+  // v201: merge resumes + manual pays into ONE list sorted by soonest-due, so the most urgent item
+  // is always on top regardless of type. Previously resumes rendered first and manual pays were
+  // appended after, so a manual pay due TODAY sank below resumes days away. Each entry carries a
+  // _sortDate (its due/resume date) and a kind; we sort the combined list, then render per kind.
+  const mpUpcomingPre = state.filter(m => m.manual_pay_state && m.manual_pay_state !== 'DONE'
+    && m.manual_pay_next_due && daysBetween(TODAY_ISO, m.manual_pay_next_due) <= 30);
+  const merged = []
+    .concat(upcoming.map(m => ({ m, kind:'resume', sortDate:m.resume_date })))
+    .concat(mpUpcomingPre.map(m => ({ m, kind:'manualpay', sortDate:m.manual_pay_next_due })));
+  merged.sort((a,b) => new Date(a.sortDate) - new Date(b.sortDate));
+
+  merged.forEach(item => {
+    if (item.kind === 'manualpay') { renderUpcomingManualPayCard(item.m, upList); return; }
+    const m = item.m;
     const card = document.createElement("div");
     card.className = "sidebar-card upcoming";
     card.style.cursor = "pointer";
@@ -4100,42 +4113,36 @@ function renderUpcomingPanel() {
     upList.appendChild(card);
   });
 
-  // v173: upcoming MANUAL PAYMENTS — sorted soonest-due first (upcoming up top, later dates lower).
-  // Teal to match the calendar tag; "Manual pay" is bold white so it clearly isn't a regular debit.
-  const mpUpcoming = state.filter(m => m.manual_pay_state && m.manual_pay_state !== 'DONE'
-    && m.manual_pay_next_due && daysBetween(TODAY_ISO, m.manual_pay_next_due) <= 30);
-  if (mpUpcoming.length){
-    upList.parentElement.style.display = "";
-    mpUpcoming.sort((a,b) => new Date(a.manual_pay_next_due) - new Date(b.manual_pay_next_due));
-    mpUpcoming.forEach(m => {
-      const days = daysBetween(TODAY_ISO, m.manual_pay_next_due);
-      const late = days < 0;
-      const bdUntil = bdDiff(new Date(TODAY_ISO + "T00:00:00"), new Date(m.manual_pay_next_due + "T00:00:00"));
-      const card = document.createElement("div");
-      card.className = "sidebar-card upcoming upcoming-manualpay";
-      card.style.cursor = "pointer";
-      card.dataset.leadId = m.lead_id;
-      const whenTxt = late ? Math.abs(days)+'d overdue' : (days === 0 ? 'due today' : 'in '+days+'d');
-      // DUE IN N BD badge — same trigger as the resume badge (within 1 business day)
-      let dueBadge = '';
-      if (late) dueBadge = '<span class="upcoming-resume-badge mp-late">LATE</span>';
-      else if (bdUntil >= 0 && bdUntil <= 1) dueBadge = '<span class="upcoming-resume-badge mp-due">DUE IN ' + bdUntil + ' BD</span>';
-      card.innerHTML =
-        '<div class="upcoming-name-row">' +
-          '<span class="mp-dot" title="Manual payment"></span>' +
-          '<span class="name mp-name">' + escapeHtml(m.name) + '</span>' +
-          dueBadge +
-        '</div>' +
-        '<div class="detail"><strong class="mp-label">Manual pay</strong> <strong>$' + (m.manual_pay_amount||0).toFixed(2) + '</strong> ' +
-          manualPayCadenceLabel(m.manual_pay_cadence).toLowerCase() + ' · ' + fmtDate(m.manual_pay_next_due) + ' (' + whenTxt + ')</div>';
-      card.addEventListener("click", () => {
-        calMonth = m.manual_pay_next_due.slice(0, 7);
-        selectDate(m.manual_pay_next_due);
-        const cw = document.querySelector(".calendar-wrap"); if(cw) cw.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-      upList.appendChild(card);
-    });
-  }
+}
+// v201: one manual-pay upcoming card — extracted so the merged/sorted upcoming list can render it
+// inline alongside resume cards (soonest-due first). Teal, "Manual pay" bold white so it's clearly
+// not a regular debit; DUE/LATE badge mirrors the resume badge.
+function renderUpcomingManualPayCard(m, upList){
+  const days = daysBetween(TODAY_ISO, m.manual_pay_next_due);
+  const late = days < 0;
+  const bdUntil = bdDiff(new Date(TODAY_ISO + "T00:00:00"), new Date(m.manual_pay_next_due + "T00:00:00"));
+  const card = document.createElement("div");
+  card.className = "sidebar-card upcoming upcoming-manualpay";
+  card.style.cursor = "pointer";
+  card.dataset.leadId = m.lead_id;
+  const whenTxt = late ? Math.abs(days)+'d overdue' : (days === 0 ? 'due today' : 'in '+days+'d');
+  let dueBadge = '';
+  if (late) dueBadge = '<span class="upcoming-resume-badge mp-late">LATE</span>';
+  else if (bdUntil >= 0 && bdUntil <= 1) dueBadge = '<span class="upcoming-resume-badge mp-due">DUE IN ' + bdUntil + ' BD</span>';
+  card.innerHTML =
+    '<div class="upcoming-name-row">' +
+      '<span class="mp-dot" title="Manual payment"></span>' +
+      '<span class="name mp-name">' + escapeHtml(m.name) + '</span>' +
+      dueBadge +
+    '</div>' +
+    '<div class="detail"><strong class="mp-label">Manual pay</strong> <strong>$' + (m.manual_pay_amount||0).toFixed(2) + '</strong> ' +
+      manualPayCadenceLabel(m.manual_pay_cadence).toLowerCase() + ' · ' + fmtDate(m.manual_pay_next_due) + ' (' + whenTxt + ')</div>';
+  card.addEventListener("click", () => {
+    calMonth = m.manual_pay_next_due.slice(0, 7);
+    selectDate(m.manual_pay_next_due);
+    const cw = document.querySelector(".calendar-wrap"); if(cw) cw.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  upList.appendChild(card);
 }
 
 // =============================================================
