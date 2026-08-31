@@ -1345,7 +1345,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v203</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v204</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2717,14 +2717,6 @@ async function reconcileCollectionsStates(){
     const patches=[];
     for (const m of state){
       const fields = {};
-      if (/LOYCHIRO|LOY CHIRO/i.test(m.name||'')) {
-        console.log('🩺 LOYCHIRO DIAG:', JSON.stringify({
-          name:m.name, status:m.status, resolution_type:m.resolution_type, resolution_date:m.resolution_date,
-          last_cleared:m.last_cleared, _bounceDates:m._bounceDates,
-          _collectionsState:m._collectionsState,
-          in_beacon_state:true
-        }, null, 2));
-      }
       // v200: a STOP that broke the resolution resets it to blank. The deal needs a FRESH resolution
       // (a closed account or re-stop after lowering isn't "handled" anymore), so we clear the live
       // resolution and drop it from the resume sidebar. The BROKE tag still shows because it's driven
@@ -2767,6 +2759,19 @@ async function reconcileCollectionsStates(){
         }
       } else if ((m._collectionsState||'') === 'BOUNCING'){
         // Unresolved & tagged BOUNCING — drop the tag once a payment CLEARED strictly after the most recent bounce.
+        const lastBounce = (m._bounceDates||[]).slice(-1)[0] || '';
+        if (m.last_cleared && lastBounce && m.last_cleared > lastBounce){
+          fields['CollectionsState'] = '';
+          fields['CollectionsDetail'] = '';
+          m._collectionsState = '';
+        }
+      } else if ((m._collectionsState||'') === 'RESUME NORMAL'){
+        // v204: a STRANDED spoke-to tag. The live resolution_type is blank (the "resume as normal"
+        // resolution EXPIRED once a payment cleared — v157), but the Master Sheet CollectionsState field
+        // was never wiped, so RESUME NORM sits on the deal forever (LOYCHIRO). The old retirement only ran
+        // inside `if (m.resolution_type)`, so an expired resolution skipped it. Retire it here on the same
+        // evidence — a payment cleared after the most recent bounce. (LOYCHIRO: bounced 8/24, spoke, paid
+        // 8/31 → resolution expired, tag stranded → now retired.)
         const lastBounce = (m._bounceDates||[]).slice(-1)[0] || '';
         if (m.last_cleared && lastBounce && m.last_cleared > lastBounce){
           fields['CollectionsState'] = '';
