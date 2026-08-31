@@ -1345,7 +1345,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v202</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v203</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2717,6 +2717,14 @@ async function reconcileCollectionsStates(){
     const patches=[];
     for (const m of state){
       const fields = {};
+      if (/LOYCHIRO|LOY CHIRO/i.test(m.name||'')) {
+        console.log('🩺 LOYCHIRO DIAG:', JSON.stringify({
+          name:m.name, status:m.status, resolution_type:m.resolution_type, resolution_date:m.resolution_date,
+          last_cleared:m.last_cleared, _bounceDates:m._bounceDates,
+          _collectionsState:m._collectionsState,
+          in_beacon_state:true
+        }, null, 2));
+      }
       // v200: a STOP that broke the resolution resets it to blank. The deal needs a FRESH resolution
       // (a closed account or re-stop after lowering isn't "handled" anymore), so we clear the live
       // resolution and drop it from the resume sidebar. The BROKE tag still shows because it's driven
@@ -2745,14 +2753,6 @@ async function reconcileCollectionsStates(){
       }
       if (m.resolution_type){
         const want = beaconCollectionsStateFor(m);
-        if (/LOYCHIRO|LOY CHIRO/i.test(m.name||'')) {
-          console.log('🩺 LOYCHIRO DIAG:', JSON.stringify({
-            name:m.name, resolution_type:m.resolution_type, resolution_date:m.resolution_date,
-            last_cleared:m.last_cleared, _bounceDates:m._bounceDates,
-            _collectionsState:m._collectionsState, want,
-            WILL_RETIRE: (want === 'OK' && (m._collectionsState||'') === 'RESUME NORMAL')
-          }, null, 2));
-        }
         if (want && want !== 'OK' && (m._collectionsState||'') !== want){
           fields['CollectionsState'] = want;
           fields['CollectionsDetail'] = beaconCollectionsDetailFor(m);
