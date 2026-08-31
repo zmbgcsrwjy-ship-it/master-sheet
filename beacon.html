@@ -1342,7 +1342,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v197</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v198</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2206,16 +2206,14 @@ function beaconReconstruct(raw, todayISO){
   merchants.forEach(m=>{
     const st = m._openStopCandidate;
     if (st){
-      const resolvedAfter = m.resolution_type && m.resolution_date && m.resolution_date >= st.date;
+      // v197: judge "was this stop resolved?" by the stop's HIT date (when the merchant actually
+      // stopped the pull), NOT the record/return date. A stop hits, then the bank returns it a few days
+      // later; the record is dated by the return date. Comparing the resolution against the later return
+      // date wrongly concluded "stop came after resolution." HAPPYANGELS hit 8/26, resolved 8/27, but its
+      // return date 8/28 made it look unresolved. Using the hit date, 8/26 <= 8/27 → correctly handled.
+      const stHit = (st.hit || st.date || '').slice(0,10);
+      const resolvedAfter = m.resolution_type && m.resolution_date && stHit && m.resolution_date >= stHit;
       const legal = (typeof legalCasesOut!=='undefined') && legalCasesOut.some(c=>c.lead_id===m.lead_id && c.status!=='settled');
-      if (/HAPPYANG|HWHSPORT|CAPNDAVE/i.test(m.name||'')) {
-        console.log('🎯 STOP-DATE DIAG:', JSON.stringify({
-          name:m.name, st_date_RECORD:st.date, st_hit:st.hit, st_ret:st.ret, st_code:st.code,
-          resolution_type:m.resolution_type, resolution_date:m.resolution_date,
-          resolvedAfter_byRecordDate:resolvedAfter,
-          resolvedAfter_byHitDate: !!(m.resolution_type && m.resolution_date && st.hit && m.resolution_date >= st.hit.slice(0,10))
-        }, null, 2));
-      }
       if (!m.bounced_today && !resolvedAfter && !legal){
         // Carry the stop forward onto the board as an unresolved open stop.
         m.bucket = 'BOUNCED';
@@ -2996,7 +2994,10 @@ function nextHitsOn(iso) {
 }
 function resumesOn(iso) {  const list = state.filter(m => 
     (m.resolution_type === 'paused' || m.resolution_type === 'lowered') && 
-    m.resume_date === iso
+    m.resume_date === iso &&
+    // v197: if the deal STOPPED on us (open stop that broke the arrangement), the old resolution is
+    // dead — a new one has to be made. Don't show its resume as if it's still active/on-track.
+    !(m.open_stop && isBroken(m))
   ).map(m => ({
     name: m.name,
     type: m.resolution_type,
@@ -4793,7 +4794,12 @@ function renderMainTable() {
       // In-flight bouncers (resolved-before-bounce-reported) stay in their natural sev_class section
       // but get visual distinction via the .in-flight CSS class on the row.
       let displayClass, displayOrder;
-      if (broken) { displayClass = "broken"; displayOrder = 8; }
+      // v197: a broken STOP stays in the STOPPED bucket (order 1) — Matt wants stops to always grab
+      // attention there, not be demoted to the lower broken-promises section. It still carries the
+      // BROKE label via brokenLabel below. Only a broken NORMAL bounce routes to the broken section.
+      const isStopSev = (m.sev_class === 'stop' || m.open_stop === true);
+      if (broken && isStopSev) { displayClass = "stop"; displayOrder = 1; }
+      else if (broken) { displayClass = "broken"; displayOrder = 8; }
       else if (isLegalStill) { displayClass = "legal-still"; displayOrder = 9; }
       else {
         // User's manual frequency override wins over the bounce-report sev_class.
@@ -4815,6 +4821,7 @@ function renderMainTable() {
         ...m,
         _displayClass: displayClass,
         _displayOrder: displayOrder,
+        _broken: broken,   // v197: explicit — a broken stop stays in the stop bucket but still shows BROKE label
         _inflight: isInFlight(m) && !isLegalStill,
         _hasLegalCase: hasOpenLegalCase(m.lead_id),
         _openStop: !!m.open_stop && !m.bounced_today,
@@ -5074,7 +5081,12 @@ function buildRow(m, editable) {
     // On past-date views, the action label on the right makes this chip redundant.
     chips += '<span class="inflight-chip">' + prettyResType(m.resolution_type) + '</span>';
   }
-  else if (m._displayClass === "broken") chips += '<span class="streak-chip">BROKE ' + (m.resolution_type === 'spoke' ? 'CONTACT' : prettyResType(m.resolution_type).toUpperCase()) + '</span>';
+  else if (m._broken) {
+    // v197: a broken resolution shows the BROKE label. A broken STOP keeps its stop code chip too,
+    // since it stays in the stop bucket (the BROKE label rides alongside, not instead).
+    chips += '<span class="streak-chip">BROKE ' + (m.resolution_type === 'spoke' ? 'CONTACT' : prettyResType(m.resolution_type).toUpperCase()) + '</span>';
+    if (m.sev_class === "stop" || m.open_stop) chips += codeChip(m.return_code, m.bounce_type);
+  }
   else if (m.sev_class === "stop") chips += codeChip(m.return_code, m.bounce_type);
   else if (m.sev_class === "consecutive") chips += '<span class="streak-chip">' + m.streak_len + ' IN A ROW</span>';
   else if (m.sev_class === "weekly") chips += '<span class="weekly-chip">Weekly</span>';
