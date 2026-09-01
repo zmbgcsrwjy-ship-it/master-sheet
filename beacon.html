@@ -244,8 +244,9 @@
     align-items: center; 
     padding: 2px 7px; 
     border-radius: 3px; 
-    background: var(--good); 
-    color: #fff; 
+    background: rgba(95,188,131,.18);
+    color: var(--good); 
+    border: 1px solid var(--good-bar);
     font-size: 9.5px; 
     font-weight: 700; 
     letter-spacing: 0.04em; 
@@ -1345,7 +1346,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v204</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v205</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
