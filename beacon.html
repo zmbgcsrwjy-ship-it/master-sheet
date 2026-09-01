@@ -1050,6 +1050,8 @@
   .resolve-expand .resolve-menu button.menu-item { display: block; width: 100%; text-align: left; background: transparent; border: 0; font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 5px; cursor: pointer; color: var(--text); }
   .resolve-expand .resolve-menu button.menu-item:hover { background: var(--surface-2); }
   .resolve-expand .resolve-menu button.menu-item.legal-item { color: #FF6B61; font-weight: 600; }
+  .resolve-menu button.menu-item.dead-item, #deal-resolve-popover .resolve-menu button.menu-item.dead-item { color: #e5534b; font-weight: 700; }
+  .us-opt.dead { color: #e5534b !important; font-weight: 700; }
   .mini-btn { background: var(--surface-2); border: 0.5px solid var(--border); color: var(--text); font: inherit; font-size: 11px; padding: 4px 9px; border-radius: 5px; cursor: pointer; }
   .mini-btn:hover { background: var(--surface-3); }
   .resolve-expand .resolve-menu .menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
@@ -1346,7 +1348,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v205</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v206</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2117,9 +2119,9 @@ function beaconReconstruct(raw, todayISO){
         if (ex) ex.text=f.Note||''; else { m.notes_log.push({date_iso:dISO, text:f.Note||''}); notesByDate[dISO]=(notesByDate[dISO]||0)+1; }
         noteRidMap[m.lead_id+'|'+dISO]=r.id;
       }
-    } else if (t==='Spoke to'||t==='Lowered'||t==='Suspend Payment'||t==='Legal'){
+    } else if (t==='Spoke to'||t==='Lowered'||t==='Suspend Payment'||t==='Legal'||t==='Dead'){
       resolvedByDate[dISO]=(resolvedByDate[dISO]||0)+1;
-      m.resolution_type = t==='Spoke to'?'spoke':t==='Lowered'?'lowered':t==='Suspend Payment'?'paused':'legal';
+      m.resolution_type = t==='Spoke to'?'spoke':t==='Lowered'?'lowered':t==='Suspend Payment'?'paused':t==='Dead'?'dead':'legal';
       m.resolution_date = dISO;
       m.resume_date = f['Resume Date']||'';
       m.lowered_amount = (payload&&payload.amount)||0;
@@ -2372,6 +2374,15 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
 // ---------- MUTATION WRITERS (append-only Actions + CollectionsState) ----------
 function beaconCollectionsStateFor(m){
   if (m.resolution_type==='legal') return 'LEGAL';
+  if (m.resolution_type==='dead'){
+    // v206: a DEAD deal is written off — payments off, not sent to legal, letting it die. It shows a
+    // red DEAD pill and drops off the bounce report. BUT if a payment CLEARS again after we marked it
+    // dead, real money came in — it's alive again, so we retire the DEAD state (returns 'OK' so the
+    // reconcile clears it) and it can resurface on the report as new activity.
+    const cleared=m.last_cleared||'';
+    if (cleared && m.resolution_date && cleared > m.resolution_date) return 'OK';
+    return 'DEAD';
+  }
   if (m.resolution_type==='paused'){
     // v182: a suspended deal that bounces ON/AFTER its resume date has broken the arrangement — the
     // payment resumed and failed. Surface it as BOUNCING on the Master Sheet, matching the board's
@@ -2406,7 +2417,7 @@ function beaconCollectionsDetailFor(m){
     if (m.resume_date){ const d=m.resume_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Resume '+md; }
   }
   if (m.resolution_type==='lowered' && m.lowered_amount) return 'Lowered to $'+Number(m.lowered_amount).toLocaleString()+'/day';
-  if (m.resolution_type==='spoke' && m.resolution_date){ const d=m.resolution_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Spoke to '+md+' — paying as normal'; }
+  if (m.resolution_type==='dead' && m.resolution_date){ const d=m.resolution_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Written off '+md+' — taking the loss'; }
   return '';
 }
 // ── MANUAL PAY (v163) ──────────────────────────────────────────────────────
@@ -2486,7 +2497,7 @@ async function beaconEndManualPay(m){
 }
 
 async function beaconPushResolution(m, todayISO){
-  const typeMap={spoke:'Spoke to', lowered:'Lowered', paused:'Suspend Payment', legal:'Legal'};
+  const typeMap={spoke:'Spoke to', lowered:'Lowered', paused:'Suspend Payment', legal:'Legal', dead:'Dead'};
   const atType=typeMap[m.resolution_type]; if(!atType) return;
   const payload={v:1, kind:'resolution', amount:m.lowered_amount||0,
     orig:{freq:m.original_freq||'', amt:m.original_bounce_amt||0, code:m.original_return_code||''}};
@@ -3026,6 +3037,7 @@ function prettyResType(t) {
   if (t === 'paused') return 'Suspended';
   if (t === 'lowered') return 'Lowered';
   if (t === 'legal') return 'Legal';
+  if (t === 'dead') return 'Dead';
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -3140,6 +3152,10 @@ function isInFlight(m) {
     if (!m.hit_date || !m.resolution_date) return true;
     return new Date(m.hit_date) <= new Date(m.resolution_date);
   }
+  // v206: a DEAD deal is always "in flight" (off the board). We wrote it off — a bounce on a dead deal
+  // is meaningless (payments are off; of course it bounces). It only comes back when a payment CLEARS,
+  // which expires the 'dead' resolution (v157) so it's no longer dead here. So while it's dead, suppress.
+  if (m.resolution_type === 'dead') return true;
   // Spoke, or a paused/lowered with no resume date: in-flight only if the pull already happened
   // on or before we resolved. <= so same-day resolutions count — the pull couldn't be undone.
   if (!m.hit_date || !m.resolution_date) return false;
@@ -4364,6 +4380,7 @@ function renderUnresolvedStops() {
         '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'lowered\')">Lowered payment…</button>' +
         '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'paused\')">Resume payment…</button>' +
         '<button class="us-opt legal" onclick="usOpenLegal(event,' + m.lead_id + ')">Send to legal / collections…</button>' +
+        '<button class="us-opt dead" onclick="markDead(' + m.lead_id + ')">Dead — take the loss…</button>' +
         '<div class="us-date-row" id="us-date-row-' + m.lead_id + '">' +
           '<label id="us-date-label-' + m.lead_id + '">Resume date</label>' +
           '<div class="us-mini-cal" id="us-mini-cal-' + m.lead_id + '"></div>' +
@@ -4434,6 +4451,7 @@ function renderUnresolvedWeeklies() {
         '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'lowered\')">Lowered payment…</button>' +
         '<button class="us-opt" onclick="usShowDate(event,' + m.lead_id + ',\'paused\')">Resume payment…</button>' +
         '<button class="us-opt legal" onclick="usOpenLegal(event,' + m.lead_id + ')">Send to legal / collections…</button>' +
+        '<button class="us-opt dead" onclick="markDead(' + m.lead_id + ')">Dead — take the loss…</button>' +
         '<div class="us-date-row" id="us-date-row-' + m.lead_id + '">' +
           '<label id="us-date-label-' + m.lead_id + '">Resume date</label>' +
           '<div class="us-mini-cal" id="us-mini-cal-' + m.lead_id + '"></div>' +
@@ -4573,6 +4591,7 @@ function sidebarActionBlock(m){
       '<button class="us-opt" onclick="usShowDate(event,'+m.lead_id+',\'lowered\')">Lowered payment…</button>'+
       '<button class="us-opt" onclick="usShowDate(event,'+m.lead_id+',\'paused\')">Resume payment…</button>'+
       '<button class="us-opt legal" onclick="usOpenLegal(event,'+m.lead_id+')">Send to legal / collections…</button>'+
+      '<button class="us-opt dead" onclick="markDead('+m.lead_id+')">Dead — take the loss…</button>'+
       '<div class="us-date-row" id="us-date-row-'+m.lead_id+'">'+
         '<label id="us-date-label-'+m.lead_id+'">Resume date</label>'+
         '<div class="us-mini-cal" id="us-mini-cal-'+m.lead_id+'"></div>'+
@@ -5656,6 +5675,7 @@ function toggleResolveExpand(ev, leadId) {
   } else if (isStop) {
     menuItemsHtml =
       '<button class="menu-item legal-item" onclick="openLegalForm(' + leadId + ')">Send to legal / collections…</button>' +
+      '<button class="menu-item dead-item" onclick="markDead(' + leadId + ')">Dead — take the loss…</button>' +
       '<div class="menu-divider"></div>' +
       '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'paused\')">Resume payment…</button>' +
       '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'lowered\')">Lowered payment…</button>' +
@@ -5670,7 +5690,8 @@ function toggleResolveExpand(ev, leadId) {
       '<div class="menu-divider"></div>' +
       '<button class="menu-item" onclick="openManualPayForm(' + leadId + ')">Manual payment plan…</button>' +
       '<div class="menu-divider"></div>' +
-      '<button class="menu-item legal-item" onclick="openLegalForm(' + leadId + ')">Send to legal / collections…</button>';
+      '<button class="menu-item legal-item" onclick="openLegalForm(' + leadId + ')">Send to legal / collections…</button>' +
+    '<button class="menu-item dead-item" onclick="markDead(' + leadId + ')">Dead — take the loss…</button>';
   }
   const clearHtml = m.resolution_type
     ? '<div class="menu-divider"></div><button class="menu-item" onclick="clearResolution(' + leadId + ')" style="color: var(--text-2);">Clear resolution</button>'
@@ -5750,7 +5771,8 @@ function openDealResolve(leadId){
     '<div class="menu-divider"></div>' +
     '<button class="menu-item" onclick="openManualPayForm(' + leadId + ')">Manual payment plan…</button>' +
     '<div class="menu-divider"></div>' +
-    '<button class="menu-item legal-item" onclick="openLegalForm(' + leadId + ')">Send to legal / collections…</button>';
+    '<button class="menu-item legal-item" onclick="openLegalForm(' + leadId + ')">Send to legal / collections…</button>' +
+    '<button class="menu-item dead-item" onclick="markDead(' + leadId + ')">Dead — take the loss…</button>';
   const clearHtml = m.resolution_type
     ? '<div class="menu-divider"></div><button class="menu-item" onclick="clearResolution(' + leadId + ')" style="color: var(--text-2);">Clear resolution</button>'
     : '';
@@ -5833,6 +5855,32 @@ function setResolution(leadId, type) {
   renderCalendar();
   updateCounters();
   showToast("Marked: " + (type === 'spoke' ? 'spoke to' : type));
+  _clearDealSearch();
+}
+
+// v206: DEAD resolution — the deal stopped on us and we're taking the loss (not sending to legal),
+// letting it die. Payments are off; it drops off the bounce report like any resolution. It only comes
+// back if a payment CLEARS again (real money in) — handled by beaconCollectionsStateFor / the sync via
+// the same resolution machinery. Prompts for an optional reason, stored as a note.
+function markDead(leadId){
+  const m = state.find(x => x.lead_id === leadId);
+  if (!m) return;
+  const reason = window.prompt('Mark ' + m.name + ' as DEAD (taking the loss, not sending to legal).\n\nOptional reason / note:', '');
+  if (reason === null) return;  // cancelled
+  m.resolution_type = 'dead';
+  m.resolution_date = TODAY_ISO;
+  m.resume_date = '';
+  m.lowered_amount = 0;
+  snapshotOriginalBounce(m);
+  persistState();
+  beaconPushResolution(m, TODAY_ISO).catch(beaconWriteErr);
+  const note = 'Marked DEAD ' + TODAY_ISO + ' — taking the loss, not sent to legal.' + (reason.trim() ? (' ' + reason.trim()) : '');
+  beaconAppendAutoNote(m, note).catch(()=>{});
+  renderForDate();
+  renderSidebar();
+  renderCalendar();
+  updateCounters();
+  showToast('Marked DEAD: ' + m.name);
   _clearDealSearch();
 }
 

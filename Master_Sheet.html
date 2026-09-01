@@ -528,7 +528,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Notes fonts enlarged in Beacon; version tag reworded to LIVE · build. Allocator: deal names match REFI merchant styling, Deal column renamed to Merchant, bigger Paid buttons, group-subtotal amounts sized to match rows.">LIVE · build 162</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="New DEAD resolution in Beacon for deals stopped on us that we write off (take the loss, not send to legal). Payments off, drops from the bounce report unless a payment clears again. Red DEAD pill here and in Beacon.">LIVE · build 163</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1811,6 +1811,7 @@ function csChip(d){
   else if(s==='SUSPENDED'||s==='RESUME SCHEDULED') col='#d4a72c'; // gold — not collecting
   else if(s==='RESUME NORMAL') col='#2ea043';                     // deeper green — bounced, spoke to, payment staying on
   else if(s==='LOWERED') col='#2dd4bf';                           // teal — lowered
+  else if(s==='DEAD') col='#7d1f1a';                              // build 163: dark red — written off, taking the loss
   else col='#888';
   const detail = d.collections_detail || '';
   // Beacon writes the detail as "Resume 7/14"; lift the date onto the pill so the part you act on
