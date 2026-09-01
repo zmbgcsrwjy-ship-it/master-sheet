@@ -911,6 +911,7 @@
   .weekly-chip { display: inline-block; padding: 3px 9px; border-radius: 4px; background: #FBEAEA; color: #B7261C; font-size: 13px; font-weight: 800; margin-right: 8px; letter-spacing: 0.02em; }
   .inflight-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--good-bg); color: var(--good); font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.03em; border: 0.5px solid var(--good-bar); }
   .resolved-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--good-bg); color: var(--good); font-size: 11px; font-weight: 600; margin-right: 6px; border: 0.5px solid var(--good-bar); }
+  .inflight-chip.dead-chip, .resolved-chip.dead-chip { background: rgba(229,83,75,.18); color: #e5534b; border-color: rgba(229,83,75,.55); font-weight: 700; }
   .freq-pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 500; }
   .freq-pill.daily { background: #EAF1FB; color: #1B4D8C; }
   .freq-pill.weekly { background: #F5E6FA; color: #5C1A7E; }
@@ -1043,6 +1044,7 @@
   button.resolve-btn:hover { background: var(--text-hover); }
   button.resolve-btn.resolved { background: var(--good-bg); color: var(--good); border-color: var(--good-bar); }
   button.resolve-btn.resolved-legal { background: rgba(255,107,97,.18); color: #FF6B61; border-color: rgba(255,107,97,.55); }
+  button.resolve-btn.resolved-dead { background: rgba(229,83,75,.20); color: #e5534b; border-color: rgba(229,83,75,.6); font-weight: 700; }
   /* Inline-expand row containing the resolve menu — sits beneath the bounce row, pushes everything below */
   .resolve-expand { background: var(--surface-2) !important; }
   .resolve-expand > td { padding: 10px 14px 14px !important; }
@@ -1348,7 +1350,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v206</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v207</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -5170,7 +5172,7 @@ function buildRow(m, editable) {
   else if (m._inflight && editable) {
     // On today's view, the in-flight chip pairs with the live Resolve button on the right.
     // On past-date views, the action label on the right makes this chip redundant.
-    chips += '<span class="inflight-chip">' + prettyResType(m.resolution_type) + '</span>';
+    chips += '<span class="inflight-chip' + (m.resolution_type==='dead'?' dead-chip':'') + '">' + prettyResType(m.resolution_type) + '</span>';
   }
   else if (m._broken || m._brokeReset) {
     // v197/v200: a broken resolution shows the BROKE label. After a stop auto-resets the resolution
@@ -5193,7 +5195,7 @@ function buildRow(m, editable) {
     } else {
       resTxt = prettyResType(m.resolution_type) + (m.resume_date ? ' · resume ' + fmtDate(m.resume_date) : '');
     }
-    chips += '<span class="resolved-chip" title="' + resTxt.replace(/"/g,'&quot;') + '">' + resTxt + '</span>';
+    chips += '<span class="resolved-chip' + (m.resolution_type==='dead'?' dead-chip':'') + '" title="' + resTxt.replace(/"/g,'&quot;') + '">' + resTxt + '</span>';
   }
   
   const _nameCls = 'merchant-name mname-click' + (isWeeklyDeal(m) ? ' wk-board-name' : '');
@@ -5203,7 +5205,7 @@ function buildRow(m, editable) {
   if (editable) {
     const _brokenRow = m._displayClass === "broken";   // broke the promise → needs a NEW resolution, don't show it as still resolved
     const resolveBtnLabel = (m.resolution_type && !_brokenRow) ? '✓ ' + prettyResType(m.resolution_type) : 'Resolve';
-    const resolveBtnClass = (m.resolution_type && !_brokenRow) ? ('resolve-btn resolved' + (m.resolution_type==='legal' ? ' resolved-legal' : '')) : 'resolve-btn';
+    const resolveBtnClass = (m.resolution_type && !_brokenRow) ? ('resolve-btn resolved' + (m.resolution_type==='legal' ? ' resolved-legal' : m.resolution_type==='dead' ? ' resolved-dead' : '')) : 'resolve-btn';
     actionsCell = '<td class="actions-cell ctr"><div class="actions-inner">' +
       '<button class="row-btn" onclick="event.stopPropagation();showMerchantInfo(' + m.lead_id + ')">Note</button>' +
       '<button class="' + resolveBtnClass + '" onclick="toggleResolveExpand(event, ' + m.lead_id + ')">' + resolveBtnLabel + '</button>' +
