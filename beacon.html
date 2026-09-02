@@ -456,7 +456,7 @@
   .sev-tile .sub { font-size: 12px; color: var(--text-2); }
   
   /* Calendar */
-  .calendar-wrap { background: var(--tile-gradient); border: 0.5px solid var(--border); border-radius: var(--r-lg); padding: 12px 16px; margin: 0 40px 16px; box-shadow: var(--shadow-md), var(--shadow-inset); }   /* v211: inset side margins so the calendar is a touch narrower than the full-width content — nice contrast */
+  .calendar-wrap { background: var(--tile-gradient); border: 0.5px solid var(--border); border-radius: var(--r-lg); padding: 12px 16px; margin: 0 64px 16px; box-shadow: var(--shadow-md), var(--shadow-inset); }   /* v211: inset side margins so the calendar is a touch narrower than the full-width content — nice contrast */
   [data-theme="dark"] .calendar-wrap { background: var(--bg); border-color: var(--border-strong); }
   .cal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
   .cal-nav { display: inline-flex; align-items: center; gap: 6px; position: relative; }
@@ -608,7 +608,7 @@
   .cal-cell.heat-3 .resume-pill, .cal-cell.heat-4 .resume-pill { background: var(--surface); color: var(--good); }
   
   /* Scheduled-resumes panel (shown above bounce table when a date has resumes) */
-  .resumes-panel { background: var(--good-bg); border: 0.5px solid var(--good-bar); border-radius: var(--r-lg); padding: 14px 18px; margin: 0 40px 16px; box-shadow: var(--shadow-md), var(--shadow-inset); }   /* v211: match the calendar's inset margins */
+  .resumes-panel { background: var(--good-bg); border: 0.5px solid var(--good-bar); border-radius: var(--r-lg); padding: 14px 18px; margin: 0 64px 16px; box-shadow: var(--shadow-md), var(--shadow-inset); }   /* v211: match the calendar's inset margins */
   .resumes-panel-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
   .resumes-panel-header h3 { font-size: 14px; font-weight: 600; margin: 0; color: var(--good); letter-spacing: 0.02em; }
   .resumes-panel-header p { font-size: 12px; color: var(--text-2); margin: 0; }
@@ -1350,7 +1350,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v211</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v212</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
