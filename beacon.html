@@ -341,7 +341,7 @@
   .us-confirm { margin-top: 8px; width: 100%; background: var(--text); color: var(--surface); border: 0; padding: 7px; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
   .us-confirm:disabled { background: var(--text-3); cursor: default; }
   
-  .main { padding: 14px 28px 120px; max-width: 2400px; margin-left: auto; margin-right: auto; align-self: start; width: 100%; box-sizing: border-box; }   /* v209: widen content to reclaim side dead space (max-width 1920->2400, side padding 48->28). Applies to all tabs via .main */
+  .main { padding: 14px 38px 120px; max-width: 2160px; margin-left: auto; margin-right: auto; align-self: start; width: 100%; box-sizing: border-box; }   /* v209: widen content to reclaim side dead space (max-width 1920->2400, side padding 48->28). Applies to all tabs via .main */
   
   .bx-side-logo { padding: 4px 40px 12px 4px; margin-bottom: 8px; border-bottom: 1px solid var(--border); }
   .bx-side-logo h1 { font-size: 21px; font-weight: 800; margin: 0; letter-spacing: -0.4px; display: inline-flex; align-items: center; gap: 9px; }
@@ -1350,7 +1350,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v209</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v210</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
