@@ -616,6 +616,11 @@
   .resumes-panel-header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
   .resumes-panel-header h3 { font-size: 14px; font-weight: 600; margin: 0; color: var(--good); letter-spacing: 0.02em; }
   .resumes-panel-header p { font-size: 12px; color: var(--text-2); margin: 0; }
+  /* v216: edit/delete buttons on scheduled-resume rows (calendar-date view only) */
+  .res-actions { margin-left: auto; display: inline-flex; gap: 6px; flex-shrink: 0; }
+  .res-edit-btn, .res-del-btn { background: transparent; border: 0.5px solid var(--border-strong); color: var(--text-2); border-radius: 5px; padding: 3px 9px; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .res-edit-btn:hover { color: var(--text); background: var(--surface-2); border-color: var(--text-3); }
+  .res-del-btn:hover { color: #e5534b; background: rgba(229,83,75,.12); border-color: rgba(229,83,75,.5); }
   .resumes-list { display: flex; flex-direction: column; gap: 6px; }
   .minfo-expand-div { background: var(--surface-2); border: 0.5px solid var(--border-strong); border-left: 3px solid var(--border-strong); border-radius: 6px; padding: 12px 14px; margin: -2px 0 4px; }
 
@@ -1358,7 +1363,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v215</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v216</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2041,6 +2046,7 @@ function beaconReconstruct(raw, todayISO){
       hit_date:'', return_date:'', contacted_today:false, contact_time:'',
       notes:'', notes_log:[], resolution_type:'', resolution_date:'', resume_date:'', resolution_history:[],
       lowered_amount:0, original_freq:'', original_bounce_amt:0, original_return_code:'',
+      daily_payment: Number(f.DailyPayment)||0,   // v216: the deal's regular daily pull, from Airtable — used as the original-amount fallback for search-set resolutions on non-bouncing deals
       manual_freq:'', rep:f.Rep||'', iso:f.ISO||'', _freqField:f.Frequency||'', _collectionsState:f.CollectionsState||'', _legalCompany:f.LegalCompany||'',
       clawback_state:f.ClawbackState||'', _bounceDates:[], _stopDates:[],
       owner_name:f.OwnerName||'', owner_phone:f.OwnerPhone||'', owner_email:f.OwnerEmail||''
@@ -2961,6 +2967,21 @@ function merchantInfoInnerHtml(m){
   const notesHtml = '<div class="minfo-section">Notes' + (legalCase ? ' <span style="color:#FF6B61;font-weight:600">· incl. legal history</span>' : '') + '</div>' + histHtml + editorHtml;
   return '<div>' + contactHtml + '</div><div>' + notesHtml + '</div>';
 }
+// v216: edit a scheduled plan from the calendar-date resumes panel — reopens the resolve menu for the
+// deal (same popover the search uses) so you can re-pick lowered/suspend/etc. and adjust date/amount.
+function editResumePlan(leadId){
+  if (typeof openDealResolve === 'function') openDealResolve(leadId);
+}
+// v216: delete a scheduled plan from the calendar-date resumes panel — clears the resolution so the
+// deal is unresolved again (no resume scheduled). Confirms first since it wipes the plan.
+function deleteResumePlan(leadId){
+  const m = state.find(x => x.lead_id === leadId);
+  if (!m) return;
+  if (!window.confirm('Delete the scheduled plan for ' + m.name + '? This clears the resolution — the deal goes back to unresolved.')) return;
+  if (typeof clearResolution === 'function') { clearResolution(leadId); }
+  renderForDate(); renderSidebar(); renderCalendar(); updateCounters();
+  showToast('Plan deleted: ' + m.name);
+}
 function showResumeInfo(leadId, itemEl){
   const next = itemEl.nextElementSibling;
   const isOpen = next && next.classList && next.classList.contains('minfo-expand-div') && next.dataset.parentId === String(leadId);
@@ -3030,7 +3051,7 @@ function origFreq(m) {
   return m.freq && m.freq !== 'nan' ? m.freq : (m.original_freq || '');
 }
 function origBounceAmt(m) {
-  return m.bounce_amt || m.original_bounce_amt || 0;
+  return m.bounce_amt || m.original_bounce_amt || m.daily_payment || 0;   // v216: daily_payment fallback for search-set resolutions
 }
 function origReturnCode(m) {
   return m.return_code || m.original_return_code || '';
@@ -3044,7 +3065,14 @@ function isWeeklyDeal(m) {
 // stops appearing in daily bounce reports tomorrow.
 function snapshotOriginalBounce(m) {
   if (!m) return;
-  if (m.bounce_amt && !m.original_bounce_amt) m.original_bounce_amt = m.bounce_amt;
+  // v216: capture the amount the debit restores to. Normally it's the bounce amount (deal bouncing
+  // today). For a SEARCH-set resolution on a non-bouncing deal there's no bounce amount, so fall back
+  // to the deal's regular daily payment (DailyPayment from Airtable) so the sidebar/calendar still show
+  // "→ original $X/day" (FAUSTINOS via search was blank before this).
+  if (!m.original_bounce_amt) {
+    if (m.bounce_amt) m.original_bounce_amt = m.bounce_amt;
+    else if (m.daily_payment) m.original_bounce_amt = m.daily_payment;
+  }
   if (m.freq && m.freq !== 'nan' && !m.original_freq) m.original_freq = m.freq;
   if (m.return_code && !m.original_return_code) m.original_return_code = m.return_code;
 }
@@ -3908,7 +3936,12 @@ function renderForDate() {
         '<span class="res-type">' + scheduledActionLabel(r.type) + '</span>' +
         amtTxt +
         '<span class="res-bal">' + (r.balance ? fmt$(r.balance) + ' bal' : '') + '</span>' +
-        (r.note ? '<span class="res-note">' + r.note + '</span>' : '');
+        (r.note ? '<span class="res-note">' + r.note + '</span>' : '') +
+        // v216: edit/delete the plan — ONLY here in the scheduled-resumes (calendar-date) view, not the sidebar
+        '<span class="res-actions">' +
+          '<button class="res-edit-btn" title="Edit this plan" onclick="event.stopPropagation();editResumePlan(' + r.lead_id + ')">✎ Edit</button>' +
+          '<button class="res-del-btn" title="Delete this plan" onclick="event.stopPropagation();deleteResumePlan(' + r.lead_id + ')">🗑 Delete</button>' +
+        '</span>';
       item.style.cursor = 'pointer';
       item.title = 'Contact info + notes';
       item.addEventListener('click', () => showResumeInfo(r.lead_id, item));
