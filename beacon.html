@@ -114,6 +114,11 @@
   .sidebar h2:first-of-type { margin-top: 4px; }
   .sidebar h2.broken { color: var(--sev-broken); }
   .sidebar-section { margin-bottom: 24px; }
+  /* v217: collapsible Upcoming list */
+  .upcoming-h2 { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; }
+  .upcoming-h2 .up-chev { font-size: 10px; color: var(--text-3); transition: color 0.15s; }
+  .upcoming-h2:hover .up-chev { color: var(--text); }
+  #upcoming-section.upcoming-collapsed #list-upcoming { display: none; }
   
   /* === Watch List (consolidated sidebar) === */
   .watch-list { margin-bottom: 24px; }
@@ -1363,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v216</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v217</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1395,8 +1400,8 @@
     </div>
   </div>
   
-  <div class="sidebar-section">
-    <h2>📅 Upcoming · next 30 days</h2>
+  <div class="sidebar-section" id="upcoming-section">
+    <h2 class="upcoming-h2" onclick="toggleUpcomingCollapse()" title="Collapse / expand the upcoming list"><span class="up-chev" id="up-chev">▾</span> 📅 Upcoming · next 30 days</h2>
     <div id="list-upcoming"></div>
   </div>
   </div>
@@ -2154,7 +2159,7 @@ function beaconReconstruct(raw, todayISO){
       // Legal cases persist regardless. When it does expire, leave a dated history note.
       const anchorDate = (m.resume_date && (m.resolution_type==='paused'||m.resolution_type==='lowered')) ? m.resume_date : dISO;
       if (m.resolution_type!=='legal' && m.last_cleared && m.last_cleared > anchorDate){
-        const past = t + (m.resume_date?(' (resume '+m.resume_date+')'):'') + ' on '+dISO+' — kept, paid since';
+        const past = t + (m.resume_date?(' (resume '+fmtDateY(m.resume_date)+')'):'') + ' on '+fmtDateY(dISO)+' — kept, paid since';
         if (!m.notes_log.find(e=>e.date_iso===dISO && /kept, paid since/.test(e.text||'')))
           m.notes_log.push({date_iso:dISO, text:past, _system:true});
         m.resolution_type=''; m.resolution_date=''; m.resume_date=''; m.lowered_amount=0;
@@ -2982,6 +2987,19 @@ function deleteResumePlan(leadId){
   renderForDate(); renderSidebar(); renderCalendar(); updateCounters();
   showToast('Plan deleted: ' + m.name);
 }
+// v217: collapse/expand the sidebar Upcoming list so it doesn't eat the screen. Remembered per-browser.
+function toggleUpcomingCollapse(){
+  const sec = document.getElementById('upcoming-section');
+  if(!sec) return;
+  const collapsed = sec.classList.toggle('upcoming-collapsed');
+  try { localStorage.setItem('bx_upcoming_collapsed', collapsed ? '1' : '0'); } catch(e){}
+  const chev = document.getElementById('up-chev'); if(chev) chev.textContent = collapsed ? '▸' : '▾';
+}
+function applyUpcomingCollapsePref(){
+  let pref='0'; try { pref = localStorage.getItem('bx_upcoming_collapsed')||'0'; } catch(e){}
+  const sec = document.getElementById('upcoming-section');
+  if(sec && pref==='1'){ sec.classList.add('upcoming-collapsed'); const chev=document.getElementById('up-chev'); if(chev) chev.textContent='▸'; }
+}
 function showResumeInfo(leadId, itemEl){
   const next = itemEl.nextElementSibling;
   const isOpen = next && next.classList && next.classList.contains('minfo-expand-div') && next.dataset.parentId === String(leadId);
@@ -3022,6 +3040,8 @@ function showMerchantInfo(leadId){
 function fmt$k(n) { if (n >= 1e6) return "$" + (n/1e6).toFixed(3) + "M"; if (n >= 1000) return "$" + Math.round(n/1000) + "K"; return "$" + Math.round(n); }
 function fmtPct(n) { return Math.round(n * 100) + "%"; }
 function fmtDate(s) { if (!s) return "—"; const d = new Date(s + "T00:00:00"); if (isNaN(d)) return s; return (d.getMonth()+1) + "/" + d.getDate(); }
+// v217: month/date/year for auto-generated notes (e.g. "Suspend Payment (resume 8/27/2026) on 8/17/2026")
+function fmtDateY(s) { if (!s) return ""; const d = new Date(s + "T00:00:00"); if (isNaN(d)) return s; return (d.getMonth()+1) + "/" + d.getDate() + "/" + d.getFullYear(); }
 function fmtLongDate(s) {
   if (!s) return "";
   const d = new Date(s + "T00:00:00");
@@ -4049,6 +4069,7 @@ function renderSidebar() {
   
   // Render upcoming (kept as separate calendar look-ahead)
   renderUpcomingPanel();
+  applyUpcomingCollapsePref();
 }
 
 function renderWatchTier(tier, items) {
@@ -5944,7 +5965,7 @@ function markDead(leadId){
   snapshotOriginalBounce(m);
   persistState();
   beaconPushResolution(m, TODAY_ISO).catch(beaconWriteErr);
-  const note = 'Marked DEAD ' + TODAY_ISO + ' — taking the loss, not sent to legal.' + (reason.trim() ? (' ' + reason.trim()) : '');
+  const note = 'Marked DEAD ' + fmtDateY(TODAY_ISO) + ' — taking the loss, not sent to legal.' + (reason.trim() ? (' ' + reason.trim()) : '');
   beaconAppendAutoNote(m, note).catch(()=>{});
   renderForDate();
   renderSidebar();
