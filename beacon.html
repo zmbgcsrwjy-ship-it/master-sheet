@@ -865,7 +865,7 @@
   table.matrix td.merchant-cell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 260px; }   /* v148: floor so the name isn't squeezed to nothing by the tags */
   .wk-board-name { color: var(--sev-wkly) !important; font-weight: 700 !important; }
   .mname-click { cursor: pointer; }
-  .mname-click:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .mname-click:hover { text-decoration: none; }   /* v213: no underline bar on deal-name hover */
   .minfo-expand { background: var(--surface-2) !important; border-left: 3px solid var(--border-strong) !important; }
   .minfo-expand td { padding: 10px 16px !important; }
   .minfo-panel { display: grid; grid-template-columns: 0.7fr 1.6fr; gap: 20px; align-items: start; }
@@ -879,6 +879,9 @@
   .minfo-panel .minfo-dot { color: var(--text-3); margin: 0 12px; }
   .minfo-panel .minfo-line a { color: #5b9dff; text-decoration: none; }
   .minfo-panel .minfo-line a:hover { text-decoration: underline; }
+  .minfo-copy { background: transparent; border: 0.5px solid var(--border-strong); color: var(--text-3); border-radius: 4px; padding: 0 5px; margin-left: 6px; font-size: 11px; cursor: pointer; line-height: 1.5; vertical-align: middle; }
+  .minfo-copy:hover { color: var(--text); background: var(--surface-2); }
+  .minfo-copy.copied { color: #2dd4bf; border-color: #2dd4bf; }
   .minfo-panel .minfo-empty { font-size: 12.5px; color: var(--text-3); font-style: italic; }
   .minfo-panel .minfo-note { border-left: 2px solid var(--border-strong); padding: 3px 0 3px 10px; margin-bottom: 8px; font-size: 14px; color: var(--text); line-height: 1.45; }
   .minfo-panel .minfo-note-date { font-size: 11px; color: var(--text-3); margin-bottom: 2px; }
@@ -912,6 +915,7 @@
   .inflight-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--good-bg); color: var(--good); font-size: 11px; font-weight: 600; margin-right: 6px; letter-spacing: 0.03em; border: 0.5px solid var(--good-bar); }
   .resolved-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; background: var(--good-bg); color: var(--good); font-size: 11px; font-weight: 600; margin-right: 6px; border: 0.5px solid var(--good-bar); }
   .inflight-chip.dead-chip, .resolved-chip.dead-chip { background: rgba(229,83,75,.18); color: #e5534b; border-color: rgba(229,83,75,.55); font-weight: 700; }
+  .inflight-chip.mp-chip, .resolved-chip.mp-chip { background: rgba(45,212,191,.16); color: #2dd4bf; border-color: rgba(45,212,191,.5); }
   .freq-pill { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 500; }
   .freq-pill.daily { background: #EAF1FB; color: #1B4D8C; }
   .freq-pill.weekly { background: #F5E6FA; color: #5C1A7E; }
@@ -1350,7 +1354,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v212</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v213</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2121,9 +2125,9 @@ function beaconReconstruct(raw, todayISO){
         if (ex) ex.text=f.Note||''; else { m.notes_log.push({date_iso:dISO, text:f.Note||''}); notesByDate[dISO]=(notesByDate[dISO]||0)+1; }
         noteRidMap[m.lead_id+'|'+dISO]=r.id;
       }
-    } else if (t==='Spoke to'||t==='Lowered'||t==='Suspend Payment'||t==='Legal'||t==='Dead'){
+    } else if (t==='Spoke to'||t==='Lowered'||t==='Suspend Payment'||t==='Legal'||t==='Dead'||t==='Manual Pay'){
       resolvedByDate[dISO]=(resolvedByDate[dISO]||0)+1;
-      m.resolution_type = t==='Spoke to'?'spoke':t==='Lowered'?'lowered':t==='Suspend Payment'?'paused':t==='Dead'?'dead':'legal';
+      m.resolution_type = t==='Spoke to'?'spoke':t==='Lowered'?'lowered':t==='Suspend Payment'?'paused':t==='Dead'?'dead':t==='Manual Pay'?'manualpay':'legal';
       m.resolution_date = dISO;
       m.resume_date = f['Resume Date']||'';
       m.lowered_amount = (payload&&payload.amount)||0;
@@ -2376,6 +2380,7 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
 // ---------- MUTATION WRITERS (append-only Actions + CollectionsState) ----------
 function beaconCollectionsStateFor(m){
   if (m.resolution_type==='legal') return 'LEGAL';
+  if (m.resolution_type==='manualpay') return 'MANUAL PAY';   // v213: manual-pay plan resolves the bounce
   if (m.resolution_type==='dead'){
     // v206: a DEAD deal is written off — payments off, not sent to legal, letting it die. It shows a
     // red DEAD pill and drops off the bounce report. BUT if a payment CLEARS again after we marked it
@@ -2470,6 +2475,14 @@ async function beaconSetManualPay(m, cadence, amount, nextDue){
   m.manual_pay_amount = Number(amount)||0;
   m.manual_pay_next_due = nextDue;
   if(!Array.isArray(m.manual_pay_log)) m.manual_pay_log = [];
+  // v213: a manual-pay plan IS a resolution to the bounce — mark the deal resolved so the row goes
+  // green/handled, the resolve button updates, and it leaves the active bounce list, like Lowered/Spoke.
+  m.resolution_type = 'manualpay';
+  m.resolution_date = TODAY_ISO;
+  m.resume_date = '';
+  m.lowered_amount = 0;
+  snapshotOriginalBounce(m);
+  beaconPushResolution(m, TODAY_ISO).catch(beaconWriteErr);
   await atPatch('Deals',[{id:m._rid, fields:{
     ManualPayState:'ACTIVE', ManualPayCadence:cadence, ManualPayAmount:String(m.manual_pay_amount),
     ManualPayNextDue:nextDue, ManualPayLog:JSON.stringify(m.manual_pay_log),
@@ -2499,7 +2512,7 @@ async function beaconEndManualPay(m){
 }
 
 async function beaconPushResolution(m, todayISO){
-  const typeMap={spoke:'Spoke to', lowered:'Lowered', paused:'Suspend Payment', legal:'Legal', dead:'Dead'};
+  const typeMap={spoke:'Spoke to', lowered:'Lowered', paused:'Suspend Payment', legal:'Legal', dead:'Dead', manualpay:'Manual Pay'};
   const atType=typeMap[m.resolution_type]; if(!atType) return;
   const payload={v:1, kind:'resolution', amount:m.lowered_amount||0,
     orig:{freq:m.original_freq||'', amt:m.original_bounce_amt||0, code:m.original_return_code||''}};
@@ -2908,7 +2921,7 @@ function merchantInfoInnerHtml(m){
   const c = [];
   if(m.owner_name)  c.push('<span class="minfo-item"><span class="minfo-lbl">Owner</span>' + m.owner_name + '</span>');
   if(m.owner_phone) c.push('<span class="minfo-item"><span class="minfo-lbl">Phone</span><a href="tel:' + String(m.owner_phone).replace(/\D/g,'') + '">' + bxFmtPhone(m.owner_phone) + '</a></span>');
-  if(m.owner_email) c.push('<span class="minfo-item"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a></span>');
+  if(m.owner_email) c.push('<span class="minfo-item"><span class="minfo-lbl">Email</span><a href="mailto:' + m.owner_email + '">' + m.owner_email + '</a><button class="minfo-copy" title="Copy email" onclick="event.stopPropagation();copyToClipboard(\'' + m.owner_email.replace(/'/g,"\\'") + '\',this)">⧉</button></span>');
   if(legalCase && legalCase.legal_company) c.push('<span class="minfo-item"><span class="minfo-lbl">Legal co.</span><span style="color:#FF6B61;font-weight:600">' + legalCase.legal_company + '</span></span>');
   const contactHtml = '<div class="minfo-section">Contact</div><div class="minfo-line">' + (c.length ? c.join('<span class="minfo-dot">·</span>') : '<span class="minfo-empty">No contact saved on the Master Sheet for this deal.</span>') + '</div>';
   // Notes — a live editor for today plus the joined history (deal notes + legal case)
@@ -3040,6 +3053,7 @@ function prettyResType(t) {
   if (t === 'lowered') return 'Lowered';
   if (t === 'legal') return 'Legal';
   if (t === 'dead') return 'Dead';
+  if (t === 'manualpay') return 'Manual Pay';
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
@@ -3154,6 +3168,9 @@ function isInFlight(m) {
     if (!m.hit_date || !m.resolution_date) return true;
     return new Date(m.hit_date) <= new Date(m.resolution_date);
   }
+  // v213: a manual-pay plan is a resolution — always in-flight (handled/green). Payments come via the
+  // manual schedule, not the debit; a bounce on the debit is expected and shouldn't unresolve it.
+  if (m.resolution_type === 'manualpay') return true;
   // v206: a DEAD deal is always "in flight" (off the board). We wrote it off — a bounce on a dead deal
   // is meaningless (payments are off; of course it bounces). It only comes back when a payment CLEARS,
   // which expires the 'dead' resolution (v157) so it's no longer dead here. So while it's dead, suppress.
@@ -4958,13 +4975,11 @@ function renderMainTable() {
   events.sort((a, b) => {
     // 1. Section order (broken/stop/cons/weekly/new/legal-still)
     if (a._displayOrder !== b._displayOrder) return a._displayOrder - b._displayOrder;
-    // 2. Within section: unresolved on top, resolved/in-flight at the bottom.
-    //    A merchant is "unresolved" if it has no resolution_type and isn't in-flight.
-    //    Broken-promise and legal-still sections all have resolutions so this is a no-op there.
-    const aResolved = !!(a.resolution_type) || a._inflight;
-    const bResolved = !!(b.resolution_type) || b._inflight;
-    if (aResolved !== bResolved) return aResolved ? 1 : -1;
-    // 3. Within unresolved/resolved sub-group, sort by sev specifics
+    // v213: do NOT push resolved/in-flight deals to the bottom of their section. Matt wants a deal to
+    // STAY in its spot when he resolves it (e.g. marking a NEW bounce "spoke to" shouldn't drop it to the
+    // bottom of the new-bounces list). Position is now purely by severity/balance, stable regardless of
+    // whether it's resolved — resolved rows just show green in place.
+    // 3. Within section, sort by sev specifics
     if (a.sev_class === "stop") return (a.severity_rank || 100) - (b.severity_rank || 100) || (b.balance - a.balance);
     if (a.sev_class === "consecutive") return (b.streak_len - a.streak_len) || (b.balance - a.balance);
     return b.balance - a.balance;
@@ -5172,7 +5187,7 @@ function buildRow(m, editable) {
   else if (m._inflight && editable) {
     // On today's view, the in-flight chip pairs with the live Resolve button on the right.
     // On past-date views, the action label on the right makes this chip redundant.
-    chips += '<span class="inflight-chip' + (m.resolution_type==='dead'?' dead-chip':'') + '">' + prettyResType(m.resolution_type) + '</span>';
+    chips += '<span class="inflight-chip' + (m.resolution_type==='dead'?' dead-chip':'') + (m.resolution_type==='manualpay'?' mp-chip':'') + '">' + prettyResType(m.resolution_type) + '</span>';
   }
   else if (m._broken || m._brokeReset) {
     // v197/v200: a broken resolution shows the BROKE label. After a stop auto-resets the resolution
@@ -7131,6 +7146,19 @@ async function beaconManualRefresh(){
   finally{ if(b) b.disabled=false; }
 }
 
+// v213: copy text (e.g. an email) to the clipboard with a brief ✓ confirmation on the button
+function copyToClipboard(text, btn){
+  const done = () => {
+    if(btn){ const o=btn.textContent; btn.textContent='✓'; btn.classList.add('copied'); setTimeout(()=>{btn.textContent=o; btn.classList.remove('copied');},1200); }
+    showToast('Copied: ' + text);
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>{ _fallbackCopy(text); done(); });
+  } else { _fallbackCopy(text); done(); }
+}
+function _fallbackCopy(text){
+  try{ const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }catch(e){}
+}
 function showToast(msg) {
   const t = document.getElementById("toast");
   t.textContent = msg;

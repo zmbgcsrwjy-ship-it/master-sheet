@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="All Deals tab font nudged 0.5px smaller (rows 13px, headers 12.5px) — spacing/sizing unchanged.">LIVE · build 165</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Manual-pay plan now resolves the bounce in Beacon (green row, MANUAL PAY chip). csChip skips the duplicate MANUAL PAY pill since manualPayChip renders it.">LIVE · build 166</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1804,6 +1804,7 @@ function copyEmail(btn, ev){
 
 function csChip(d){
   const s=d.collections_state; if(!s||s==='OK') return '';
+  if(s==='MANUAL PAY') return '';   // build 166: manualPayChip renders this separately — avoid a duplicate pill
   const hasStop = bounceByLead[d.lead_id] && bounceByLead[d.lead_id].hasStop;
   let col;
   if(s==='LEGAL') col='#6b7885';                                  // slate — legal (handled); matches Beacon
