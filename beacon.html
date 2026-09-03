@@ -216,6 +216,10 @@
     white-space: nowrap;
   }
   .watch-card.hot .watch-tag { background: var(--sev-stop); color: #fff; }
+  /* v215: broken-promise cards in HOT use the broken-promise orange, not stop-red */
+  .watch-card.hot.is-broken .watch-tag { background: var(--sev-broken-bar); color: #fff; }
+  .watch-card.hot.is-broken { border-left-color: var(--sev-broken-bar); }
+  .watch-card.hot.is-broken .watch-name { color: var(--sev-broken); }
   .watch-card.active-tier .watch-tag { background: var(--watch-active); color: #fff; }
   .watch-card.quiet .watch-tag { background: var(--surface-2); color: var(--text-2); border: 0.5px solid var(--border); }
   .watch-card .watch-detail { color: var(--text-2); font-size: 11px; }
@@ -1354,7 +1358,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v214</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v215</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3385,6 +3389,21 @@ function getWatchList() {
   active.sort((a, b) => (b.sortAge || 0) - (a.sortAge || 0));
   quiet.sort((a, b) => (a.sortAge || 0) - (b.sortAge || 0));  // oldest stale first
   
+  // v215: order the HOT list by priority — an unresolved STOP (STOP TODAY / OPEN STOP) is the most
+  // urgent thing on the board and must sit at the top, above broken promises and legal-still. Stable
+  // within a tier (preserves the natural order). STOP TODAY beats OPEN STOP (a fresh stop over a carried one).
+  const _hotRank = { 'unresolved-stop': 0, 'broken-promise': 1, 'legal-still': 2 };
+  hot.forEach((h,i)=>{ h._ord = i; });  // preserve original order within a tier
+  hot.sort((a,b)=>{
+    const ra = _hotRank[a.reason] ?? 5, rb = _hotRank[b.reason] ?? 5;
+    if (ra !== rb) return ra - rb;
+    // within unresolved-stops, a stop hitting TODAY outranks a carried-forward open stop
+    if (a.reason === 'unresolved-stop'){
+      const aToday = a.m.bounced_today ? 0 : 1, bToday = b.m.bounced_today ? 0 : 1;
+      if (aToday !== bToday) return aToday - bToday;
+    }
+    return a._ord - b._ord;
+  });
   return { hot, active, quiet };
 }
 
@@ -4013,7 +4032,8 @@ function renderWatchTier(tier, items) {
     const tierClass = tier === 'active' ? 'active-tier' : tier;
     // If this is a weekly-flavored item, add is-weekly so it renders purple (color continuity)
     const isWeekly = it.reason === 'unresolved-weekly' || (isWeeklyDeal(m) && it.reason === 'resume-soon');
-    card.className = 'watch-card ' + tierClass + (isWeekly ? ' is-weekly' : '');
+    const isBrokenReason = it.reason === 'broken-promise';   // v215: broken promises get the orange tag, not red
+    card.className = 'watch-card ' + tierClass + (isWeekly ? ' is-weekly' : '') + (isBrokenReason ? ' is-broken' : '');
     card.style.cursor = 'pointer';
     card.dataset.leadId = m.lead_id;  // for hover cross-highlight with bounce table
     card.addEventListener('click', () => {
