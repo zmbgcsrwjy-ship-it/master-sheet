@@ -77,9 +77,9 @@
   }
   html { scrollbar-gutter: stable; }   /* v168: always reserve the scrollbar's width so switching between a tall tab (Daily, has a scrollbar) and a short one (Legal/Manual, none) doesn't shift the centered content sideways */
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
-  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
+  .layout { display: grid; grid-template-columns: 375px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
   /* v83: density — Compact fits Beacon on a 1080p screen */
-  body.compact .layout { grid-template-columns: 300px 1fr; }
+  body.compact .layout { grid-template-columns: 335px 1fr; }
   /* v83: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
@@ -1354,7 +1354,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v213</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v214</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
