@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Outlook written-off rows now pull the deal PNL (not max loss) for the amount and the full Balance Left (not book-adjusted) for the balance column — matching All Deals. Month-loss total uses PNL too.">LIVE · build 167</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="PNL: clawbacks and legal fees no longer affect the Sal/Matt payout (Pinnacle now bakes them into deal balances — deducting again would double-count). They stay visible on the PNL tab as informational rows. Kickback-clawed-back and FF due unchanged.">LIVE · build 168</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -680,7 +680,7 @@ select.badge:hover{filter:brightness(1.2)}
             </table>
           </div>
           <div id="pnl-settle"></div>
-          <div style="font-size:11px;color:var(--text3);padding:8px 4px">House split: Highland Hill Capital 50% of book PNL and 50% of legal (global). Kickbacks 100% ours, distributed once after funding. FF is full book-level cost on a 4-month lag. Legal total is entered on the Monthly tab. A funding month pays out as soon as it's positive; a negative month is held — no payout, no deduction — until the whole cohort goes dark (every open deal DEFAULT or 30+ days with no payment), then its loss deducts. After a loss is settled, later collections surface as ↩ RECOVERY income to pay back out. The Settled column is a running account.</div>
+          <div style="font-size:11px;color:var(--text3);padding:8px 4px">House split: Highland Hill Capital 50% of book PNL. Kickbacks 100% ours, distributed once after funding. FF is full book-level cost on a 4-month lag. Legal fees and clawbacks are now baked into deal balances by Pinnacle, so they're shown here for reference only and do NOT affect the payout (that would double-count). A funding month pays out as soon as it's positive; a negative month is held — no payout, no deduction — until the whole cohort goes dark (every open deal DEFAULT or 30+ days with no payment), then its loss deducts. After a loss is settled, later collections surface as ↩ RECOVERY income to pay back out. The Settled column is a running account.</div>
         </div>
         <div class="panel" id="panel-renewal" style="display:none">
           <div class="panel-header"><h3>REFI eligible</h3><span style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -2775,7 +2775,10 @@ async function computePnl(){
   const kickTotal = kicks.reduce((s,k)=>s+k.amount,0);
   const kickbackClaw = (monthlyManual[curYM]&&monthlyManual[curYM].kickbackClaw)||0;  // clawed-back MSC kickbacks — off your page, 50/50
   const payableTotal = cohorts.reduce((s,c)=>s+c.payable,0);
-  const each = (payableTotal + kickTotal - kickbackClaw - ffDue - legalOurEnd + clawbackOurEnd)/2;
+  // build 168: clawbacks and legal fees no longer affect the payout — Pinnacle now bakes them into the
+  // deal balance, so they're already reflected in cohort PNL. Deducting again would double-count. They
+  // stay VISIBLE on the PNL tab as informational rows. Kickback-clawed-back and FF due are unchanged.
+  const each = (payableTotal + kickTotal - kickbackClaw - ffDue)/2;
   return {month: curYM, cohorts, kicks, ffDue, legalTotal, legalOurEnd, clawbackTotal, clawbackOurEnd, kickTotal, kickbackClaw, payableTotal, each};
 }
 
@@ -2788,7 +2791,10 @@ function clawedDealsForMonth(month){
 }
 function pnlRowsHtml(p){
   const sec=(label,cls)=>`<tr><td colspan="7" class="pnl-sec ${cls}">${label}</td></tr>`;
-  const clawbackRow=(name,bc)=>{ const oe=bc*HOUSE_SPLIT; return `<tr><td style="padding-left:22px;color:var(--text);font-weight:500">${name}</td>${money(bc)}${money(oe)}<td>—</td>${money(oe)}${moneyDiv(oe/2)}${money(oe/2)}</tr>`; };
+  // build 168: clawback rows are informational only now (Pinnacle bakes them into the balance). Show
+  // the clawed commission for reference, but dashes in OUR END / AVAILABLE / SAL / MATT since they no
+  // longer feed the payout split.
+  const clawbackRow=(name,bc)=>`<tr><td style="padding-left:22px;color:var(--text);font-weight:500">${name}</td>${money(bc)}<td>—</td><td>—</td><td>—</td><td class="pnl-div">—</td><td>—</td></tr>`;
   const kickRevRow=(name,kb)=>`<tr><td style="padding-left:22px;color:var(--text);font-weight:500">${name}</td>${money(-kb,true)}${money(-kb,true)}<td>—</td>${money(-kb,true)}${moneyDiv(-kb/2,true)}${money(-kb/2,true)}</tr>`;
   const clawedList=clawedDealsForMonth(p.month);
   const money=(v,red)=>`<td class="${red||(v<-0.005)?'pnl-neg':''}">${v==null?'—':fmt$(v)}</td>`;
@@ -2819,9 +2825,9 @@ function pnlRowsHtml(p){
   if(kickbackClaw>0) h+=clawedList.filter(c=>c.kb>0).map(c=>kickRevRow(c.name,c.kb)).join('');
   h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-yellow');
   h+=`<tr><td style="font-weight:600">FF due (${monthLabelFull(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${moneyDiv(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
-  h+=sec('LEGAL FEES — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-red');
-  h+=`<tr><td style="font-weight:600">Legal</td>${money(-legalTotal,legalTotal>0)}${money(-legalOurEnd,legalOurEnd>0)}<td>—</td>${money(-legalOurEnd,legalOurEnd>0)}${moneyDiv(-legalOurEnd/2,legalOurEnd>0)}${money(-legalOurEnd/2,legalOurEnd>0)}</tr>`;
-  h+=sec('CLAWBACKS — 50% HOUSE SPLIT (manual, Monthly tab)','pnl-sec-teal');
+  h+=sec('LEGAL FEES — informational (baked into balance by Pinnacle)','pnl-sec-red');
+  h+=`<tr><td style="font-weight:600">Legal</td>${money(-legalTotal,legalTotal>0)}<td>—</td><td>—</td><td>—</td><td class="pnl-div">—</td><td>—</td></tr>`;
+  h+=sec('CLAWBACKS — informational (baked into balance by Pinnacle)','pnl-sec-teal');
   h+=clawedList.map(c=>clawbackRow(c.name,c.bc)).join('');
   h+=`<tr><td style="font-weight:800;background:var(--bg3)">PAYOUT</td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td style="background:var(--bg3)"></td><td class="pnl-div ${nz(p.each)?(p.each>0?'pnl-pos':'pnl-neg'):''}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td><td class="${nz(p.each)?(p.each>0?'pnl-pos':'pnl-neg'):''}" style="font-weight:800;background:var(--bg3)">${fmt$(p.each)}</td></tr>`;
   return h;
@@ -2881,7 +2887,7 @@ async function closeOutMonth(){
     await loadPnlState();
     const p=await computePnl();
     if(pnlSnapshots.some(s=>s.month===p.month)){ showNotice(monthLabelFull(p.month)+' is already closed — see history.','warn'); renderPnl(); return; }
-    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nEligible month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+(p.kickbackClaw>0?'\nKickback clawed back: -'+fmt$(p.kickbackClaw):'')+'\nFF deducted: '+fmt$(p.ffDue)+'\nLegal deducted (our end): '+fmt$(p.legalOurEnd)+'\nClawback added (our end): '+fmt$(p.clawbackOurEnd)+'\n\nThis locks the snapshot and settles each eligible month into the ledger — positive months pay, dark (30-day no-pay) losses deduct, recoveries credit back. It cannot be re-run for this month.');
+    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nEligible month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+(p.kickbackClaw>0?'\nKickback clawed back: -'+fmt$(p.kickbackClaw):'')+'\nFF deducted: '+fmt$(p.ffDue)+'\n\n(Legal & clawbacks are baked into deal balances by Pinnacle — informational only, not in the payout.)\n\nThis locks the snapshot and settles each eligible month into the ledger — positive months pay, dark (30-day no-pay) losses deduct, recoveries credit back. It cannot be re-run for this month.');
     if(!ok) return;
     showLoading('Closing out '+monthLabelFull(p.month)+'...');
     await atFetchT('PnlSnapshots','POST','',{records:[{fields:{Month:p.month, ClosedAt:new Date().toISOString(), SalPayout:Math.round(p.each*100)/100, MattPayout:Math.round(p.each*100)/100, DataJSON:JSON.stringify(p)}}]});
