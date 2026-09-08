@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="PNL: clawbacks and legal fees no longer affect the Sal/Matt payout (Pinnacle now bakes them into deal balances — deducting again would double-count). They stay visible on the PNL tab as informational rows. Kickback-clawed-back and FF due unchanged.">LIVE · build 168</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Fixed the PNL settle-up: Sal page = PNL − FF, Matt page = MSC kickbacks. Legal + clawback no longer land on Sal page (Pinnacle bakes them into balances) — that leftover was the phantom Sept +595.">LIVE · build 169</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2833,11 +2833,12 @@ function pnlRowsHtml(p){
   return h;
 }
 
-// Settle-up: PNL/FF/legal/clawback land on Sal's page; kickbacks on Matt's page. Each owns 50%
-// of the combined total, so one tops up the other. Display only — does not change any PNL number.
+// Settle-up: PNL − FF lands on Sal's page; MSC kickbacks (net of kickback-claw) on Matt's page. Each
+// owns 50% of the combined total, so one tops up the other. Display only — does not change any PNL number.
+// build 168: legal + clawback no longer land on Sal's page — Pinnacle bakes them into deal balances, so
+// they're already in the cohort PNL; adding them again here double-counted (that was the phantom Sept +595).
 function pnlSettleHtml(p){
-  const legalOurEnd = p.legalOurEnd!=null ? p.legalOurEnd : (p.legal||0);
-  const salPage = (p.payableTotal||0) - (p.ffDue||0) - legalOurEnd + (p.clawbackOurEnd||0);
+  const salPage = (p.payableTotal||0) - (p.ffDue||0);
   const mattPage = (p.kickTotal||0) - (p.kickbackClaw||0);
   const each = p.each!=null ? p.each : (salPage+mattPage)/2;
   const transfer = each - mattPage; // >0 Sal→Matt ; <0 Matt→Sal
@@ -2847,7 +2848,7 @@ function pnlSettleHtml(p){
   else line=`<span style="color:#c9a15a">→ Matt sends Sal</span><span style="color:#c9a15a">${fmt$(-transfer)}</span>`;
   return `<div style="margin:12px 80px 6px auto; padding:12px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; max-width:520px">
     <div style="font-size:11px; font-weight:700; letter-spacing:.5px; color:var(--text3); margin-bottom:8px">SETTLE-UP — ${monthLabelFull(p.month)}</div>
-    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Sal's page — PNL − FF − legal + clawback</span><span style="color:var(--text)">${fmt$(salPage)}</span></div>
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Sal's page — PNL − FF</span><span style="color:var(--text)">${fmt$(salPage)}</span></div>
     <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Matt's page — MSC kickbacks</span><span style="color:var(--text)">${fmt$(mattPage)}</span></div>
     <div style="border-top:1px solid var(--border); margin-top:6px; padding-top:8px; display:flex; justify-content:space-between; font-size:13px; font-weight:700">${line}</div>
     <div style="font-size:10px; color:var(--text3); margin-top:5px">Both partners net to ${fmt$(each)} for the month.</div>
