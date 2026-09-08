@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Diagnostic: investigating why a clawed deal’s reversed kickback (MARVELOUS) isn’t deducting in the clawback month. Removed the settle diag (stale-snapshot issue resolved via unclose/re-close).">LIVE · build 171</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Diagnostic v2: show each clawed deal’s stored kickback amount to determine if reversals can be auto-corrected.">LIVE · build 172</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2792,12 +2792,11 @@ function clawedDealsForMonth(month){
 function pnlRowsHtml(p){
   // TEMP DIAG build 171 — why isn't MARVELOUS's clawed kickback deducting in August?
   try {
-    const mv = deals.find(d=>/MARVELOUS/i.test(d.merchant||''));
-    if(mv){ console.log('🔧 CLAW-KB DIAG:', JSON.stringify({
-      merchant:mv.merchant, clawback_state:mv.clawback_state, clawed_info:mv.clawed_info,
-      pnl_month:p.month, kickbackClaw_for_month:p.kickbackClaw,
-      clawedList:clawedDealsForMonth(p.month)
-    }, null, 2)); }
+    const clawed = deals.filter(d=>(d.clawback_state||'').toUpperCase()==='CLAWED');
+    console.log('🔧 CLAW-KB DIAG:', JSON.stringify(clawed.map(d=>({
+      merchant:d.merchant, clawed_info:d.clawed_info,
+      d_kickback:d.kickback, d_kickback_paid:d.kickback_paid
+    })), null, 2));
   } catch(e){ console.log('CLAW-KB DIAG err', e); }
   const sec=(label,cls)=>`<tr><td colspan="7" class="pnl-sec ${cls}">${label}</td></tr>`;
   // build 168: clawback rows are informational only now (Pinnacle bakes them into the balance). Show
