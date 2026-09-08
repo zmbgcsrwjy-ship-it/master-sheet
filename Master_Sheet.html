@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="PNL kickback list shows ONLY deals funded that month (fixed the <= that pulled prior-month deals in). A prior-month deal appears in a later month only via its clawback reversal. A deal funded+clawed same month shows in both the kickback list and the clawback section.">LIVE · build 177</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Fixed: the kickback-clawed-back total feeding the payout now sums the same clawed deals shown in the list (was using a stale stored total, so July showed -$727.50 but only subtracted -$547.50). Display and math now always agree.">LIVE · build 178</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2814,7 +2814,11 @@ async function computePnl(){
   const clawbackTotal = (monthlyManual[curYM]&&monthlyManual[curYM].clawback)||0;
   const clawbackOurEnd = clawbackTotal*HOUSE_SPLIT; // clawback recovered commission — income, 50% house split like legal
   const kickTotal = kicks.reduce((s,k)=>s+k.amount,0);
-  const kickbackClaw = (monthlyManual[curYM]&&monthlyManual[curYM].kickbackClaw)||0;  // clawed-back MSC kickbacks — off your page, 50/50
+  // build 178: the kickback-clawed-back total that feeds the payout MUST equal the sum of the clawed
+  // deals shown in the list below — otherwise the displayed clawbacks and the math diverge (July showed
+  // 4 clawbacks totaling -$727.50 but the stored KickbackClaw total was only -$547.50, so JSUNDERGROUND's
+  // $180 was shown but not subtracted). Derive it from clawedDealsForMonth so display == math, always.
+  const kickbackClaw = clawedDealsForMonth(curYM).reduce((s,c)=>s+(c.kb||0),0);
   const payableTotal = cohorts.reduce((s,c)=>s+c.payable,0);
   // build 168: clawbacks and legal fees no longer affect the payout — Pinnacle now bakes them into the
   // deal balance, so they're already reflected in cohort PNL. Deducting again would double-count. They
