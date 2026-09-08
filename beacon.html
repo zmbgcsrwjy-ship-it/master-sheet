@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v218</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v219</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3194,8 +3194,15 @@ function isInFlight(m) {
   // late-arriving bounce for a period we already handled. (A bounce AFTER the resolution is a broken
   // promise and is handled by isBroken, not suppressed here.)
   if (!m.resolution_type && m.hit_date && Array.isArray(m.resolution_history) && m.resolution_history.length) {
-    const covered = m.resolution_history.some(r => r.date && m.hit_date <= r.date);
-    if (covered) return true;
+    // v219: only treat as in-flight (handled/green) if the covering resolution is still ACTIVE — i.e.
+    // no payment cleared after it. If a payment cleared strictly after the covering resolution's date,
+    // the promise was KEPT: the resolution is done, so the deal is resolved-and-finished, not lingering
+    // green with an empty chip. (SOULEMPANADAS: bounced 9/4, spoke 9/4, paid 9/8 → kept → not in-flight.)
+    const covering = m.resolution_history.filter(r => r.date && m.hit_date <= r.date).sort((a,b)=> a.date<b.date?1:-1)[0];
+    if (covering) {
+      const kept = m.last_cleared && m.last_cleared > covering.date;
+      return !kept;   // still active → in-flight; kept → done (not in-flight)
+    }
   }
   if (!m.resolution_type) return false;
   // v87: a SUSPENSION stays "in flight" (still recognized as resolved) for its whole active window —
@@ -4972,16 +4979,6 @@ function renderMainTable() {
       const isLegalStill = m.resolution_type === "legal" || hasOpenLegalCase(m.lead_id);
       const broken = isBroken(m);
       const inflight = isInFlight(m);
-      if (/SOULEMPANADAS|SOULEMPANDAS/i.test(m.name||'')) {
-        console.log('🥟 SOUL DIAG:', JSON.stringify({
-          name:m.name, bounced_today:m.bounced_today, hit_date:m.hit_date,
-          resolution_type:m.resolution_type, resolution_date:m.resolution_date,
-          resume_date:m.resume_date, last_cleared:m.last_cleared,
-          open_stop:m.open_stop, sev_class:m.sev_class, _brokeReset:m._brokeReset,
-          manual_pay_state:m.manual_pay_state, resolution_history:m.resolution_history,
-          broken, inflight
-        }, null, 2));
-      }
       // Display order: STOPS (1) → CONSEC (2) → WEEKLY (3) → NEW (4) — operational priority first.
       // Then a gap, then BROKEN PROMISES (8) and SENT TO LEGAL STILL BOUNCING (9) at the bottom
       // as separate "closed-loop" sections that need a different mental mode to action.
@@ -5271,7 +5268,9 @@ function buildRow(m, editable) {
   else if (m._inflight && editable) {
     // On today's view, the in-flight chip pairs with the live Resolve button on the right.
     // On past-date views, the action label on the right makes this chip redundant.
-    chips += '<span class="inflight-chip' + (m.resolution_type==='dead'?' dead-chip':'') + (m.resolution_type==='manualpay'?' mp-chip':'') + '">' + prettyResType(m.resolution_type) + '</span>';
+    // v219: only render the chip if there's an actual resolution label — never an empty pill.
+    const rt = prettyResType(m.resolution_type);
+    if (rt) chips += '<span class="inflight-chip' + (m.resolution_type==='dead'?' dead-chip':'') + (m.resolution_type==='manualpay'?' mp-chip':'') + '">' + rt + '</span>';
   }
   else if (m._broken || m._brokeReset) {
     // v197/v200: a broken resolution shows the BROKE label. After a stop auto-resets the resolution
