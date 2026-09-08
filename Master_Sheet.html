@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Clawed deals now always reverse their kickback (removed the kbPaid gate that skipped it). Added a one-time Fix clawed kickbacks button to re-book reversals the old logic missed. Removed diagnostics.">LIVE · build 173</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Diagnostic: list every deal funded in the current PNL month with a kickback and whether it flows into the realized kicks list, to find which August kickbacks are being dropped.">LIVE · build 175</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -672,7 +672,6 @@ select.badge:hover{filter:brightness(1.2)}
             <select id="pnl-history" onchange="renderPnl(this.value)" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">Current (in progress)</option></select>
             <button class="btn btn-green" id="pnl-close-btn" onclick="closeOutMonth()">🔒 Close out month</button>
             <button class="btn" id="pnl-unclose-btn" onclick="uncloseMonth()" style="display:none">🔓 Unclose month</button>
-            <button class="btn" id="pnl-fixkb-btn" onclick="fixClawedKickbacks()" title="One-time: re-book any clawed-deal kickback reversals that the old logic skipped" style="font-size:11px">🔧 Fix clawed kickbacks</button>
           </span></div>
           <div class="table-wrap">
             <table>
@@ -2799,6 +2798,14 @@ async function computePnl(){
   const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid && (d.clawback_state||'').toUpperCase()!=='CLAWED' && (d.date_funded||'').slice(0,7) <= curYM)
     .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback, date:d.date_funded||''}))
     .sort((a,b)=>{ const x=a.date||'9999-99', y=b.date||'9999-99'; return x<y?-1:x>y?1:0; }); // oldest → newest, dateless last
+  // TEMP DIAG build 175 — list every deal funded in curYM with a kickback, and why it's in/out of kicks
+  try {
+    const augKb = deals.filter(d=>(d.kickback||0)>0 && (d.date_funded||'').slice(0,7)===curYM)
+      .map(d=>({ merchant:d.merchant, kickback:d.kickback, funded:d.date_funded,
+        kickback_paid:d.kickback_paid, clawback_state:d.clawback_state,
+        IN_KICKS: !d.kickback_paid && (d.clawback_state||'').toUpperCase()!=='CLAWED' }));
+    console.log('🎯 KICKS DIAG '+curYM+' (count '+augKb.filter(x=>x.IN_KICKS).length+' of '+augKb.length+'):', JSON.stringify(augKb, null, 2));
+  } catch(e){ console.log('KICKS DIAG err', e); }
   const ffDue = ffByMonthFrom(deals)[addMonthsYM(curYM,-4)]||0;
   const legalTotal = (monthlyManual[curYM]&&monthlyManual[curYM].legal)||0;
   const legalOurEnd = legalTotal*HOUSE_SPLIT; // legal is 50% house split too (June 11, 2026)
@@ -3621,7 +3628,13 @@ async function computeMonthlyRows(){
     const bookFunding=ds.reduce((s,d)=>s+(d.funded||0)*(d.book_pct||100)/100,0); // OUR share of funding
     const banks=ds.reduce((s,d)=>s+(d.bank_fees||0),0);
     const balance=ds.reduce((s,d)=>s+(d.balance||0)*(d.book_pct||100)/100,0); // OUR book share of outstanding balance
-    const bonus=ds.reduce((s,d)=>s+(d.kickback||0),0);
+    const bonusGross=ds.reduce((s,d)=>s+(d.kickback||0),0);
+    // build 174: net out clawed-back kickbacks so the Monthly Kickbacks column matches the PNL tab's
+    // realized figure. A clawed deal's kickback is reversed in the month it was clawed (KickbackClaw on
+    // the Monthly record), so subtract that month's reversal total. Without this, August showed the raw
+    // gross (e.g. still counting BERTLIE $135 + MARVELOUS $127.50) instead of the net $1,515.
+    const kbClaw = (manual && manual.kickbackClaw) || 0;
+    const bonus = bonusGross - kbClaw;
     const pnl=ds.reduce((s,d)=>s+(d.pnl||0),0);
     const ffees=ds.reduce((s,d)=>s+(d.finance_fee||0),0);
     const legal=manual.legal||0, clawback=manual.clawback||0;
@@ -3635,16 +3648,16 @@ async function computeMonthlyRows(){
   const flushYear=y=>{
     if(!y||!yearAcc[y]) return;
     const a=yearAcc[y];
-    rows.push(mkRow('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback}, '', true));
+    rows.push(mkRow('Total '+y, a.deals, {legal:a.legal, clawback:a.clawback, kickbackClaw:a.kickbackClaw}, '', true));
   };
   months.forEach(ym=>{
     const y=ym.slice(0,4);
     if(lastYear&&y!==lastYear){ flushYear(lastYear); }
     lastYear=y;
-    yearAcc[y]=yearAcc[y]||{deals:[],legal:0,clawback:0};
-    const man=monthlyManual[ym]||{legal:0,clawback:0};
+    yearAcc[y]=yearAcc[y]||{deals:[],legal:0,clawback:0,kickbackClaw:0};
+    const man=monthlyManual[ym]||{legal:0,clawback:0,kickbackClaw:0};
     yearAcc[y].deals=yearAcc[y].deals.concat(groups[ym]);
-    yearAcc[y].legal+=man.legal||0; yearAcc[y].clawback+=man.clawback||0;
+    yearAcc[y].legal+=man.legal||0; yearAcc[y].clawback+=man.clawback||0; yearAcc[y].kickbackClaw+=man.kickbackClaw||0;
     rows.push(mkRow(monthLabelFull(ym), groups[ym], man, ym, false));
   });
   flushYear(lastYear);
