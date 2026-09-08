@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Reverted build 174: Monthly Kickbacks column is GROSS total collected (no clawback subtraction) — Aug $1,755. PNL tab unchanged (clawed deals earn + reverse separately). Removed the kicks diagnostic.">LIVE · build 176</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="PNL kickback list shows ONLY deals funded that month (fixed the <= that pulled prior-month deals in). A prior-month deal appears in a later month only via its clawback reversal. A deal funded+clawed same month shows in both the kickback list and the clawback section.">LIVE · build 177</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2800,7 +2800,12 @@ async function computePnl(){
   // (via kickbackClaw / clawed_info). So a clawed deal appears in BOTH places: earned here, reversed
   // there — both visible, each in its own month. (Previously CLAWED deals were excluded from the gross,
   // hiding the earning and only showing the reversal — that under-counted the funding month.)
-  const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid && (d.date_funded||'').slice(0,7) <= curYM)
+  // build 177: the kickback payout list shows ONLY deals funded IN this month (=== curYM), not <=.
+  // The old <= pulled prior-month deals (July's MARVELOUS/TAMALES) into August. A prior-month deal only
+  // appears in a later month via the CLAWBACK section (its reversal), never in this top kickback list.
+  // A deal funded AND clawed in the same month shows in BOTH: earned here + reversed in the clawback
+  // section below — never auto-zeroed.
+  const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid && (d.date_funded||'').slice(0,7) === curYM)
     .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback, date:d.date_funded||''}))
     .sort((a,b)=>{ const x=a.date||'9999-99', y=b.date||'9999-99'; return x<y?-1:x>y?1:0; }); // oldest → newest, dateless last
   const ffDue = ffByMonthFrom(deals)[addMonthsYM(curYM,-4)]||0;
