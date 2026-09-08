@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Diagnostic v2: show each clawed deal’s stored kickback amount to determine if reversals can be auto-corrected.">LIVE · build 172</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Clawed deals now always reverse their kickback (removed the kbPaid gate that skipped it). Added a one-time Fix clawed kickbacks button to re-book reversals the old logic missed. Removed diagnostics.">LIVE · build 173</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -672,6 +672,7 @@ select.badge:hover{filter:brightness(1.2)}
             <select id="pnl-history" onchange="renderPnl(this.value)" style="background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-size:12px"><option value="">Current (in progress)</option></select>
             <button class="btn btn-green" id="pnl-close-btn" onclick="closeOutMonth()">🔒 Close out month</button>
             <button class="btn" id="pnl-unclose-btn" onclick="uncloseMonth()" style="display:none">🔓 Unclose month</button>
+            <button class="btn" id="pnl-fixkb-btn" onclick="fixClawedKickbacks()" title="One-time: re-book any clawed-deal kickback reversals that the old logic skipped" style="font-size:11px">🔧 Fix clawed kickbacks</button>
           </span></div>
           <div class="table-wrap">
             <table>
@@ -2214,23 +2215,54 @@ async function bookKickbackClaw(month, amount){
   if(m&&m._id){ await atFetchT('Monthly','PATCH','',{records:[{id:m._id, fields:{KickbackClaw:next}}]}); m.kickbackClaw=next; }
   else{ const out=await atFetchT('Monthly','POST','',{records:[{fields:{Month:month, KickbackClaw:next}}]}); monthlyManual[month]={_id:out.records[0].id, legal:0, clawback:0, kickbackClaw:next}; }
 }
+// build 173: ONE-TIME fix — earlier claws (under the old kbPaid gate) recorded kb:0 for deals whose
+// kickback_paid flag was 0, so their kickback reversal was skipped. Under the new rule a clawed deal
+// ALWAYS reverses its kickback. This scans every clawed deal, rebuilds clawed_info.kb from the deal's
+// real Kickback amount, and books the missing difference into that claw month's KickbackClaw total.
+async function fixClawedKickbacks(){
+  const clawed = deals.filter(d=>(d.clawback_state||'').toUpperCase()==='CLAWED');
+  const fixes=[];
+  clawed.forEach(d=>{
+    let info={}; try{info=JSON.parse(d.clawed_info||'{}');}catch(e){}
+    const realKb = Math.round((d.kickback||0)*100)/100;
+    const storedKb = Math.round((Number(info.kb)||0)*100)/100;
+    if(realKb!==storedKb && info.m){ fixes.push({d, month:info.m, from:storedKb, to:realKb, diff:Math.round((realKb-storedKb)*100)/100, bc:Number(info.bc)||0}); }
+  });
+  if(!fixes.length){ showNotice('No clawed-kickback corrections needed \u2014 all reversals already match the deals\u2019 kickback amounts.','success',7000); return; }
+  const preview = fixes.map(f=>' \u2022 '+f.d.merchant+' ('+f.month+'): kickback reversal '+fmt$(f.from)+' \u2192 '+fmt$(f.to)).join('\n');
+  if(!confirm('Correct '+fixes.length+' clawed deal'+(fixes.length!==1?'s':'')+' whose kickback reversal was skipped by the old logic?\n\n'+preview+'\n\nThis updates each deal\u2019s clawed record and adds the missing reversal to that month\u2019s Kickback-clawed-back total. It does not touch closed-month snapshots (unclose/re-close those to pick it up).')) return;
+  showLoading('Correcting clawed kickbacks\u2026');
+  try{
+    for(const f of fixes){
+      const info={m:f.month, bc:f.bc, kb:f.to};
+      await atFetch('PATCH','',{records:[{id:f.d._id, fields:{ClawedInfo:JSON.stringify(info)}}]});
+      f.d.clawed_info=JSON.stringify(info);
+      if(f.diff!==0) await bookKickbackClaw(f.month, f.diff);
+    }
+    hideLoading();
+    showNotice('Corrected '+fixes.length+' clawed kickback reversal'+(fixes.length!==1?'s':'')+'. Re-check the PNL months. (Closed months need unclose/re-close.)','success',10000);
+    renderMetrics(); renderClawback(); renderTable();
+    if(currentView==='monthly') renderMonthly(); if(currentView==='pnl') renderPnl();
+  }catch(err){ hideLoading(); showNotice('Fix failed: '+err.message+' \u2014 some deals may have applied; re-run to finish.','error',12000); }
+}
 async function markClawed(dealId){
   const d=deals.find(x=>x._id===dealId); if(!d) return;
   const bookComm=Math.round((d.comm_amount||0)*(d.book_pct||100)/100*100)/100;  // clawback income = OUR book comm (not total)
-  const kb=d.kickback||0, kbPaid=!!d.kickback_paid;                              // MSC kickback to reverse off your page
+  const kb=d.kickback||0;                                                        // MSC kickback to reverse off your page
   const month=new Date().toISOString().slice(0,7);
+  // build 173: a clawed deal ALWAYS reverses its kickback in the claw month, using the original kickback
+  // amount — regardless of whether it was flagged paid. (The old kbPaid gate recorded kb:0 for deals
+  // whose kickback_paid flag was 0, so TAMALES/MULTISURANCE/BERTLIE/MARVELOUS lost their reversals.)
   let msg=`Mark ${d.merchant} as clawed back?\n\nBooks ${fmt$(bookComm)} book commission into ${month}'s Clawback (income, 50/50).`;
-  if(kb>0) msg += kbPaid
-    ? `\nReverses the ${fmt$(kb)} MSC kickback off your page (already paid out).`
-    : `\nStops the ${fmt$(kb)} MSC kickback from paying out (not yet distributed).`;
+  if(kb>0) msg += `\nReverses the ${fmt$(kb)} MSC kickback off your page.`;
   if(!confirm(msg)) return;
   try{
     await setClawbackState(dealId,'CLAWED');
     if(bookComm>0) await bookClawbackAmount(month, bookComm);
-    if(kb>0 && kbPaid) await bookKickbackClaw(month, kb);   // reverse only if already paid; unpaid is excluded from kicks
-    const info={m:month, bc:bookComm, kb:(kb>0&&kbPaid)?kb:0};   // remember exactly what/where we booked, for undo
+    if(kb>0) await bookKickbackClaw(month, kb);   // always reverse
+    const info={m:month, bc:bookComm, kb:(kb>0?kb:0)};   // remember exactly what/where we booked, for undo
     await atFetch('PATCH','',{records:[{id:dealId, fields:{ClawedInfo:JSON.stringify(info)}}]}); d.clawed_info=JSON.stringify(info);
-    showNotice(`${d.merchant} clawed — ${fmt$(bookComm)} to ${month} Clawback${kb>0?`, ${fmt$(kb)} kickback ${kbPaid?'reversed':'stopped'}`:''}.`,'success',7000);
+    showNotice(`${d.merchant} clawed — ${fmt$(bookComm)} to ${month} Clawback${kb>0?`, ${fmt$(kb)} kickback reversed`:''}.`,'success',7000);
     renderMetrics(); renderClawback(); renderTable();
     if(currentView==='monthly') renderMonthly(); if(currentView==='pnl') renderPnl();
   }catch(err){ showNotice('Clawback failed: '+err.message,'error',8000); }
@@ -2790,14 +2822,6 @@ function clawedDealsForMonth(month){
   }).map(d=>{ let info={}; try{info=JSON.parse(d.clawed_info||'{}');}catch(e){} return {name:d.merchant, bc:Number(info.bc)||0, kb:Number(info.kb)||0}; });
 }
 function pnlRowsHtml(p){
-  // TEMP DIAG build 171 — why isn't MARVELOUS's clawed kickback deducting in August?
-  try {
-    const clawed = deals.filter(d=>(d.clawback_state||'').toUpperCase()==='CLAWED');
-    console.log('🔧 CLAW-KB DIAG:', JSON.stringify(clawed.map(d=>({
-      merchant:d.merchant, clawed_info:d.clawed_info,
-      d_kickback:d.kickback, d_kickback_paid:d.kickback_paid
-    })), null, 2));
-  } catch(e){ console.log('CLAW-KB DIAG err', e); }
   const sec=(label,cls)=>`<tr><td colspan="7" class="pnl-sec ${cls}">${label}</td></tr>`;
   // build 168: clawback rows are informational only now (Pinnacle bakes them into the balance). Show
   // the clawed commission for reference, but dashes in OUR END / AVAILABLE / SAL / MATT since they no
