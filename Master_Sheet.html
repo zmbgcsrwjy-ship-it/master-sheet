@@ -532,7 +532,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Fixed the PNL settle-up: Sal page = PNL − FF, Matt page = MSC kickbacks. Legal + clawback no longer land on Sal page (Pinnacle bakes them into balances) — that leftover was the phantom Sept +595.">LIVE · build 169</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Diagnostic: investigating why a clawed deal’s reversed kickback (MARVELOUS) isn’t deducting in the clawback month. Removed the settle diag (stale-snapshot issue resolved via unclose/re-close).">LIVE · build 171</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2790,6 +2790,15 @@ function clawedDealsForMonth(month){
   }).map(d=>{ let info={}; try{info=JSON.parse(d.clawed_info||'{}');}catch(e){} return {name:d.merchant, bc:Number(info.bc)||0, kb:Number(info.kb)||0}; });
 }
 function pnlRowsHtml(p){
+  // TEMP DIAG build 171 — why isn't MARVELOUS's clawed kickback deducting in August?
+  try {
+    const mv = deals.find(d=>/MARVELOUS/i.test(d.merchant||''));
+    if(mv){ console.log('🔧 CLAW-KB DIAG:', JSON.stringify({
+      merchant:mv.merchant, clawback_state:mv.clawback_state, clawed_info:mv.clawed_info,
+      pnl_month:p.month, kickbackClaw_for_month:p.kickbackClaw,
+      clawedList:clawedDealsForMonth(p.month)
+    }, null, 2)); }
+  } catch(e){ console.log('CLAW-KB DIAG err', e); }
   const sec=(label,cls)=>`<tr><td colspan="7" class="pnl-sec ${cls}">${label}</td></tr>`;
   // build 168: clawback rows are informational only now (Pinnacle bakes them into the balance). Show
   // the clawed commission for reference, but dashes in OUR END / AVAILABLE / SAL / MATT since they no
@@ -2848,8 +2857,8 @@ function pnlSettleHtml(p){
   else line=`<span style="color:#c9a15a">→ Matt sends Sal</span><span style="color:#c9a15a">${fmt$(-transfer)}</span>`;
   return `<div style="margin:12px 80px 6px auto; padding:12px 14px; background:var(--bg3); border:1px solid var(--border2); border-radius:8px; max-width:520px">
     <div style="font-size:11px; font-weight:700; letter-spacing:.5px; color:var(--text3); margin-bottom:8px">SETTLE-UP — ${monthLabelFull(p.month)}</div>
-    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Sal's page — PNL − FF</span><span style="color:var(--text)">${fmt$(salPage)}</span></div>
-    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Matt's page — MSC kickbacks</span><span style="color:var(--text)">${fmt$(mattPage)}</span></div>
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Sal's page: PNL − FF</span><span style="color:var(--text)">${fmt$(salPage)}</span></div>
+    <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text2); padding:2px 0"><span>Matt's page: MSC Kickbacks</span><span style="color:var(--text)">${fmt$(mattPage)}</span></div>
     <div style="border-top:1px solid var(--border); margin-top:6px; padding-top:8px; display:flex; justify-content:space-between; font-size:13px; font-weight:700">${line}</div>
     <div style="font-size:10px; color:var(--text3); margin-top:5px">Both partners net to ${fmt$(each)} for the month.</div>
   </div>`;
