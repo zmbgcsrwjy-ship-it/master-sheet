@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v220</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v221</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2876,6 +2876,19 @@ async function syncBounceReport(file){
     const res = await beaconSyncBounces(parsed, state, keys, file.name);
     updateSyncProgress('Rebuilding the board\u2026');
     await beaconReload();
+    // TEMP DIAG v221 — is HAPPYANGELS in state after reload, and what's its shape?
+    try {
+      const h = state.find(m=>/HAPPYANGEL/i.test(m.name||''));
+      console.log('🔔 HAPPY POST-RELOAD:', h ? JSON.stringify({
+        found:true, name:h.name, status:h.status, bounced_today:h.bounced_today, hit_date:h.hit_date,
+        sev_class:h.sev_class, resolution_type:h.resolution_type, open_stop:h.open_stop,
+        _bounceDates:h._bounceDates, _stopDates:h._stopDates, last_cleared:h.last_cleared,
+        inflight:isInFlight(h), broken:isBroken(h)
+      }, null, 2) : 'NOT IN STATE AT ALL');
+      // also: did any bounce record for HAPPY exist in the raw cache?
+      const raw = (beaconRawCache.bounces||[]).filter(r=>/HAPPYANGEL/i.test((r.fields&&r.fields.Merchant)||''));
+      console.log('🔔 HAPPY RAW BOUNCE RECORDS:', raw.length, raw.map(r=>({Bounce:r.fields.Bounce, Date:r.fields.Date, Severity:r.fields.Severity, Code:r.fields['Return Code']})));
+    } catch(e){ console.log('HAPPY POST-RELOAD err', e); }
     var bits = res.created + ' new bounce' + (res.created===1?'':'s') + ' added';
     if (res.skipped) bits += '  \u00b7  ' + res.skipped + ' already in';
     if (res.unmatched.length) bits += '  \u00b7  ' + res.unmatched.length + ' unmatched';
