@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v222</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v223</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2352,22 +2352,11 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       // HAPPYANGELS: lowered, resumed (paid 8/27), then stopped AGAIN on 8/28 — a broken arrangement
       // that must show. We skip only genuine ongoing stops (no resume since the last stop). Suspended
       // deals still hidden while paused; brokeResume surfaces on the resume date; legal via legalToday.
-      // v194 SAFETY NET: a skip here only suppresses a DUPLICATE calendar stamp — it must NEVER make a
-      // deal vanish from the report. We only skip when the deal already has a prior stop record that
-      // will still render it (carried-forward open stop). If skipping would orphan the deal (no existing
-      // record to surface it), we let the record through instead. RULE: an uploaded deal always appears.
-      // v222: HARD RULE — a stop dated AFTER the deal's resolution is new activity (a fresh stop that
-      // broke or post-dates the arrangement) and MUST create a record and surface. It is never an
-      // "ongoing" stop to suppress. This closes the vanishing bug: HAPPYANGELS was lowered on 8/27,
-      // then stopped 9/14 — the old skip saw stale 8/26–8/28 records, called it "already visible," and
-      // dropped 9/14 entirely even though the deal wasn't on the board anymore.
-      const resDate = m.deal.resolution_date || '';
-      const stopAfterResolution = resDate && bDay > resDate;
-      const hasExistingStopRecord = (m.deal._stopDates||[]).some(d => d && d < bDay);
-      const wouldSkip = (lastStop && !brokeResume && !legalToday && !resumed && !stopAfterResolution);
-      if (wouldSkip && hasExistingStopRecord){ skipped.push(key+' (ongoing stop — already visible via prior record)'); continue; }
-      // if wouldSkip but there is NO existing record to carry it, fall through and create the record
-      // so the deal cannot disappear (defensive — covers any future edge the skip conditions miss).
+      // v223: NEVER skip a bounce record. Every row in the report creates a record so the deal always
+      // appears on the board — it lands in the HANDLED bucket if it's genuinely already-resolved (decided
+      // downstream by isInFlight/isBroken at render), or the active bucket if it's new. The old skip
+      // dropped "ongoing stop" records entirely to avoid a duplicate calendar stamp, but that made deals
+      // vanish (HAPPYANGELS). A deal in the report must ALWAYS show somewhere — no exceptions.
       (batchStops[m.deal._rid]=batchStops[m.deal._rid]||[]).push(bDay);
     }
     const sev = _isStop ? 'STOP' : (b.consec>1?'CONSEC':'NEW');
