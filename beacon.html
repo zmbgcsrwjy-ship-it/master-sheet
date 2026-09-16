@@ -2744,9 +2744,9 @@ async function beaconReload(){
   Object.keys(r.noteRidMap).forEach(k=>{ beaconNoteRidMap[k] = r.noteRidMap[k]; });
   // DIAG v224-diag: dump KINO state after reconstruct
   (function(){
-    const kino = state.find(m => (m.merchant||'').toUpperCase().includes('KINO'));
+    const kino = state.find(m => (m.name||'').toUpperCase().includes('KINO'));
     if(kino){
-      console.log('[KINO-DIAG] merchant:', kino.merchant);
+      console.log('[KINO-DIAG] name:', kino.name);
       console.log('[KINO-DIAG] open_stop:', kino.open_stop);
       console.log('[KINO-DIAG] open_stop_date:', kino.open_stop_date);
       console.log('[KINO-DIAG] bounced_today:', kino.bounced_today);
