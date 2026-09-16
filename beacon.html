@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v224-diag</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v224</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2242,8 +2242,13 @@ function beaconReconstruct(raw, todayISO){
       // return date 8/28 made it look unresolved. Using the hit date, 8/26 <= 8/27 → correctly handled.
       const stHit = (st.hit || st.date || '').slice(0,10);
       const resolvedAfter = m.resolution_type && m.resolution_date && stHit && m.resolution_date >= stHit;
+      // v224: also clear the open-stop if a payment cleared AFTER the stop hit date.
+      // When a v157 resolution expires (payment clears → resolution_type blanks), resolvedAfter becomes
+      // false even though the merchant paid. Without this guard, open_stop stays set and the deal ghosts
+      // on the HOT board forever even though the issue is resolved.
+      const clearedAfterStop = m.last_cleared && stHit && m.last_cleared > stHit;
       const legal = (typeof legalCasesOut!=='undefined') && legalCasesOut.some(c=>c.lead_id===m.lead_id && c.status!=='settled');
-      if (!m.bounced_today && !resolvedAfter && !legal){
+      if (!m.bounced_today && !resolvedAfter && !clearedAfterStop && !legal){
         // Carry the stop forward onto the board as an unresolved open stop.
         m.bucket = 'BOUNCED';
         m.bounced_today = false;          // it did NOT bounce today — it's a carried-forward open stop
@@ -2742,31 +2747,6 @@ async function beaconReload(){
   const r = beaconReconstruct(beaconRawCache, beaconEffectiveToday(beaconRawCache));
   state = r.state; history = r.history; legalCases = r.legalCases; STATS = r.STATS; TODAY_ISO = r.TODAY_ISO;
   Object.keys(r.noteRidMap).forEach(k=>{ beaconNoteRidMap[k] = r.noteRidMap[k]; });
-  // DIAG v224-diag: dump KINO state after reconstruct
-  (function(){
-    const kino = state.find(m => (m.name||'').toUpperCase().includes('KINO'));
-    if(kino){
-      console.log('[KINO-DIAG] name:', kino.name);
-      console.log('[KINO-DIAG] open_stop:', kino.open_stop);
-      console.log('[KINO-DIAG] open_stop_date:', kino.open_stop_date);
-      console.log('[KINO-DIAG] bounced_today:', kino.bounced_today);
-      console.log('[KINO-DIAG] hit_date:', kino.hit_date);
-      console.log('[KINO-DIAG] bounce_type:', kino.bounce_type);
-      console.log('[KINO-DIAG] sev_class:', kino.sev_class);
-      console.log('[KINO-DIAG] return_code:', kino.return_code);
-      console.log('[KINO-DIAG] resolution_type:', kino.resolution_type);
-      console.log('[KINO-DIAG] resolution_date:', kino.resolution_date);
-      console.log('[KINO-DIAG] resolution_history:', JSON.stringify(kino.resolution_history));
-      console.log('[KINO-DIAG] last_cleared:', kino.last_cleared);
-      console.log('[KINO-DIAG] paid_today:', kino.paid_today);
-      console.log('[KINO-DIAG] isBroken:', isBroken(kino));
-      console.log('[KINO-DIAG] isInFlight:', isInFlight(kino));
-      console.log('[KINO-DIAG] CollectionsState:', kino.collections_state);
-    } else {
-      console.log('[KINO-DIAG] no deal found matching KINO in state');
-    }
-  })();
-  // END DIAG
   viewDate = TODAY_ISO; calMonth = TODAY_ISO.slice(0,7);
   document.getElementById("total-tracked").textContent = STATS.total_tracked;
   renderSidebar(); renderCalendar(); renderForDate(); updateCounters(); updateLegalBadge();
