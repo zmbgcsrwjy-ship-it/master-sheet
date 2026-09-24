@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v228</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v229</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2288,6 +2288,68 @@ function beaconReconstruct(raw, todayISO){
     }
     delete m._openStopCandidate;
   });
+  // v229: Carry unresolved open stops into every historical date so a merchant never silently
+  // disappears from the calendar between the first stop and the resolution. Any date that has
+  // bounce-report data but is missing the merchant gets a synthetic _carriedStop event injected.
+  // Stats (stop_count_today) are computed BEFORE injection so no calendar cell goes red for these.
+  // The _openStop flag triggers the "⛔ OPEN STOP" chip so Matt can see it's a carried entry.
+  {
+    // Use stopByDeal (already built) — it covers merchants bouncing today AND prior open stops.
+    // We re-apply the same resolution guards the open_stop block uses to skip resolved deals.
+    for (const rid in stopByDeal) {
+      const m = dealsById[rid]; if (!m) continue;
+      const st = stopByDeal[rid];
+      // Resolved? Same checks as the open_stop guard above.
+      const stHit = (st.hit || st.date || '').slice(0,10);
+      const resolvedAfter = m.resolution_type && m.resolution_date && stHit && m.resolution_date >= stHit;
+      const _msStop = Array.isArray(m._stopDates) ? (m._stopDates.slice(-1)[0]||'') : '';
+      const clearedAfterStop = _msStop && m.last_cleared && m.last_cleared > _msStop;
+      const _legal = (typeof legalCasesOut!=='undefined') && legalCasesOut.some(c=>c.lead_id===m.lead_id && c.status!=='settled');
+      if (resolvedAfter || clearedAfterStop || _legal) continue; // resolved — don't carry
+
+      // Find episode start: most recent resolution date → first stop AFTER it.
+      let lastResDate = '';
+      if (Array.isArray(m.resolution_history)) {
+        for (const rh of m.resolution_history) { if (rh.date && rh.date > lastResDate) lastResDate = rh.date; }
+      }
+      if (m.last_cleared && m.last_cleared > lastResDate) lastResDate = m.last_cleared;
+
+      let episodeStart = '';
+      for (const d of dates) {
+        if (d >= today) continue;
+        for (const r of byDate[d]) {
+          const f=r.fields||{}; const rrid=(f.Deal&&f.Deal[0])||null; if(rrid!==rid) continue;
+          if (bSevClassFor(f.Severity, f['Return Code'])==='stop' && (!lastResDate || d > lastResDate)) {
+            if (!episodeStart) episodeStart = d;
+          }
+        }
+      }
+      if (!episodeStart) episodeStart = (st.date||'').slice(0,10); // fallback: most recent stop date
+      if (!episodeStart) continue;
+
+      // Inject a synthetic carried event into every historical date in the episode window
+      // where the merchant has no real bounce entry already.
+      for (const d of dates) {
+        if (d < episodeStart || d >= today) continue;
+        if (!historyOut[d]) continue;
+        // Skip if merchant already has a real event for this date (real > synthetic)
+        if (historyOut[d].bounce_events.some(e => e.lead_id === m.lead_id)) continue;
+        historyOut[d].bounce_events.push({
+          lead_id: m.lead_id, name: m.name,
+          bounce_amt: m.bounce_amt||0, bounce_type: 'stop',
+          _carriedStop: true, _openStop: true, _weekly: false,
+          return_code: m.return_code||'', severe_reason: rcodeSevereLabel(m.return_code||''),
+          sev_class: 'stop', group_order: bGroupOrder('stop'), severity_rank: 100,
+          open_stop_date: m.hit_date || episodeStart,
+          streak_len: 0, status: m.status||'', balance: m.balance||0,
+          pct_paid: m.pct_paid||0, freq: m._freqField||'Daily', mtd_bounces: 0,
+          days_delinq: 0, last_pull: '', rep: m.rep||'',
+          hit_date: m.hit_date||'', return_date: '', is_revocation: false, archived_note: ''
+        });
+      }
+    }
+  }
+
   // (keep _freqField — isWeeklyDeal relies on it for deals that bounced earlier in the week)
   return {state:merchants, history:historyOut, legalCases:legalCasesOut, STATS:statsOut, TODAY_ISO:today, noteRidMap};
 }
