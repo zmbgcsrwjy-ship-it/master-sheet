@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v225</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v226</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2192,14 +2192,23 @@ function beaconReconstruct(raw, todayISO){
       // v99: a stop on a HANDLED deal (has a resolution — sent to legal, suspended, etc.) that's later
       // than the deal's FIRST stop is the same ongoing stop being re-listed. Flag it so the calendar /
       // stop counts don't keep marking it as a new stop. The original (first) stop still shows.
-      const _handled = !!m.resolution_type;
       // Fail-safe: if the agreed resume date has passed and they're STILL stopping, that's a broken
       // agreement — do NOT collapse it, surface it on the calendar (matches the board's "BROKE SUSPENDED").
       const _brokeResume = m.resume_date && d >= m.resume_date;
-      // v225: removed _handled requirement — an unresolved open stop re-appearing in daily/bounce
-      // reports is the same ongoing stop, not a new one each day. The _brokeResume guard is the only
-      // exception: a stop AFTER a promised resume date is a genuinely new event and must show.
-      const _carriedStop = !_brokeResume && sev==='stop' && Array.isArray(m._stopDates) && m._stopDates.length>0 && d > m._stopDates[0];
+      // v226: a stop is "carried" (same ongoing event, re-listed in the daily report) if:
+      //   1. there IS a prior stop for this deal before today's date, AND
+      //   2. no payment has cleared since that most-recent prior stop.
+      // If last_cleared > most-recent-prior-stop → merchant paid after the last stop → this is a
+      // genuinely NEW stop incident, not a re-listing → must show on the calendar.
+      // This mirrors the identical logic already used in the weekly-batch resumption check (see
+      // "const resumed=lastStop && m.deal.last_cleared && m.deal.last_cleared>lastStop;" ~line 2350).
+      // Replaces the broken v225 check (d > m._stopDates[0]) which suppressed ALL stops after the
+      // absolute first-ever stop, and the original v223 check (_handled && ...) which only suppressed
+      // stops on deals that had an active resolution_type, leaving unresolved re-listed stops visible.
+      const _priorStops = Array.isArray(m._stopDates) ? m._stopDates.filter(sd => sd < d) : [];
+      const _prevStop   = _priorStops.length ? _priorStops[_priorStops.length - 1] : null;
+      const _paidSincePrev = _prevStop && m.last_cleared && m.last_cleared > _prevStop;
+      const _carriedStop = !_brokeResume && sev==='stop' && !!_prevStop && !_paidSincePrev;
       const _weekly = m.lead_id ? isWeeklyDeal(m) : false;   // weekly-FREQUENCY deal (by origFreq), not the event tag
       return { lead_id:m.lead_id||0, name:m.name||String(f.Bounce||'').split(' — ')[0],
         bounce_amt:Number(f.Amount)||0, bounce_type:(sev==='stop'?'stop':'bounce'), _carriedStop:_carriedStop, _weekly:_weekly,
