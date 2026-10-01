@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v229</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v230</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1959,8 +1959,11 @@ const RC_STOP_CODES    = ['R05','R07','R08','R10','R16','R29'];   // merchant/ba
 // Kept for back-compat with existing call sites; now the union of both severe groups.
 const _STOP_CODES_ALL = RC_ACCOUNT_CODES.concat(RC_STOP_CODES);
 // Returns 'account' | 'stop' | '' for a raw return code.
+// v230: take only the first whitespace-delimited token so legacy Airtable records that stored
+// the full Pinnacle description ("R16 - Account Frozen/Entry Returned Per OFAC Instruction")
+// still classify correctly — the first word is always the R-code itself.
 function rcodeSeverity(code){
-  const rc=String(code||'').toUpperCase().trim();
+  const rc=String(code||'').toUpperCase().trim().split(/\s/)[0];
   if(RC_STOP_CODES.indexOf(rc)>=0) return 'stop';
   if(RC_ACCOUNT_CODES.indexOf(rc)>=0) return 'account';
   return '';
@@ -2416,16 +2419,30 @@ function beaconMatchDeal(bounce, merchants){
 // Idempotent sync: skip rows whose Bounce key already exists. Returns summary.
 async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceName){
   const toCreate=[]; const unmatched=[]; const ambiguous=[]; const skipped=[];
+  const toUpgrade=[];  // v230: existing records whose Severity needs upgrading to STOP
   const batchStops={};  // stop dates added in THIS run, per deal — so multi-day reports don't self-duplicate
+  const _stopCodes = ['R02','R05','R07','R08','R10','R16','R29'];
   for (const b of parsed.bounces){
     const bDay=b.returnDate||b.settleDate;
     const key=b.merchant+' — '+bDay;
-    if (existingBounceKeys.has(key)){ skipped.push(key); continue; }
+    // v230: compute _isStop BEFORE the key check so we can detect severity mismatches on
+    // already-synced records. Prior versions wrote Severity='CONSEC' for type='bounce' rows
+    // even when the return code (e.g. R16) is a merchant stop — the duplicate-key guard then
+    // preserved that wrong value forever. Now we patch Airtable to upgrade stale records.
+    const _isStop = b.type==='stop' || b.type==='revocation' || _stopCodes.indexOf((b.returnCode||'').toUpperCase())>=0;
+    if (existingBounceKeys.has(key)){
+      skipped.push(key);
+      if (_isStop){
+        const existingRec = beaconRawCache.bounces.find(r=>(r.fields&&r.fields.Bounce)===key);
+        if (existingRec && existingRec.id && (existingRec.fields||{}).Severity !== 'STOP'){
+          toUpgrade.push({id:existingRec.id, fields:{'Severity':'STOP','Return Code':b.returnCode}});
+        }
+      }
+      continue;
+    }
     const m=beaconMatchDeal(b, merchants);
     if (!m.deal){ unmatched.push(b.merchant); continue; }
     if (m.ambiguous) ambiguous.push(b.merchant);
-    const _stopCodes = ['R02','R05','R07','R08','R10','R16','R29'];
-    const _isStop = b.type==='stop' || b.type==='revocation' || _stopCodes.indexOf((b.returnCode||'').toUpperCase())>=0;
     // v93: a stop payment is a persistent state, not a daily event. When the report re-lists an
     // ongoing stop on a later day, that's the SAME stop — don't re-stamp the calendar. Only treat it
     // as a NEW stop if the deal RESUMED (a payment cleared) since its last stop.
@@ -2458,6 +2475,8 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       'Rep':b.rep, 'Source Report':sourceName||'', 'Hit Date':b.hitDate||null, 'Return Date':b.returnDate||null }});
   }
   const created = toCreate.length ? await atCreate('Bounces', toCreate) : [];
+  // v230: upgrade stale bounce records whose Severity was written incorrectly by a prior version
+  if (toUpgrade.length) await atPatch('Bounces', toUpgrade);
   // CollectionsState → BOUNCING for unresolved bounced deals (don't stomp LEGAL/SUSPENDED/RESUME SCHEDULED)
   const protect=new Set(['LEGAL','SUSPENDED','RESUME SCHEDULED']);
   const patches=[];
