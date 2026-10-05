@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v230</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v231</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3082,8 +3082,8 @@ function merchantInfoInnerHtml(m){
 }
 // v216: edit a scheduled plan from the calendar-date resumes panel — reopens the resolve menu for the
 // deal (same popover the search uses) so you can re-pick lowered/suspend/etc. and adjust date/amount.
-function editResumePlan(leadId){
-  if (typeof openDealResolve === 'function') openDealResolve(leadId);
+function editResumePlan(leadId, anchorEl){
+  if (typeof openDealResolve === 'function') openDealResolve(leadId, anchorEl);
 }
 // v216: delete a scheduled plan from the calendar-date resumes panel — clears the resolution so the
 // deal is unresolved again (no resume scheduled). Confirms first since it wipes the plan.
@@ -4074,7 +4074,7 @@ function renderForDate() {
         (r.note ? '<span class="res-note">' + r.note + '</span>' : '') +
         // v216: edit/delete the plan — ONLY here in the scheduled-resumes (calendar-date) view, not the sidebar
         '<span class="res-actions">' +
-          '<button class="res-edit-btn" title="Edit this plan" onclick="event.stopPropagation();editResumePlan(' + r.lead_id + ')">✎ Edit</button>' +
+          '<button class="res-edit-btn" title="Edit this plan" onclick="event.stopPropagation();editResumePlan(' + r.lead_id + ',this)">✎ Edit</button>' +
           '<button class="res-del-btn" title="Delete this plan" onclick="event.stopPropagation();deleteResumePlan(' + r.lead_id + ')">🗑 Delete</button>' +
         '</span>';
       item.style.cursor = 'pointer';
@@ -5968,7 +5968,11 @@ function onDealSearchInput(){
   box.classList.add('shown');
 }
 // Open the resolve popover for a searched deal — builds the identical resolve-menu the board uses.
-function openDealResolve(leadId){
+// v231: accepts an optional anchorEl so the popover can be positioned relative to any trigger
+// element (e.g. the ✎ Edit button in the scheduled-resumes panel) rather than always anchoring to
+// the deal-search-input box.  When anchorEl is supplied the back button closes the popover instead
+// of returning to the search dropdown.
+function openDealResolve(leadId, anchorEl){
   const m = state.find(x => x.lead_id === leadId);
   if(!m){ showToast('ERR: deal missing — hard refresh'); return; }
   const menuItemsHtml =
@@ -5985,10 +5989,14 @@ function openDealResolve(leadId){
     ? '<div class="menu-divider"></div><button class="menu-item" onclick="clearResolution(' + leadId + ')" style="color: var(--text-2);">Clear resolution</button>'
     : '';
   const pop = document.getElementById('deal-resolve-popover');
+  // v231: back button behaviour differs by entry-point
+  const backBtn = anchorEl
+    ? '<button class="dp-back" onclick="closeDealResolve()">✕ Close</button>'
+    : '<button class="dp-back" onclick="dealResolveBackToList()">‹ Back to search</button>';
   // Wrap in .resolve-expand so it inherits the EXACT bounce-board resolve styling (identical look).
   pop.innerHTML =
     '<div class="resolve-expand-host"><div class="resolve-menu" id="resolve-menu-' + leadId + '">' +
-      '<button class="dp-back" onclick="dealResolveBackToList()">‹ Back to search</button>' +
+      backBtn +
       '<div class="dp-header">Resolve <strong>' + escapeHtml(m.name) + '</strong></div>' +
       menuItemsHtml +
       '<div class="date-row" id="date-row-' + leadId + '">' +
@@ -6007,12 +6015,13 @@ function openDealResolve(leadId){
       '</div>' +
       clearHtml +
     '</div></div>';
-  const inp = document.getElementById('deal-search-input');
-  const r = inp.getBoundingClientRect();
+  // v231: position relative to the supplied anchor element, falling back to the search input
+  const anchor = (anchorEl && anchorEl.getBoundingClientRect) ? anchorEl : document.getElementById('deal-search-input');
+  const r = anchor.getBoundingClientRect();
   pop.style.top = (r.bottom + 6) + 'px';
   pop.style.right = (window.innerWidth - r.right) + 'px';
   pop.classList.add('shown');
-  document.getElementById('deal-search-results').classList.remove('shown');
+  if(!anchorEl) document.getElementById('deal-search-results').classList.remove('shown');
 }
 function closeDealResolve(){
   const pop = document.getElementById('deal-resolve-popover');
