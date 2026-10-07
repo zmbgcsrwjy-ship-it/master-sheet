@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 181</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 182</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -691,20 +691,8 @@ select.badge:hover{filter:brightness(1.2)}
             <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--text3)"><input type="checkbox" id="refi-show-ignored" onchange="renderRenewal()" style="cursor:pointer">show ignored</label>
           </span></div>
           <div class="table-wrap" id="renewal-table-wrap">
-            <table style="table-layout:fixed">
-              <colgroup>
-                <col style="width:90px"><!-- Date Funded -->
-                <col style="width:200px"><!-- Merchant -->
-                <col style="width:80px"><!-- Bounces -->
-                <col style="width:90px"><!-- Balance -->
-                <col style="width:70px"><!-- % Paid -->
-                <col><!-- ISO — flex -->
-                <col style="width:80px"><!-- Rep -->
-                <col style="width:70px"><!-- Lead ID -->
-                <col style="width:110px"><!-- Funder -->
-                <col style="width:60px"><!-- actions -->
-              </colgroup>
-              <thead><tr><th onclick="sortRenewal('date_funded')">Date Funded ↕</th><th>Merchant</th><th onclick="sortRenewal('bounce_count')" title="Bounce history — click to sort" style="white-space:nowrap">Bounces ↕</th><th onclick="sortRenewal('balance')">Balance ↕</th><th onclick="sortRenewal('pct_paid')">% Paid ↕</th><th>ISO</th><th>Rep</th><th>Lead ID</th><th>Funder</th><th></th></tr></thead>
+            <table>
+              <thead><tr><th onclick="sortRenewal('date_funded')">Date Funded ↕</th><th>Merchant</th><th onclick="sortRenewal('bounce_count')" title="Bounce history — click to sort" style="white-space:nowrap;width:1px">Bounces ↕</th><th onclick="sortRenewal('balance')">Balance ↕</th><th onclick="sortRenewal('pct_paid')">% Paid ↕</th><th onclick="sortRenewal('iso')" style="cursor:pointer">ISO ↕</th><th onclick="sortRenewal('rep')" style="cursor:pointer">Rep ↕</th><th>Lead ID</th><th>Funder</th><th></th></tr></thead>
               <tbody id="renewal-body"></tbody>
             </table>
           </div>
@@ -2074,13 +2062,13 @@ function renderRenewal(){
   const fIso=isoSel.value;
   const rows=eligible.filter(d=>(!fRep||(d.rep||'Unassigned')===fRep)&&(!fIso||(d.iso||'Unassigned')===fIso));
   const k=renewalSort.key,dir=renewalSort.dir;
-  rows.sort((a,b)=>{ let va=a[k],vb=b[k]; if(k==='date_funded'){ va=new Date(va||0); vb=new Date(vb||0); } if(k==='bounce_count'){ const cnt=d=>{ const e=bounceByLead[d.lead_id]; return e?(e.hasStop?e.count+1000:e.count):0; }; va=cnt(a); vb=cnt(b); } return ((va||0)-(vb||0))*dir; });
+  rows.sort((a,b)=>{ let va=a[k],vb=b[k]; if(k==='date_funded'){ va=new Date(va||0); vb=new Date(vb||0); return (va-vb)*dir; } if(k==='bounce_count'){ const cnt=d=>{ const e=bounceByLead[d.lead_id]; return e?(e.hasStop?e.count+1000:e.count):0; }; va=cnt(a); vb=cnt(b); return ((va||0)-(vb||0))*dir; } if(k==='iso'||k==='rep'){ return (va||'').localeCompare(vb||'')*dir; } return ((va||0)-(vb||0))*dir; });
   document.querySelectorAll('#panel-renewal .sort-ind').forEach(s=>{ s.textContent=' ↕'; });
   if(!rows.length){body.innerHTML='<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">No eligible deals match these filters.</td></tr>';return;}
   const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
   body.innerHTML=rows.map(d=>`<tr${d.refi_ignored?' style="opacity:.5"':''}>
     <td style="white-space:nowrap;color:var(--text3)">${fmtDate(d.date_funded)}</td>
-    <td style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dealNameHtml(d)}${csChip(d)}${manualPayChip(d)}</td>
+    <td style="font-weight:600">${dealNameHtml(d)}${csChip(d)}${manualPayChip(d)}</td>
     <td style="text-align:center;white-space:nowrap">${bounceBadges(d)||'<span style="color:var(--text3)">—</span>'}</td>
     <td>${fmt$(d.balance)}</td>
     <td class="${(d.pnl||0)>=0?'val-green':(d.pct_paid||0)>=0.5?'val-amber':'val-red'}" style="font-weight:700">${Math.round((d.pct_paid||0)*100)}%</td>
