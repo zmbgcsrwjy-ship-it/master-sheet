@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v234</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v235</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -7116,6 +7116,15 @@ function toggleCaseDetail(leadId) {
       '<div class="case-detail-field"><label>Settlement</label><input type="text" data-field="settlement" data-lead="' + leadId + '" value="' + escapeHtml(c.settlement || '') + '" placeholder="e.g. $430/week, PIF" /></div>' +
       '<div class="case-detail-field" style="grid-column: 1 / -1;"><label>Target processors</label><input type="text" data-field="targets" data-lead="' + leadId + '" value="' + escapeHtml(c.targets || '') + '" /></div>' +
       '<div class="case-detail-field" style="grid-column: 1 / -1; padding-top: 8px; border-top: 0.5px solid var(--border); margin-top: 4px;">' +
+        '<label style="color: var(--accent);">Log payment received</label>' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;">' +
+          '<input type="number" id="pay-amt-' + leadId + '" placeholder="Amount $" min="0" step="0.01" style="width:120px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text1);font-size:13px;" />' +
+          '<input type="date" id="pay-date-' + leadId + '" value="' + (typeof TODAY_ISO !== 'undefined' ? TODAY_ISO : new Date().toISOString().slice(0,10)) + '" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text1);font-size:13px;" />' +
+          '<button onclick="logLegalPayment(' + leadId + ')" style="padding:5px 12px;border-radius:6px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:600;">Log payment</button>' +
+        '</div>' +
+        '<div id="pay-msg-' + leadId + '" style="font-size:11px;margin-top:4px;color:var(--text3);font-style:italic;min-height:14px;"></div>' +
+      '</div>' +
+      '<div class="case-detail-field" style="grid-column: 1 / -1; padding-top: 8px; border-top: 0.5px solid var(--border); margin-top: 4px;">' +
         '<label style="color: var(--sev-stop);">Remove from legal</label>' +
         '<button class="remove-legal-btn" onclick="removeFromLegal(' + leadId + ')">Remove this case entirely</button>' +
         '<div style="font-size: 11px; color: var(--text-3); margin-top: 4px; font-style: italic;">Deletes the case from this tab and clears the legal flag on the merchant. Use if the deal shouldn\'t have been sent to legal.</div>' +
@@ -7148,6 +7157,49 @@ function onCaseFieldChange(e) {
     renderLegalCases();
     updateLegalBadge();
   }
+}
+
+async function logLegalPayment(leadId) {
+  const msgEl = document.getElementById('pay-msg-' + leadId);
+  const amtEl = document.getElementById('pay-amt-' + leadId);
+  const dateEl = document.getElementById('pay-date-' + leadId);
+  if (!amtEl || !dateEl) return;
+  const amount = parseFloat(amtEl.value);
+  const dateISO = dateEl.value;
+  if (!amount || amount <= 0) { if (msgEl) msgEl.textContent = 'Enter a valid payment amount.'; amtEl.focus(); return; }
+  if (!dateISO) { if (msgEl) msgEl.textContent = 'Enter a payment date.'; dateEl.focus(); return; }
+  const c = legalCases.find(x => x.lead_id === leadId);
+  if (!c) return;
+  const m = state.find(x => x.lead_id === leadId);
+  const prevBalance = typeof c.current_balance === 'number' ? c.current_balance : (c.balance_at_send || 0);
+  const newBalance = Math.max(0, prevBalance - amount);
+  if (msgEl) msgEl.textContent = 'Saving…';
+  // Write to Airtable if we have the record ID
+  if (m && m._rid) {
+    try {
+      await atPatch('Deals', [{ id: m._rid, fields: { Balance: newBalance, LastCleared: dateISO } }]);
+      // Also update in-memory state so refreshLegalCaseBalances picks it up
+      m.balance = newBalance;
+    } catch(err) {
+      if (msgEl) msgEl.textContent = '⚠ Airtable save failed: ' + (err.message || err);
+      return;
+    }
+  }
+  // Update local case state
+  c.current_balance = newBalance;
+  c.current_balance_date = dateISO;
+  c.balance_stale = false;
+  // Add timeline entry
+  if (!c.updates) c.updates = [];
+  c.updates.push({ date: dateISO, text: 'Payment received: ' + fmt$(amount) + ' — balance updated to ' + fmt$(newBalance), logged_at: new Date().toISOString(), type: 'payment' });
+  persistLegalCases();
+  if (msgEl) msgEl.textContent = '✓ Saved — balance updated to ' + fmt$(newBalance);
+  amtEl.value = '';
+  // Refresh legal panel in place (reopen detail row)
+  renderLegalCases();
+  toggleCaseDetail(leadId);
+  toggleCaseDetail(leadId);
+  checkAndShowPifBanner();
 }
 
 function addTimelineEntry(leadId) {
