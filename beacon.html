@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v232</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v233</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2924,6 +2924,22 @@ async function reconcileCollectionsStates(){
         // 8/31 → resolution expired, tag stranded → now retired.)
         const lastBounce = (m._bounceDates||[]).slice(-1)[0] || '';
         if (m.last_cleared && lastBounce && m.last_cleared > lastBounce){
+          fields['CollectionsState'] = '';
+          fields['CollectionsDetail'] = '';
+          m._collectionsState = '';
+        }
+      } else if ((m._collectionsState||'') === 'RESUME SCHEDULED' || (m._collectionsState||'') === 'SUSPENDED'){
+        // v233: a STRANDED RESUME SCHEDULED / SUSPENDED tag. Same class of bug as the RESUME NORMAL
+        // case above (v204), but for paused deals. When a paused resolution expires in state-build
+        // (last_cleared > resume_date at lines 2163-2168), resolution_type and resume_date are both
+        // blanked in memory — but the Airtable CollectionsState field is never touched, so the pill
+        // strands on the Master Sheet after payments resume (MORRITASTAQUERIA: suspended to 9/16,
+        // paid after, tag stuck). The `if (m.resolution_type)` branch above never fires because the
+        // resolution is gone. Retire it on the same evidence used for RESUME NORMAL: a payment cleared
+        // and there's no more-recent bounce after it. Also covers the edge case where there was never
+        // a bounce on record (last_cleared exists, no bounce history at all).
+        const lastBounce = (m._bounceDates||[]).slice(-1)[0] || '';
+        if (m.last_cleared && (!lastBounce || m.last_cleared > lastBounce)){
           fields['CollectionsState'] = '';
           fields['CollectionsDetail'] = '';
           m._collectionsState = '';
