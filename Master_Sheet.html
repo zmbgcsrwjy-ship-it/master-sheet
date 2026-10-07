@@ -691,8 +691,20 @@ select.badge:hover{filter:brightness(1.2)}
             <label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--text3)"><input type="checkbox" id="refi-show-ignored" onchange="renderRenewal()" style="cursor:pointer">show ignored</label>
           </span></div>
           <div class="table-wrap" id="renewal-table-wrap">
-            <table>
-              <thead><tr><th onclick="sortRenewal('date_funded')">Date Funded ↕</th><th>Merchant</th><th onclick="sortRenewal('bounce_count')" title="Bounce history — click to sort" style="white-space:nowrap;width:1px">Bounces ↕</th><th onclick="sortRenewal('balance')">Balance ↕</th><th onclick="sortRenewal('pct_paid')">% Paid ↕</th><th>ISO</th><th>Rep</th><th>Lead ID</th><th>Funder</th><th></th></tr></thead>
+            <table style="table-layout:fixed">
+              <colgroup>
+                <col style="width:90px"><!-- Date Funded -->
+                <col style="width:200px"><!-- Merchant -->
+                <col style="width:80px"><!-- Bounces -->
+                <col style="width:90px"><!-- Balance -->
+                <col style="width:70px"><!-- % Paid -->
+                <col><!-- ISO — flex -->
+                <col style="width:80px"><!-- Rep -->
+                <col style="width:70px"><!-- Lead ID -->
+                <col style="width:110px"><!-- Funder -->
+                <col style="width:60px"><!-- actions -->
+              </colgroup>
+              <thead><tr><th onclick="sortRenewal('date_funded')">Date Funded ↕</th><th>Merchant</th><th onclick="sortRenewal('bounce_count')" title="Bounce history — click to sort" style="white-space:nowrap">Bounces ↕</th><th onclick="sortRenewal('balance')">Balance ↕</th><th onclick="sortRenewal('pct_paid')">% Paid ↕</th><th>ISO</th><th>Rep</th><th>Lead ID</th><th>Funder</th><th></th></tr></thead>
               <tbody id="renewal-body"></tbody>
             </table>
           </div>
@@ -2068,7 +2080,7 @@ function renderRenewal(){
   const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
   body.innerHTML=rows.map(d=>`<tr${d.refi_ignored?' style="opacity:.5"':''}>
     <td style="white-space:nowrap;color:var(--text3)">${fmtDate(d.date_funded)}</td>
-    <td style="font-weight:600">${dealNameHtml(d)}${csChip(d)}${manualPayChip(d)}</td>
+    <td style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dealNameHtml(d)}${csChip(d)}${manualPayChip(d)}</td>
     <td style="text-align:center;white-space:nowrap">${bounceBadges(d)||'<span style="color:var(--text3)">—</span>'}</td>
     <td>${fmt$(d.balance)}</td>
     <td class="${(d.pnl||0)>=0?'val-green':(d.pct_paid||0)>=0.5?'val-amber':'val-red'}" style="font-weight:700">${Math.round((d.pct_paid||0)*100)}%</td>
