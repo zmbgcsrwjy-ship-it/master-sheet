@@ -1758,6 +1758,7 @@ function setDensity(mode){
 
 function toggleContact(el, ev){
   if(ev) ev.stopPropagation();
+  if(window.getSelection && window.getSelection().toString().length > 0) return; // skip click when user is selecting text
   try{
     var raw = el && el.dataset ? el.dataset.contact : '';
     if(!raw) return;

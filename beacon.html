@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v231</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v232</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -5348,6 +5348,7 @@ function buildRow(m, editable) {
     tr.style.cursor = "pointer";
     tr.addEventListener("click", function(e){
       if (e.target.closest("button, a, input, textarea, select, .resolve-btn, .row-btn, .resolve-menu")) return;
+      if (window.getSelection && window.getSelection().toString().length > 0) return; // v232: ignore click when user is selecting text
       showMerchantInfo(m.lead_id);
     });
   }
