@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v235</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v236</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2631,7 +2631,9 @@ async function beaconLogManualPay(m, amount, receivedISO, overrideNextDue){
 // End a manual-pay plan (deal paid off, or returned to auto-debit).
 async function beaconEndManualPay(m){
   m.manual_pay_state = 'DONE';
-  await atPatch('Deals',[{id:m._rid, fields:{ManualPayState:'DONE'}}]);
+  m.manual_pay_xapp = '';
+  m._manualPayXapp = '';
+  await atPatch('Deals',[{id:m._rid, fields:{ManualPayState:'DONE', ManualPayStateXapp:''}}]);
 }
 
 async function beaconPushResolution(m, todayISO){
@@ -2958,7 +2960,8 @@ async function reconcileCollectionsStates(){
       // v163: keep the Master Sheet's manual-pay pill current — recompute the cross-app state each load
       // so a deal flips to PAYMENT LATE the moment it passes its next-due date, without needing an action.
       const wantMp = manualPayStateFor(m);
-      if ((m._manualPayXapp || '') !== wantMp){ fields['ManualPayStateXapp'] = wantMp; m._manualPayXapp = wantMp; }
+      const curMp = m._manualPayXapp !== undefined ? m._manualPayXapp : (m.manual_pay_xapp || '');
+      if (curMp !== wantMp){ fields['ManualPayStateXapp'] = wantMp; m._manualPayXapp = wantMp; }
       if (Object.keys(fields).length) patches.push({id:m._rid, fields:fields});
     }
     if (!patches.length) return;
