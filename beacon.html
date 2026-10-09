@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v237</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v238</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2644,6 +2644,18 @@ async function beaconPushResolution(m, todayISO){
   const fields={ 'Action': atType.toUpperCase()+' — '+m.name+' — '+todayISO, 'Deal':[m._rid],
     'When': todayISO+'T17:00:00.000Z', 'Type':atType, 'Note':JSON.stringify(payload),
     'By': BEACON_CFG.user };
+  if (m.resume_date) fields['Resume Date']=m.resume_date;
+  await atCreate('Actions',[{fields}]);
+  await atPatch('Deals',[{id:m._rid, fields:{'CollectionsState':beaconCollectionsStateFor(m), 'CollectionsDetail':beaconCollectionsDetailFor(m)}}]);
+}
+// v238: log a "spoke to" contact without changing the deal's resolution arrangement
+// (used when spoke-to is applied over an active lowered/paused plan — Option A).
+async function beaconPushSpokeContact(m, todayISO){
+  const payload={v:1, kind:'resolution', amount:m.lowered_amount||0,
+    orig:{freq:m.original_freq||'', amt:m.original_bounce_amt||0, code:m.original_return_code||''}};
+  const fields={ 'Action':'SPOKE TO — '+m.name+' — '+todayISO, 'Deal':[m._rid],
+    'When':todayISO+'T17:00:00.000Z', 'Type':'Spoke to', 'Note':JSON.stringify(payload),
+    'By':BEACON_CFG.user };
   if (m.resume_date) fields['Resume Date']=m.resume_date;
   await atCreate('Actions',[{fields}]);
   await atPatch('Deals',[{id:m._rid, fields:{'CollectionsState':beaconCollectionsStateFor(m), 'CollectionsDetail':beaconCollectionsDetailFor(m)}}]);
@@ -6002,8 +6014,11 @@ function onDealSearchInput(){
 function openDealResolve(leadId, anchorEl){
   const m = state.find(x => x.lead_id === leadId);
   if(!m){ showToast('ERR: deal missing — hard refresh'); return; }
+  // v238: contextual label — when a lowered/paused arrangement is active, "spoke to" preserves it
+  const hasArrangement = (m.resolution_type === 'lowered' || m.resolution_type === 'paused');
+  const spokeLabel = hasArrangement ? 'Spoke to — arrangement stands' : 'Spoke to — resuming as normal';
   const menuItemsHtml =
-    '<button class="menu-item" onclick="setResolution(' + leadId + ', \'spoke\')">Spoke to — resuming as normal</button>' +
+    '<button class="menu-item" onclick="setResolution(' + leadId + ', \'spoke\')">' + spokeLabel + '</button>' +
     '<div class="menu-divider"></div>' +
     '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'lowered\')">Lowered payments…</button>' +
     '<button class="menu-item" onclick="showDateRow(' + leadId + ', \'paused\')">Suspend Payment…</button>' +
@@ -6089,6 +6104,22 @@ function setResolution(leadId, type) {
   if (!m) return;
   // If switching away from an active manual-pay plan, end it so the Master Sheet pill clears.
   if (m.manual_pay_state === 'ACTIVE') beaconEndManualPay(m).catch(beaconWriteErr);
+  // v238 Option A: "Spoke to" over an active lowered/paused arrangement — preserve the plan,
+  // just refresh resolution_date (resets isBroken anchor) and log the contact.
+  const hasArrangement = (m.resolution_type === 'lowered' || m.resolution_type === 'paused');
+  if (type === 'spoke' && hasArrangement) {
+    m.resolution_date = TODAY_ISO;
+    snapshotOriginalBounce(m);
+    persistState();
+    beaconPushSpokeContact(m, TODAY_ISO).catch(beaconWriteErr);
+    renderForDate();
+    renderSidebar();
+    renderCalendar();
+    updateCounters();
+    showToast('Spoke to — arrangement preserved');
+    _clearDealSearch();
+    return;
+  }
   m.resolution_type = type;
   m.resolution_date = TODAY_ISO;
   m.resume_date = '';
