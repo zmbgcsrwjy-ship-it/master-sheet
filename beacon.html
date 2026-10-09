@@ -1368,7 +1368,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v236</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v237</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -6087,6 +6087,8 @@ document.addEventListener('click', e => {
 function setResolution(leadId, type) {
   const m = state.find(x => x.lead_id === leadId);
   if (!m) return;
+  // If switching away from an active manual-pay plan, end it so the Master Sheet pill clears.
+  if (m.manual_pay_state === 'ACTIVE') beaconEndManualPay(m).catch(beaconWriteErr);
   m.resolution_type = type;
   m.resolution_date = TODAY_ISO;
   m.resume_date = '';
@@ -6329,6 +6331,8 @@ function confirmDateResolution(leadId) {
   }
   const m = state.find(x => x.lead_id === leadId);
   if (!m) return;
+  // If switching away from an active manual-pay plan, end it so the Master Sheet pill clears.
+  if (m.manual_pay_state === 'ACTIVE') beaconEndManualPay(m).catch(beaconWriteErr);
   m.resolution_type = type;
   m.resolution_date = TODAY_ISO;
   m.resume_date = dateInput.value;
@@ -6351,6 +6355,8 @@ function confirmDateResolution(leadId) {
 function clearResolution(leadId) {
   const m = state.find(x => x.lead_id === leadId);
   if (!m) return;
+  // If clearing while manual pay is active, end it so the Master Sheet pill clears too.
+  if (m.manual_pay_state === 'ACTIVE') beaconEndManualPay(m).catch(beaconWriteErr);
   m.resolution_type = ''; m.resolution_date = ''; m.resume_date = ''; m.lowered_amount = 0;
   persistState();
   beaconPushClear(m, TODAY_ISO).catch(beaconWriteErr);
