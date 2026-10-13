@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 186</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 187</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2812,7 +2812,19 @@ async function computePnl(){
   const kicks = deals.filter(d=>(d.kickback||0)>0 && !d.kickback_paid && (d.date_funded||'').slice(0,7) === curYM)
     .map(d=>({_id:d._id, label:d.merchant, amount:d.kickback, date:d.date_funded||''}))
     .sort((a,b)=>{ const x=a.date||'9999-99', y=b.date||'9999-99'; return x<y?-1:x>y?1:0; }); // oldest → newest, dateless last
-  const ffDue = ffByMonthFrom(deals)[addMonthsYM(curYM,-4)]||0;
+  // build 187: FF is now due when a cohort's Our End (ourEnd > 0) turns positive — not on a fixed
+  // 4-month lag. We track which funding months' FF has already been billed by looking at the
+  // ffRows arrays stored in new-format close-out snapshots. Old snapshots (no ffRows) are not
+  // honoured — we reset to a clean slate under the new rule per Matt's decision.
+  const ffMap = ffByMonthFrom(deals);
+  const billedFfMonths = new Set();
+  pnlSnapshots.forEach(s => {
+    try { const sd=JSON.parse(s.data||'{}'); if(sd.ffRows&&sd.ffRows.length) sd.ffRows.forEach(r=>billedFfMonths.add(r.ym)); } catch(e){}
+  });
+  const ffRows = cohorts.filter(c=>c.ourEnd>0 && (ffMap[c.ym]||0)>0 && !billedFfMonths.has(c.ym))
+    .map(c=>({ym:c.ym, label:monthLabelFull(c.ym), amount:ffMap[c.ym]}))
+    .sort((a,b)=>a.ym<b.ym?-1:a.ym>b.ym?1:0);
+  const ffDue = ffRows.reduce((s,r)=>s+r.amount,0);
   const legalTotal = (monthlyManual[curYM]&&monthlyManual[curYM].legal)||0;
   const legalOurEnd = legalTotal*HOUSE_SPLIT; // legal is 50% house split too (June 11, 2026)
   const clawbackTotal = (monthlyManual[curYM]&&monthlyManual[curYM].clawback)||0;
@@ -2831,7 +2843,7 @@ async function computePnl(){
   // build 186: clawbacks re-added to payout (Our End 50%, splits evenly 25/25). Sal holds the clawback
   // income on her page; each partner then nets to the same `each`. Legal stays informational only.
   const each = (payableTotal + kickTotal - kickbackClaw - ffDue + clawbackOurEndLive)/2;
-  return {month: curYM, cohorts, kicks, ffDue, legalTotal, legalOurEnd, clawbackTotal, clawbackOurEnd: clawbackOurEndLive, kickTotal, kickbackClaw, payableTotal, each};
+  return {month: curYM, cohorts, kicks, ffDue, ffRows, legalTotal, legalOurEnd, clawbackTotal, clawbackOurEnd: clawbackOurEndLive, kickTotal, kickbackClaw, payableTotal, each};
 }
 
 function clawedDealsForMonth(month){
@@ -2884,8 +2896,15 @@ function pnlRowsHtml(p){
   if(kickbackClaw>0) h+=`<tr><td style="font-weight:600;color:var(--text2)">Kickback clawed back</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`;
   if(kickbackClaw>0) h+=clawedList.filter(c=>c.kb>0).map(c=>kickRevRow(c.name,c.kb)).join('');
   if(kickbackClaw>0) h+=subRow('Total kickback clawed back', -sumKickClaw, true);
-  h+=sec('FINANCE FEES — 4-MONTH LAG (ALL OURS)','pnl-sec-yellow');
-  h+=`<tr><td style="font-weight:600">FF due (${monthLabelFull(addMonthsYM(p.month,-4))} fundings)</td>${money(-p.ffDue,p.ffDue>0)}${money(-p.ffDue,p.ffDue>0)}<td>—</td>${money(-p.ffDue,p.ffDue>0)}${moneyDiv(-p.ffDue/2,p.ffDue>0)}${money(-p.ffDue/2,p.ffDue>0)}</tr>`;
+  h+=sec('FINANCE FEES — DUE WHEN COHORT TURNS POSITIVE (ALL OURS)','pnl-sec-yellow');
+  // build 187: one row per cohort whose Our End went positive this month (or legacy: single 4-month-lag row)
+  const ffRowsDisp = (p.ffRows && p.ffRows.length) ? p.ffRows : (p.ffDue > 0 ? [{ym: addMonthsYM(p.month,-4), label: monthLabelFull(addMonthsYM(p.month,-4)), amount: p.ffDue}] : []);
+  if (!ffRowsDisp.length) {
+    h+=`<tr><td colspan="7" style="color:var(--text3);padding-left:14px">No finance fees due this month.</td></tr>`;
+  } else {
+    ffRowsDisp.forEach(r=>{ h+=`<tr><td style="font-weight:600">FF due (${r.label} fundings)</td>${money(-r.amount,r.amount>0)}${money(-r.amount,r.amount>0)}<td>—</td>${money(-r.amount,r.amount>0)}${moneyDiv(-r.amount/2,r.amount>0)}${money(-r.amount/2,r.amount>0)}</tr>`; });
+    if (ffRowsDisp.length > 1) h+=subRow('Total FF due', -(ffRowsDisp.reduce((s,r)=>s+r.amount,0)), true);
+  }
   h+=sec('LEGAL FEES — informational (baked into balance by Pinnacle)','pnl-sec-red');
   h+=`<tr><td style="font-weight:600">Legal</td>${money(-legalTotal,legalTotal>0)}<td>—</td><td>—</td><td>—</td><td class="pnl-div">—</td><td>—</td></tr>`;
   h+=sec('CLAWBACKS — COMMISSION RECOVERED (50/50)','pnl-sec-teal');
@@ -2951,7 +2970,8 @@ async function closeOutMonth(){
     await loadPnlState();
     const p=await computePnl();
     if(pnlSnapshots.some(s=>s.month===p.month)){ showNotice(monthLabelFull(p.month)+' is already closed — see history.','warn'); renderPnl(); return; }
-    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nEligible month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+(p.kickbackClaw>0?'\nKickback clawed back: -'+fmt$(p.kickbackClaw):'')+(p.clawbackOurEnd>0?'\nClawbacks (our end): +'+fmt$(p.clawbackOurEnd):'')+'\nFF deducted: '+fmt$(p.ffDue)+'\n\n(Legal fees are baked into deal balances by Pinnacle — informational only, not in the payout. Clawbacks are now included.)\n\nThis locks the snapshot and settles each eligible month into the ledger — positive months pay, dark (30-day no-pay) losses deduct, recoveries credit back. It cannot be re-run for this month.');
+    const ffDetail = (p.ffRows&&p.ffRows.length) ? p.ffRows.map(r=>'\n  · '+r.label+': -'+fmt$(r.amount)).join('') : (p.ffDue?'\n  · -'+fmt$(p.ffDue):'');
+    const ok=confirm('Close out '+monthLabelFull(p.month)+'?\n\nPayout: '+fmt$(p.each)+' each (Sal & Matt)\nEligible month settlements (net): '+fmt$(p.payableTotal)+'\nKickbacks: '+fmt$(p.kickTotal)+(p.kickbackClaw>0?'\nKickback clawed back: -'+fmt$(p.kickbackClaw):'')+(p.clawbackOurEnd>0?'\nClawbacks (our end): +'+fmt$(p.clawbackOurEnd):'')+'\nFF deducted: '+fmt$(p.ffDue)+(ffDetail?ffDetail:'')+'\n\n(Legal fees are baked into deal balances by Pinnacle — informational only. FF is now billed when a cohort\'s Our End turns positive. Clawbacks are included.)\n\nThis locks the snapshot and settles each eligible month into the ledger. It cannot be re-run for this month.');
     if(!ok) return;
     showLoading('Closing out '+monthLabelFull(p.month)+'...');
     await atFetchT('PnlSnapshots','POST','',{records:[{fields:{Month:p.month, ClosedAt:new Date().toISOString(), SalPayout:Math.round(p.each*100)/100, MattPayout:Math.round(p.each*100)/100, DataJSON:JSON.stringify(p)}}]});
@@ -3767,7 +3787,9 @@ async function exportExcel(){
     const prows=[];
     p.cohorts.forEach(c=>prows.push([c.label+(c.held?' (held — collecting)':(c.recovery?' (recovery)':'')),n(c.pnl),n(c.ourEnd),n(c.paid),n(c.avail),c.held?null:n(c.payable/2),c.held?null:n(c.payable/2)]));
     p.kicks.forEach(k=>prows.push(['Kickback — '+k.label,n(k.amount),n(k.amount),null,n(k.amount),n(k.amount/2),n(k.amount/2)]));
-    prows.push(['FF due (4-mo lag)',n(-p.ffDue),n(-p.ffDue),null,n(-p.ffDue),n(-p.ffDue/2),n(-p.ffDue/2)]);
+    // build 187: FF can now span multiple rows (one per cohort that turned positive this month)
+    const ffExRows=(p.ffRows&&p.ffRows.length)?p.ffRows:[{label:monthLabelFull(addMonthsYM(p.month,-4)),amount:p.ffDue}];
+    ffExRows.forEach(r=>{ if(r.amount>0) prows.push(['FF due ('+r.label+')',n(-r.amount),n(-r.amount),null,n(-r.amount),n(-r.amount/2),n(-r.amount/2)]); });
     prows.push(['Legal (50% house split)',n(-p.legalTotal),n(-p.legalOurEnd),null,n(-p.legalOurEnd),n(-p.legalOurEnd/2),n(-p.legalOurEnd/2)]);
     prows.push(['PAYOUT',null,null,null,null,n(p.each),n(p.each)]);
     addSheet('PNL',['Item','Total PNL','Our End (50%)','Settled','Available','Sal','Matt'],prows,[30,12,14,11,12,11,11]);
