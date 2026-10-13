@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 187</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 188</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2747,6 +2747,16 @@ async function maybeFreezeMonthEnd(){
   showNotice('Froze '+froze+' month-end PNL — later payments will not move it until you close out.','info',9000);
 }
 
+// build 188: shared helper — derives the Set of funding-month YMs whose FF has already been billed
+// from close-out snapshot DataJSON. Called by both computePnl and renderMonthly.
+function getBilledFfMonths(){
+  const s = new Set();
+  pnlSnapshots.forEach(snap => {
+    try { const sd=JSON.parse(snap.data||'{}'); if(sd.ffRows&&sd.ffRows.length) sd.ffRows.forEach(r=>s.add(r.ym)); } catch(e){}
+  });
+  return s;
+}
+
 async function computePnl(){
   try{ await loadMonthlyManual(); }catch(e){ monthlyManual={}; }
   const liveYM = new Date().toISOString().slice(0,7);
@@ -2817,10 +2827,7 @@ async function computePnl(){
   // ffRows arrays stored in new-format close-out snapshots. Old snapshots (no ffRows) are not
   // honoured — we reset to a clean slate under the new rule per Matt's decision.
   const ffMap = ffByMonthFrom(deals);
-  const billedFfMonths = new Set();
-  pnlSnapshots.forEach(s => {
-    try { const sd=JSON.parse(s.data||'{}'); if(sd.ffRows&&sd.ffRows.length) sd.ffRows.forEach(r=>billedFfMonths.add(r.ym)); } catch(e){}
-  });
+  const billedFfMonths = getBilledFfMonths();
   const ffRows = cohorts.filter(c=>c.ourEnd>0 && (ffMap[c.ym]||0)>0 && !billedFfMonths.has(c.ym))
     .map(c=>({ym:c.ym, label:monthLabelFull(c.ym), amount:ffMap[c.ym]}))
     .sort((a,b)=>a.ym<b.ym?-1:a.ym>b.ym?1:0);
@@ -3708,17 +3715,23 @@ async function computeMonthlyRows(){
 async function renderMonthly(){
   const body=document.getElementById('monthly-body'), empty=document.getElementById('monthly-empty');
   body.innerHTML='<tr><td colspan="15" style="color:var(--text3)">Loading monthly data...</td></tr>';
+  // build 188: load PNL snapshots so we can show FF-paid checkmarks on months whose FF was billed
+  try{ await loadPnlState(); }catch(e){}
+  const billedFfMonths = getBilledFfMonths();
   const rows=await computeMonthlyRows();
   if(!rows.length){ body.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
   body.innerHTML=rows.map(r=>{
     const style=r.isTotal?'font-weight:700;background:var(--bg3)':'';
+    // build 188: green checkmark next to month label when that cohort's FF was billed in a close-out
+    const ffCheck = (!r.isTotal && r.ym && billedFfMonths.has(r.ym))
+      ? `<span style="color:var(--green);margin-left:6px;font-size:12px;opacity:.9" title="Finance fee billed">✓ FF</span>` : '';
     const manualCells=r.isTotal
       ? `<td style="${style}${nz(r.legal)?';color:var(--red)':''}">${fmt$(r.legal)}</td><td style="${style}${nz(r.clawback)?';color:#5eead4':''}">${fmt$(r.clawback)}</td>`
       : `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.legal?fmt$(r.legal):''}" placeholder="$0.00" style="width:92px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:${nz(r.legal)?'var(--red)':'var(--text)'};padding:4px 8px;font-size:12px;text-align:center" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Legal',(this.value||'').replace(/[^0-9.]/g,''))"></td>`+
         `<td><input class="m-edit" type="text" inputmode="decimal" value="${r.clawback?fmt$(r.clawback):''}" placeholder="$0.00" style="width:92px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 8px;font-size:12px;text-align:center" onfocus="this.value=(this.value||'').replace(/[^0-9.]/g,'')" onblur="this.value=this.value.trim()?fmt$(parseFloat(this.value.replace(/[^0-9.]/g,''))||0):''" onchange="saveMonthlyCell('${r.ym}','Clawback',(this.value||'').replace(/[^0-9.]/g,''))"></td>`;
     return `<tr>
-      <td style="${style};white-space:nowrap">${r.label}</td>
+      <td style="${style};white-space:nowrap">${r.label}${ffCheck}</td>
       <td style="${style}">${r.tdf}</td><td style="${style}">${r.nw}</td><td style="${style}">${r.rf}</td>
       <td style="${style}">${fmt$(r.bookFunding)}</td>
       <td style="${style}">${r.avgSize!=null?fmt$(r.avgSize):'—'}</td>
