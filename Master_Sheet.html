@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 191</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 192</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1822,6 +1822,8 @@ function copyEmail(btn, ev){
 }function hasContact(d){ return !!(d.industry||d.owner_name||d.owner_phone||d.owner_email); }
 
 function csChip(d){
+  // build 192: paid-off deals (PIF/COMPLETED or a DEFAULT whose balance is gone) don't need collection chips
+  if(d.status==='PIF'||d.status==='COMPLETED'||(d.status==='DEFAULT'&&(d.balance||0)<=0.5)) return '';
   const s=d.collections_state; if(!s||s==='OK') return '';
   if(s==='MANUAL PAY') return '';   // build 166: manualPayChip renders this separately — avoid a duplicate pill
   // build 190: use stopIsActive (clears once a payment lands after the stop date) rather than raw hasStop
@@ -1855,6 +1857,8 @@ function csChip(d){
 // Manual-pay pill (build 149) — Beacon-owned, display-only here. A separate track from the
 // collections pill: a deal can carry both. Teal = on a manual payment plan; red = a payment is late.
 function manualPayChip(d){
+  // build 192: paid-off deals don't need a manual-pay chip
+  if(d.status==='PIF'||d.status==='COMPLETED'||(d.status==='DEFAULT'&&(d.balance||0)<=0.5)) return '';
   const s = (d.manual_pay_xapp||'').toUpperCase();
   if(!s) return '';
   const late = s === 'PAYMENT LATE';
@@ -3557,7 +3561,14 @@ function renderOutlook(){
   if(!months.length){ body.innerHTML=''; empty.style.display=''; return; }
   empty.style.display='none';
 
-  const isWrittenOff=d=> d.status==='DEFAULT' || (d.collections_state||'').toUpperCase()==='LEGAL';
+  // build 192: a DEFAULT whose balance has been paid to zero (e.g. via REFI) is no longer a loss —
+  // move it into the "Still paying" column so its book_profit shows as a winner, not a write-off.
+  const isDefPaidOff = d => d.status==='DEFAULT' && (d.balance||0) <= 0.5;
+  const isWrittenOff = d => {
+    if((d.collections_state||'').toUpperCase()==='LEGAL') return true;
+    if(d.status==='DEFAULT') return !isDefPaidOff(d);   // paid-off default → not written off
+    return false;
+  };
   // build 167: the written-off amount is the deal's actual PNL loss, not the worst-case max loss.
   // PNL is negative for a loser (e.g. -$2,675.50); take the magnitude. This feeds both the row display
   // and the month's total loss so the Outlook math matches the real PNL shown in All Deals.
@@ -3600,10 +3611,12 @@ function renderOutlook(){
       if(wasRefiedOut(d)) t+='<span class="tag refi" title="This deal renewed — replaced by a newer advance for the same merchant">refi</span>';
       else if(d.status==='PIF') t+='<span class="tag paid">paid off</span>';
       else if(d.status==='COMPLETED') t+='<span class="tag paid">completed</span>';
+      // build 192: DEFAULT deals whose balance hit zero (paid off via REFI) get a "paid off" tag
+      else if(isDefPaidOff(d)) t+='<span class="tag paid" title="Defaulted but balance cleared — treated as a winner">paid off</span>';
       t+=olCsChip(d);           // bouncing / suspended / resume / lowered / legal — same as All deals
       return t;
     };
-    const nameCls=d=> (isPaid(d)||wasRefiedOut(d)) ? 'nm paidname' : 'nm';
+    const nameCls=d=> (isPaid(d)||wasRefiedOut(d)||isDefPaidOff(d)) ? 'nm paidname' : 'nm';
     // balance + %paid meter for each row so you can see how far into the deal we are
     const pctBar=d=>{ const pct=Math.max(0,Math.min(100,Math.round((d.pct_paid||0)*100)));
       return '<span class="ol-meter" title="'+pct+'% paid down"><span class="ol-meter-fill" style="width:'+pct+'%"></span></span><span class="ol-pct">'+pct+'%</span>'; };
@@ -3679,6 +3692,8 @@ function olToggle(headEl){
 
 // Compact collections pill for the outlook rows — same states/colours as csChip, smaller.
 function olCsChip(d){
+  // build 192: paid-off deals don't need collection chips — that chapter is closed
+  if(d.status==='PIF'||d.status==='COMPLETED'||(d.status==='DEFAULT'&&(d.balance||0)<=0.5)) return '';
   const s=(d.collections_state||'').toUpperCase(); if(!s||s==='OK') return '';
   // build 190: use stopIsActive so STOP PMT clears once a payment lands after the stop date
   const activeStop = stopIsActive(d);
