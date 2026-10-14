@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 189</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 191</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1202,10 +1202,26 @@ async function loadBounceSummary(){
   Object.values(bounceByLead).forEach(e=>{ e.dates.sort(); e.stopDates.sort(); }); // ascending; dates[3] = 4th bounce
 }
 // Returns small HTML badges for a deal's bounce history (stop codes first, then BOUNCING state).
+// build 190: a stop payment is "active" only while no cleared payment has landed after it.
+// Once d.last_cleared > the last recorded stop date, the merchant resumed paying — treat it as
+// historical for display (badge + pill drop back to normal bounce state). Clawback eligibility
+// and sort still read raw hasStop, which is permanent, because those care about history.
+function stopIsActive(d){
+  const e = bounceByLead[d.lead_id];
+  if(!e || !e.hasStop) return false;
+  const lastStop = e.stopDates.length ? e.stopDates[e.stopDates.length-1] : null;
+  const lastCleared = d.last_cleared ? d.last_cleared.slice(0,10) : null;
+  // If either date is missing we can't compare — stay conservative and keep the flag up.
+  if(!lastStop || !lastCleared) return true;
+  // Stop is no longer active once a cleared payment lands on or after the stop date.
+  return lastCleared < lastStop;
+}
+
 function bounceBadges(d){
   let out='';
   const e = bounceByLead[d.lead_id];
-  if(e && e.hasStop){
+  // build 190: show ⛔ badge only while the stop is still active (no cleared payment after it)
+  if(e && stopIsActive(d)){
     const stopCodes=[...e.codes].filter(c=>STOP_RCODES.includes(c));
     const label = stopCodes.length ? stopCodes.join('/') : 'STOP';
     // build 114: distinguish an account/doc error (our side) from a true merchant stop in the tooltip.
@@ -1215,7 +1231,7 @@ function bounceBadges(d){
               : 'stop-payment / hard return — merchant blocked the debit';
     out += `<span class="bbadge bbadge-stop" title="Severe return (${label}) — ${why}. Review before refinancing.">⛔ ${label}</span>`;
   } else if(e && e.count>0){
-    out += `<span class="bbadge bbadge-bnc" title="${e.count} prior bounce${e.count!==1?'s':''} on record">⚠ ${e.count} bnc</span>`;
+    out += `<span class="bbadge bbadge-bnc" title="${e.count} prior bounce${e.count!==1?'s':''} on record${e.hasStop?' (includes a prior stop payment that has since cleared)':''}">⚠ ${e.count} bnc</span>`;
   }
   // BOUNCING is intentionally omitted here — csChip() renders it with correct colour (blue vs red).
   // Having it in both places produced a duplicate pill for Durango Taco / Pojas Floor style deals.
@@ -1808,10 +1824,11 @@ function copyEmail(btn, ev){
 function csChip(d){
   const s=d.collections_state; if(!s||s==='OK') return '';
   if(s==='MANUAL PAY') return '';   // build 166: manualPayChip renders this separately — avoid a duplicate pill
-  const hasStop = bounceByLead[d.lead_id] && bounceByLead[d.lead_id].hasStop;
+  // build 190: use stopIsActive (clears once a payment lands after the stop date) rather than raw hasStop
+  const activeStop = stopIsActive(d);
   let col;
-  if(s==='LEGAL') col='#6b7885';                                  // slate — legal (handled); matches Beacon
-  else if(s==='BOUNCING') col = hasStop ? '#e5534b' : '#539bf5';  // red if a stop payment, else blue
+  if(s==='LEGAL') col='#6b7885';                                       // slate — legal (handled); matches Beacon
+  else if(s==='BOUNCING') col = activeStop ? '#e5534b' : '#539bf5';    // red if stop still active, else blue
   // build 111: a suspend and a scheduled resume are the same thing in the book — the deal isn't
   // pulling right now. Beacon requires a resume date on every suspend, so RESUME SCHEDULED is the
   // one you actually see; bare SUSPENDED only shows on a legacy record with no date. Both read
@@ -1827,10 +1844,10 @@ function csChip(d){
   const resumeOn = s==='RESUME SCHEDULED' ? ((detail.match(/^Resume\s+(.+)$/)||[])[1]||'') : '';
   const label = s==='RESUME SCHEDULED' ? ('SUSPENDED'+(resumeOn?' · '+resumeOn:''))
               : s==='RESUME NORMAL' ? 'RESUME NORM'
-              : (s==='BOUNCING'&&hasStop) ? 'STOP PMT'   // build 132: stop payment reads its own label, not BOUNCING
+              : (s==='BOUNCING'&&activeStop) ? 'STOP PMT'   // build 132/190: stop payment reads its own label while active
               : s;
   const tipState = s==='RESUME SCHEDULED' ? 'SUSPENDED' : s;
-  const tip = 'Collections (Beacon): ' + tipState + (detail ? ' — ' + detail : '') + (s==='BOUNCING'&&hasStop?' (stop payment)':'');
+  const tip = 'Collections (Beacon): ' + tipState + (detail ? ' — ' + detail : '') + (s==='BOUNCING'&&activeStop?' (stop payment)':s==='BOUNCING'&&bounceByLead[d.lead_id]&&bounceByLead[d.lead_id].hasStop?' (had a prior stop — cleared by later payment)':'');
   const txt = s==='LEGAL' ? '#ff6b61' : '#fff';   // legal reads in red on its slate pill so it stands out
   return `<span title="${tip}" style="display:inline-block;margin-left:5px;padding:1px 7px;border-radius:9px;font-size:9.5px;font-weight:700;letter-spacing:.4px;color:${txt};background:${col};vertical-align:middle;white-space:nowrap">${label}</span>`;
 }
@@ -2062,7 +2079,21 @@ function renderRenewal(){
   const fIso=isoSel.value;
   const rows=eligible.filter(d=>(!fRep||(d.rep||'Unassigned')===fRep)&&(!fIso||(d.iso||'Unassigned')===fIso));
   const k=renewalSort.key,dir=renewalSort.dir;
-  rows.sort((a,b)=>{ let va=a[k],vb=b[k]; if(k==='date_funded'){ va=new Date(va||0); vb=new Date(vb||0); return (va-vb)*dir; } if(k==='bounce_count'){ const cnt=d=>{ const e=bounceByLead[d.lead_id]; return e?(e.hasStop?e.count+1000:e.count):0; }; va=cnt(a); vb=cnt(b); return ((va||0)-(vb||0))*dir; } if(k==='iso'||k==='rep'){ return (va||'').localeCompare(vb||'')*dir; } return ((va||0)-(vb||0))*dir; });
+  // build 191: multi-level sort — primary key (toggled), then tiebreakers so ISOs stay grouped
+  // under each rep (and vice-versa), and date breaks the final tie newest-first.
+  rows.sort((a,b)=>{
+    let r=0;
+    if(k==='date_funded'){ r=(new Date(a.date_funded||0)-new Date(b.date_funded||0))*dir; }
+    else if(k==='bounce_count'){ const cnt=d=>{ const e=bounceByLead[d.lead_id]; return e?(e.hasStop?e.count+1000:e.count):0; }; r=(cnt(a)-cnt(b))*dir; }
+    else if(k==='iso'||k==='rep'){ r=(a[k]||'').localeCompare(b[k]||'')*dir; }
+    else { r=((a[k]||0)-(b[k]||0))*dir; }
+    if(r!==0) return r;
+    // secondary: when sorting by rep → group by ISO A→Z; by iso → group by rep A→Z
+    if(k==='rep'){ r=(a.iso||'').localeCompare(b.iso||''); if(r!==0) return r; }
+    if(k==='iso'){ r=(a.rep||'').localeCompare(b.rep||''); if(r!==0) return r; }
+    // tertiary (and fallback for all keys): newest funded first within the group
+    return new Date(b.date_funded||0)-new Date(a.date_funded||0);
+  });
   document.querySelectorAll('#panel-renewal .sort-ind').forEach(s=>{ s.textContent=' ↕'; });
   if(!rows.length){body.innerHTML='<tr><td colspan="10" style="color:var(--text3);text-align:center;padding:20px">No eligible deals match these filters.</td></tr>';return;}
   const esc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -3649,10 +3680,11 @@ function olToggle(headEl){
 // Compact collections pill for the outlook rows — same states/colours as csChip, smaller.
 function olCsChip(d){
   const s=(d.collections_state||'').toUpperCase(); if(!s||s==='OK') return '';
-  const hasStop = bounceByLead[d.lead_id] && bounceByLead[d.lead_id].hasStop;
+  // build 190: use stopIsActive so STOP PMT clears once a payment lands after the stop date
+  const activeStop = stopIsActive(d);
   let col, label=s;
   if(s==='LEGAL'){ col='#6b7885'; }
-  else if(s==='BOUNCING'){ col=hasStop?'#e5534b':'#539bf5'; label=hasStop?'STOP PMT':'BOUNCING'; }
+  else if(s==='BOUNCING'){ col=activeStop?'#e5534b':'#539bf5'; label=activeStop?'STOP PMT':'BOUNCING'; }
   else if(s==='SUSPENDED'||s==='RESUME SCHEDULED'){
     col='#d4a72c';
     // build 150: lift the resume date onto the pill so Outlook matches All Deals ("SUSPENDED · 7/14")
