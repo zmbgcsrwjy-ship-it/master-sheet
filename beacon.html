@@ -77,9 +77,9 @@
   }
   html { scrollbar-gutter: stable; }   /* v168: always reserve the scrollbar's width so switching between a tall tab (Daily, has a scrollbar) and a short one (Legal/Manual, none) doesn't shift the centered content sideways */
   body { margin: 0; background: var(--bg); background-image: var(--bg-gradient); background-attachment: fixed; color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; transition: background-color 0.25s ease, color 0.25s ease; }
-  .layout { display: grid; grid-template-columns: 375px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
+  .layout { display: grid; grid-template-columns: 400px 1fr; gap: 0; min-height: 100vh; transition: grid-template-columns 0.2s; }
   /* v83: density — Compact fits Beacon on a 1080p screen */
-  body.compact .layout { grid-template-columns: 335px 1fr; }
+  body.compact .layout { grid-template-columns: 358px 1fr; }
   /* v83: collapse must beat the compact column rule (specificity fix) */
   body.compact .layout.collapsed { grid-template-columns: 44px 1fr; }
   body.compact table.matrix { font-size: 11px; }
@@ -555,6 +555,12 @@
   .cal-tooltip .tt-header { font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 6px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; }
   .cal-tooltip .tt-subhead { font-size: 10.5px; color: rgba(255,255,255,0.5); margin: 8px 0 4px; font-weight: 700; letter-spacing: 0.03em; }
   .cal-tooltip .tt-subhead:first-of-type { margin-top: 2px; }
+  /* per-section subhead colours — match the sidebar's established palette */
+  .cal-tooltip .tt-subhead-stop   { color: #F2A8A1; }     /* red  — stop payments */
+  .cal-tooltip .tt-subhead-resume { color: #8FE3A8; }     /* green — scheduled resumes */
+  .cal-tooltip .tt-subhead-manual { color: #2dd4bf; }     /* teal  — manual pay due */
+  .cal-tooltip .tt-subhead-mpaid  { color: #8FE3A8; }     /* green — manual pay received */
+  .cal-tooltip .tt-subhead-next   { color: rgba(255,255,255,0.65); }  /* slightly brighter — next hits */
   .cal-tooltip .tt-header-stops { color: #F2A8A1; }
   .cal-tooltip .tt-section-spacer { margin-top: 10px; padding-top: 10px; border-top: 0.5px solid rgba(255,255,255,0.1); }
   .cal-tooltip .tt-row { display: flex; gap: 10px; padding: 3px 0; align-items: baseline; }
@@ -1368,7 +1374,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v238</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v239</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -4026,23 +4032,23 @@ function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits, manualPays
     html += bounces.map(ev => { const code=ev.return_code||'\u2014'; const cn=rcodeName(code); return rowFor(ev,'',code+(cn?': '+cn:'')); }).join("");
   }
   if (stops.length) {
-    html += '<div class="tt-subhead">\ud83d\uded1 ' + stops.length + ' stop' + (stops.length===1?'':'s') + '</div>';
+    html += '<div class="tt-subhead tt-subhead-stop">\ud83d\uded1 ' + stops.length + ' stop' + (stops.length===1?'':'s') + '</div>';
     html += stops.map(ev => { const code=(ev.bounce_type==='Expected Payment Missing')?'EPM':(ev.return_code||'\u2014'); const cn=rcodeName(code); return rowFor(ev,'tt-stop',code+(cn?': '+cn:'')); }).join("");
   }
   if (resumes.length) {
-    html += '<div class="tt-subhead">\u21bb ' + resumes.length + ' resume' + (resumes.length===1?'':'s') + '</div>';
+    html += '<div class="tt-subhead tt-subhead-resume">\u21bb ' + resumes.length + ' resume' + (resumes.length===1?'':'s') + '</div>';
     html += resumes.map(r => { const origAmt=r.bounce_amt||0; let detail=scheduledActionLabel(r.type); if(r.type==='lowered'&&r.lowered_amount>0&&origAmt>0) detail+=' \u00b7 $'+r.lowered_amount.toFixed(0)+' \u2192 $'+origAmt.toFixed(0)+'/day'; else if(origAmt>0) detail+=' \u00b7 $'+origAmt.toFixed(0)+'/day'; return rowFor({name:r.name,lead_id:r.lead_id,freq:r.freq},'',detail); }).join("");
   }
   if (nextHits.length) {
-    html += '<div class="tt-subhead">\u2197 ' + nextHits.length + ' next hit</div>';
+    html += '<div class="tt-subhead tt-subhead-next">\u2197 ' + nextHits.length + ' next hit</div>';
     html += nextHits.map(x => rowFor({name:x.name,lead_id:x.lead_id},'','next weekly pull')).join("");
   }
   if (manualPays.length) {
-    html += '<div class="tt-subhead">\ud83d\udcb5 ' + manualPays.length + ' manual pay due</div>';
+    html += '<div class="tt-subhead tt-subhead-manual">\ud83d\udcb5 ' + manualPays.length + ' manual pay due</div>';
     html += manualPays.map(x => rowFor({name:x.name,lead_id:x.lead_id},'','$'+(x.amount||0).toFixed(2)+' due')).join("");
   }
   if (manualPaid.length) {
-    html += '<div class="tt-subhead">\u2713 ' + manualPaid.length + ' manual pay received</div>';
+    html += '<div class="tt-subhead tt-subhead-mpaid">\u2713 ' + manualPaid.length + ' manual pay received</div>';
     html += manualPaid.map(x => rowFor({name:x.name,lead_id:x.lead_id},'','$'+(x.amount||0).toFixed(2)+' paid')).join("");
   }
   _calTooltipEl.innerHTML = html;
