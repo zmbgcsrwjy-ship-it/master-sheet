@@ -3611,8 +3611,8 @@ function renderOutlook(){
       if(wasRefiedOut(d)) t+='<span class="tag refi" title="This deal renewed — replaced by a newer advance for the same merchant">refi</span>';
       else if(d.status==='PIF') t+='<span class="tag paid">paid off</span>';
       else if(d.status==='COMPLETED') t+='<span class="tag paid">completed</span>';
-      // build 192: DEFAULT deals whose balance hit zero (paid off via REFI) get a "paid off" tag
-      else if(isDefPaidOff(d)) t+='<span class="tag paid" title="Defaulted but balance cleared — treated as a winner">paid off</span>';
+      // build 192: DEFAULT deals whose balance hit zero got there via REFI — label them "refi" not "paid off"
+      else if(isDefPaidOff(d)) t+='<span class="tag refi" title="Defaulted but balance cleared via REFI — treated as a winner">refi</span>';
       t+=olCsChip(d);           // bouncing / suspended / resume / lowered / legal — same as All deals
       return t;
     };
