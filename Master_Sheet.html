@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 192</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 193</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1004,6 +1004,7 @@ const REQUIRED_FIELDS = [
   {name:'CollectionsDetail', type:'singleLineText'},
   {name:'LegalCompany', type:'singleLineText'},
   {name:'ManualPayStateXapp', type:'singleLineText'},   // build 149: Beacon-owned manual-pay pill state (MANUAL PAY / PAYMENT LATE)
+  {name:'ManualPayState', type:'singleLineText'},        // build 193: defensive gate — if DONE/blank, suppress chip even if XApp is stale
   {name:'DateFunded',  type:'date', options:{dateFormat:{name:'iso'}}},
   {name:'Funded',      type:'number', options:{precision:2}},
   {name:'RTR',         type:'number', options:{precision:2}},
@@ -1157,6 +1158,7 @@ function fieldsToDeal(id, f) {
     notes:        f.Notes        || '',
     collections_state: f.CollectionsState || '',   // Beacon-owned — Master Sheet only displays it
     manual_pay_xapp: f.ManualPayStateXapp || '',    // Beacon-owned — manual-pay pill (build 149)
+    manual_pay_state: f.ManualPayState || '',       // build 193: defensive gate for stale XApp values
     collections_detail: f.CollectionsDetail || '', // Beacon-owned — resume date / lowered detail, for the pill tooltip
     legal_company: f.LegalCompany || '',           // Beacon-owned — collections firm handling the case
     clawback_state: f.ClawbackState || '',          // clawback lifecycle: '' | FORCED | CLAWED | DISMISSED
@@ -1859,6 +1861,10 @@ function csChip(d){
 function manualPayChip(d){
   // build 192: paid-off deals don't need a manual-pay chip
   if(d.status==='PIF'||d.status==='COMPLETED'||(d.status==='DEFAULT'&&(d.balance||0)<=0.5)) return '';
+  // build 193: if Beacon's ManualPayState is DONE (or blank), the plan is ended — suppress even if
+  // ManualPayStateXapp wasn't cleared (stale field after a failed write or direct Airtable edit).
+  const mps = (d.manual_pay_state||'').toUpperCase();
+  if(mps && mps!=='ACTIVE') return '';
   const s = (d.manual_pay_xapp||'').toUpperCase();
   if(!s) return '';
   const late = s === 'PAYMENT LATE';
