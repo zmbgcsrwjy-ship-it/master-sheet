@@ -2216,26 +2216,26 @@ function beaconReconstruct(raw, todayISO){
   // and the next day's re-listing to appear as a brand-new stop. This map is updated AFTER each
   // date's events are built (so it's always "prior dates only") using the same bSevClassFor call
   // that drives the calendar — the two can never disagree.
-  const prevStopDateByRid = {};
+  // v242b: track the FIRST report date of each stop episode per deal (replaces prevStopDateByRid).
+  // Root bug: prevStopDateByRid updated every iteration to "yesterday", so _paidSincePrev used
+  // last_cleared > yesterday — a future clearance (even weeks later) bled back into historical
+  // calendar cells and made every carryover day appear as a new stop.
+  // Fix: anchor to the FIRST date of the current episode AND gate with last_cleared <= d so a
+  // payment that hasn't happened yet on calendar day d never marks that cell as a new episode.
+  const firstStopDateByRid = {};
   for (const d of dates){
     const events = byDate[d].map(r=>{
       const f=r.fields||{}; const rid=(f.Deal&&f.Deal[0]); const m=(rid&&dealsById[rid])||{};
       const sev=bSevClassFor(f.Severity, f['Return Code']);
-      // Fail-safe: if the agreed resume date has passed and they're STILL stopping, that's a broken
-      // agreement — do NOT collapse it, surface it on the calendar (matches the board's "BROKE SUSPENDED").
-      const _brokeResume = m.resume_date && d >= m.resume_date;
       // A stop is "carried" (same ongoing episode, re-listed in the daily report) when ALL of:
-      //   1. there IS a prior stop for this deal (from prevStopDateByRid — same classifier as sev),
-      //   2. no payment has cleared since that prior stop (last_cleared), AND
-      //   3. no formal resolution was logged after that prior stop (resolution_history, survives v157).
-      // If any condition is false → genuinely new stop incident → show on calendar.
-      const _prevStop = rid ? (prevStopDateByRid[rid] || null) : null;
-      const _paidSincePrev = _prevStop && m.last_cleared && m.last_cleared > _prevStop;
-      const _resolvedSincePrev = _prevStop && Array.isArray(m.resolution_history) &&
-        m.resolution_history.some(rh => rh.date && rh.date > _prevStop && rh.date <= d);
-      // v242: removed !_brokeResume — passing the resume date should NOT re-paint a carryover stop red.
-      // The deal still surfaces on the board; only the calendar cell coloring changes.
-      const _carriedStop = sev==='stop' && !!_prevStop && !_paidSincePrev && !_resolvedSincePrev;
+      //   1. there IS a recorded first-stop date for this deal (firstStopDateByRid),
+      //   2. no payment cleared between that first stop and THIS calendar day d (last_cleared window), AND
+      //   3. no formal resolution was logged in that same window.
+      const _firstStop = rid ? (firstStopDateByRid[rid] || null) : null;
+      const _paidSinceFirst = _firstStop && m.last_cleared && m.last_cleared > _firstStop && m.last_cleared <= d;
+      const _resolvedSinceFirst = _firstStop && Array.isArray(m.resolution_history) &&
+        m.resolution_history.some(rh => rh.date && rh.date > _firstStop && rh.date <= d);
+      const _carriedStop = sev==='stop' && !!_firstStop && !_paidSinceFirst && !_resolvedSinceFirst;
       const _weekly = m.lead_id ? isWeeklyDeal(m) : false;   // weekly-FREQUENCY deal (by origFreq), not the event tag
       return { lead_id:m.lead_id||0, name:m.name||String(f.Bounce||'').split(' — ')[0],
         bounce_amt:Number(f.Amount)||0, bounce_type:(sev==='stop'?'stop':'bounce'), _carriedStop:_carriedStop, _weekly:_weekly,
@@ -2245,11 +2245,20 @@ function beaconReconstruct(raw, todayISO){
         days_delinq:Number(f['Consecutive Count'])||0, last_pull:'', rep:m.rep||'',
         hit_date:f['Hit Date']||'', return_date:f['Return Date']||'', is_revocation:false, archived_note:'' };
     });
-    // Update prevStopDateByRid AFTER events are built so the map only reflects dates BEFORE d.
-    // Re-use bSevClassFor (same as above) to guarantee the two are always in sync.
+    // Update firstStopDateByRid AFTER events are built so map only reflects dates BEFORE d.
+    // Set to d on first occurrence; reset to d only when a new episode starts (paid or resolved since first stop, on/before d).
     for (const r of byDate[d]){
       const f=r.fields||{}; const rid=(f.Deal&&f.Deal[0]); if(!rid) continue;
-      if(bSevClassFor(f.Severity, f['Return Code'])==='stop') prevStopDateByRid[rid]=d;
+      if(bSevClassFor(f.Severity, f['Return Code'])!=='stop') continue;
+      const m2=dealsById[rid]||{};
+      if(!firstStopDateByRid[rid]){
+        firstStopDateByRid[rid]=d;  // first stop for this deal — episode starts
+      } else {
+        const _p=m2.last_cleared && m2.last_cleared>firstStopDateByRid[rid] && m2.last_cleared<=d;
+        const _r=Array.isArray(m2.resolution_history) &&
+          m2.resolution_history.some(rh=>rh.date && rh.date>firstStopDateByRid[rid] && rh.date<=d);
+        if(_p||_r) firstStopDateByRid[rid]=d;  // new episode — reset first-stop anchor
+      }
     }
     const _st = statsFor(events);
     _st.resolved_count = resolvedByDate[d]||0;
