@@ -1377,7 +1377,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v242b</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v243</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2232,7 +2232,7 @@ function beaconReconstruct(raw, todayISO){
       //   2. no payment cleared between that first stop and THIS calendar day d (last_cleared window), AND
       //   3. no formal resolution was logged in that same window.
       const _firstStop = rid ? (firstStopDateByRid[rid] || null) : null;
-      const _paidSinceFirst = _firstStop && m.last_cleared && m.last_cleared > _firstStop && m.last_cleared <= d;
+      const _paidSinceFirst = _firstStop && m.last_cleared && m.last_cleared > _firstStop && m.last_cleared < d;
       const _resolvedSinceFirst = _firstStop && Array.isArray(m.resolution_history) &&
         m.resolution_history.some(rh => rh.date && rh.date > _firstStop && rh.date <= d);
       const _carriedStop = sev==='stop' && !!_firstStop && !_paidSinceFirst && !_resolvedSinceFirst;
@@ -2254,7 +2254,7 @@ function beaconReconstruct(raw, todayISO){
       if(!firstStopDateByRid[rid]){
         firstStopDateByRid[rid]=d;  // first stop for this deal — episode starts
       } else {
-        const _p=m2.last_cleared && m2.last_cleared>firstStopDateByRid[rid] && m2.last_cleared<=d;
+        const _p=m2.last_cleared && m2.last_cleared>firstStopDateByRid[rid] && m2.last_cleared<d;
         const _r=Array.isArray(m2.resolution_history) &&
           m2.resolution_history.some(rh=>rh.date && rh.date>firstStopDateByRid[rid] && rh.date<=d);
         if(_p||_r) firstStopDateByRid[rid]=d;  // new episode — reset first-stop anchor
