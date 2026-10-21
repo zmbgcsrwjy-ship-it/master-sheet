@@ -1377,7 +1377,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v240</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v241</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2159,6 +2159,10 @@ function beaconReconstruct(raw, todayISO){
       m.resume_date = f['Resume Date']||'';
       m.lowered_amount = (payload&&payload.amount)||0;
       if (payload&&payload.orig){ m.original_freq=payload.orig.freq||''; m.original_bounce_amt=payload.orig.amt||0; m.original_return_code=payload.orig.code||''; }
+      // v241: load pre-suspend state so the expiry logic below can restore a lowered plan
+      if (m.resolution_type==='paused' && payload&&payload.preSuspend){
+        m._preSuspendType=payload.preSuspend.type||''; m._preSuspendResume=payload.preSuspend.resume||''; m._preSuspendAmt=payload.preSuspend.amt||0;
+      } else { m._preSuspendType=''; m._preSuspendResume=''; m._preSuspendAmt=0; }
       // v172: record every resolution action in a permanent per-date history that SURVIVES expiry.
       // The live resolution can later be cleared (v157: they paid → tag drops off the active board),
       // but a resolution set on a past date must still show on THAT date's historical view — it's a
@@ -2174,7 +2178,16 @@ function beaconReconstruct(raw, todayISO){
         const past = t + (m.resume_date?(' (resume '+fmtDateY(m.resume_date)+')'):'') + ' on '+fmtDateY(dISO)+' — kept, paid since';
         if (!m.notes_log.find(e=>e.date_iso===dISO && /kept, paid since/.test(e.text||'')))
           m.notes_log.push({date_iso:dISO, text:past, _system:true});
-        m.resolution_type=''; m.resolution_date=''; m.resume_date=''; m.lowered_amount=0;
+        // v241: if this was a suspension of a lowered plan, restore to that plan after the suspension
+        // clears — but only if the lowered plan's own resume_date is still ahead of us; otherwise clear fully.
+        if (m.resolution_type==='paused' && m._preSuspendType==='lowered' &&
+            m._preSuspendResume && m._preSuspendResume > anchorDate) {
+          m.resolution_type='lowered'; m.resolution_date=dISO;
+          m.resume_date=m._preSuspendResume; m.lowered_amount=m._preSuspendAmt||0;
+        } else {
+          m.resolution_type=''; m.resolution_date=''; m.resume_date=''; m.lowered_amount=0;
+        }
+        m._preSuspendType=''; m._preSuspendResume=''; m._preSuspendAmt=0;
       }
     }
   }
@@ -2555,7 +2568,7 @@ function beaconCollectionsDetailFor(m){
     if (m.resume_date && lastBounce && lastBounce >= m.resume_date && !(cleared && cleared > lastBounce)) return 'Bounced after resume';
     if (m.resume_date){ const d=m.resume_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Resume '+md; }
   }
-  if (m.resolution_type==='lowered' && m.lowered_amount) return 'Lowered to $'+Number(m.lowered_amount).toLocaleString()+'/day';
+  if (m.resolution_type==='lowered' && m.lowered_amount) return 'Lowered to $'+Number(m.lowered_amount).toLocaleString()+'/'+freqUnit(m);  // v241
   if (m.resolution_type==='dead' && m.resolution_date){ const d=m.resolution_date; const md=(d.length>=10)?(parseInt(d.slice(5,7),10)+'/'+parseInt(d.slice(8,10),10)):d; return 'Written off '+md+' — taking the loss'; }
   return '';
 }
@@ -2650,6 +2663,9 @@ async function beaconPushResolution(m, todayISO){
   const atType=typeMap[m.resolution_type]; if(!atType) return;
   const payload={v:1, kind:'resolution', amount:m.lowered_amount||0,
     orig:{freq:m.original_freq||'', amt:m.original_bounce_amt||0, code:m.original_return_code||''}};
+  // v241: include pre-suspend state in payload so state-build can restore lowered plan after suspension
+  if (m.resolution_type==='paused' && m._preSuspendType)
+    payload.preSuspend={type:m._preSuspendType, resume:m._preSuspendResume||'', amt:m._preSuspendAmt||0};
   const fields={ 'Action': atType.toUpperCase()+' — '+m.name+' — '+todayISO, 'Deal':[m._rid],
     'When': todayISO+'T17:00:00.000Z', 'Type':atType, 'Note':JSON.stringify(payload),
     'By': BEACON_CFG.user };
@@ -3252,6 +3268,11 @@ function snapshotOriginalBounce(m) {
   if (m.return_code && !m.original_return_code) m.original_return_code = m.return_code;
 }
 
+// v241: return 'week' for weekly-frequency deals, 'day' for daily (and everything else).
+// Used to label lowered-payment inputs and chips correctly regardless of pull frequency.
+function freqUnit(m) {
+  return ((m && (m._freqField||m.original_freq||'').toLowerCase().includes('week')) ? 'week' : 'day');
+}
 // Pretty-print resolution_type for chips, buttons, and toasts
 function prettyResType(t) {
   if (!t) return '';
@@ -4040,7 +4061,7 @@ function showCalTooltip(cell, iso, resumes, stops, bounces, nextHits, manualPays
   }
   if (resumes.length) {
     html += '<div class="tt-subhead tt-subhead-resume">\u21bb ' + resumes.length + ' resume' + (resumes.length===1?'':'s') + '</div>';
-    html += resumes.map(r => { const origAmt=r.bounce_amt||0; let detail=scheduledActionLabel(r.type); if(r.type==='lowered'&&r.lowered_amount>0&&origAmt>0) detail+=' \u00b7 $'+r.lowered_amount.toFixed(0)+' \u2192 $'+origAmt.toFixed(0)+'/day'; else if(origAmt>0) detail+=' \u00b7 $'+origAmt.toFixed(0)+'/day'; return rowFor({name:r.name,lead_id:r.lead_id,freq:r.freq},'',detail); }).join("");
+    html += resumes.map(r => { const origAmt=r.bounce_amt||0; const rfu=(r.freq||'').toLowerCase().includes('week')?'week':'day'; let detail=scheduledActionLabel(r.type); if(r.type==='lowered'&&r.lowered_amount>0&&origAmt>0) detail+=' \u00b7 $'+r.lowered_amount.toFixed(0)+' \u2192 $'+origAmt.toFixed(0)+'/'+rfu; else if(origAmt>0) detail+=' \u00b7 $'+origAmt.toFixed(0)+'/'+rfu; return rowFor({name:r.name,lead_id:r.lead_id,freq:r.freq},'',detail); }).join("");  // v241
   }
   if (nextHits.length) {
     html += '<div class="tt-subhead tt-subhead-next">\u2197 ' + nextHits.length + ' next hit</div>';
@@ -4105,10 +4126,12 @@ function renderForDate() {
       const origAmt = r.bounce_amt || 0;
       let amtTxt = '';
       if (r.type === 'lowered' && r.lowered_amount > 0 && origAmt > 0) {
-        amtTxt = '<span class="res-amt"><span class="res-amt-old changed">$' + r.lowered_amount.toFixed(2) + '</span> <span class="res-amt-arrow">→</span> <span class="res-amt-new">$' + origAmt.toFixed(2) + '/day</span></span>';
+        const rfu = (r.freq||'').toLowerCase().includes('week') ? 'week' : 'day';  // v241
+        amtTxt = '<span class="res-amt"><span class="res-amt-old changed">$' + r.lowered_amount.toFixed(2) + '</span> <span class="res-amt-arrow">→</span> <span class="res-amt-new">$' + origAmt.toFixed(2) + '/' + rfu + '</span></span>';
       } else if (origAmt > 0) {
+        const rfu = (r.freq||'').toLowerCase().includes('week') ? 'week' : 'day';  // v241
         // Suspended (or fallback): just show the resumed amount
-        amtTxt = '<span class="res-amt"><span class="res-amt-new">$' + origAmt.toFixed(2) + '/day</span></span>';
+        amtTxt = '<span class="res-amt"><span class="res-amt-new">$' + origAmt.toFixed(2) + '/' + rfu + '</span></span>';
       }
       const isWeekly = r.freq === 'Weekly';
       const nameCls = isWeekly ? 'res-name res-name-weekly' : 'res-name';
@@ -4361,12 +4384,14 @@ function renderUpcomingPanel() {
     const origAmt = origBounceAmt(m);
     let detailHtml;
     if (m.resolution_type === 'lowered' && m.lowered_amount > 0) {
-      detailHtml = '<strong>Lowered $' + m.lowered_amount.toFixed(2) + '/day</strong>' +
-        (origAmt > 0 ? ' → original <strong>$' + origAmt.toFixed(2) + '/day</strong>' : '') +
+      const fu = freqUnit(m);  // v241
+      detailHtml = '<strong>Lowered $' + m.lowered_amount.toFixed(2) + '/' + fu + '</strong>' +
+        (origAmt > 0 ? ' → original <strong>$' + origAmt.toFixed(2) + '/' + fu + '</strong>' : '') +
         ' on ' + fmtDate(m.resume_date) + ' (' + (days === 0 ? 'today' : days + 'd') + ')';
     } else {
+      const fu = freqUnit(m);  // v241
       detailHtml = '<strong>Suspended</strong>' +
-        (origAmt > 0 ? ' → resume <strong>$' + origAmt.toFixed(2) + '/day</strong>' : ' → resume') +
+        (origAmt > 0 ? ' → resume <strong>$' + origAmt.toFixed(2) + '/' + fu + '</strong>' : ' → resume') +
         ' on ' + fmtDate(m.resume_date) + ' (' + (days === 0 ? 'today' : days + 'd') + ')';
     }
     
@@ -4891,14 +4916,18 @@ function usShowDate(ev, leadId, type) {
     const m = state.find(x => x.lead_id === leadId);
     const origAmt = (m && m.bounce_amt) || 0;
     const hint = document.getElementById("us-lowered-amt-hint-" + leadId);
+    // v241: label + hint use the deal's actual frequency ('week' for weekly, 'day' otherwise)
+    const fu = freqUnit(m);
+    const amtLbl = amtRow && amtRow.querySelector('label');
+    if (amtLbl) amtLbl.textContent = 'New ' + fu + 'ly payment';
     if (origAmt > 0) {
       amtInput.placeholder = "less than " + origAmt.toFixed(2);
       amtInput.max = (origAmt - 0.01).toFixed(2);
-      if (hint) hint.textContent = "Must be less than $" + origAmt.toFixed(2) + "/day (current daily pull)";
+      if (hint) hint.textContent = "Must be less than $" + origAmt.toFixed(2) + "/" + fu + " (current " + fu + "ly pull)";
     } else {
       amtInput.placeholder = "0.00";
       amtInput.removeAttribute("max");
-      if (hint) hint.textContent = "amount to pull each business day until the original payment resumes";
+      if (hint) hint.textContent = "amount to pull each business " + fu + " until the original payment resumes";
     }
     amtInput.oninput = () => updateUsConfirmBtnState(leadId);
   } else {
@@ -4922,13 +4951,15 @@ function updateUsConfirmBtnState(leadId) {
   }
   if (type === 'lowered') {
     const amt = parseFloat(document.getElementById("us-lowered-amt-" + leadId).value);
+    // v241: freq-aware labels in validate/confirm button
+    const m = state.find(x => x.lead_id === leadId);
+    const fu = freqUnit(m);
     if (!amt || amt <= 0) {
       btn.disabled = true;
-      btn.textContent = "Enter daily amount";
+      btn.textContent = "Enter " + fu + "ly amount";
       return;
     }
     // Failsafe: lowered must be strictly less than the original (current daily pull)
-    const m = state.find(x => x.lead_id === leadId);
     const origAmt = (m && m.bounce_amt) || 0;
     if (origAmt > 0 && amt >= origAmt) {
       btn.disabled = true;
@@ -4936,7 +4967,7 @@ function updateUsConfirmBtnState(leadId) {
       return;
     }
     btn.disabled = false;
-    btn.textContent = "Confirm — $" + amt.toFixed(2) + "/day until " + fmtDate(dateVal);
+    btn.textContent = "Confirm — $" + amt.toFixed(2) + "/" + fu + " until " + fmtDate(dateVal);
     return;
   }
   btn.disabled = false;
@@ -5036,6 +5067,15 @@ function usConfirmDate(ev, leadId) {
   }
   const m = state.find(x => x.lead_id === leadId);
   if (!m) return;
+  // v241: pre-suspend state — save the current lowered plan so we can restore it when the
+  // suspension ends (auto-clear logic in state-build reads _preSuspendType from payload).
+  if (type === 'paused' && m.resolution_type === 'lowered') {
+    m._preSuspendType = 'lowered';
+    m._preSuspendResume = m.resume_date;
+    m._preSuspendAmt = m.lowered_amount;
+  } else if (type !== 'paused') {
+    m._preSuspendType = ''; m._preSuspendResume = ''; m._preSuspendAmt = 0;
+  }
   m.resolution_type = type;
   m.resolution_date = TODAY_ISO;
   m.resume_date = dateInput.value;
@@ -5048,7 +5088,7 @@ function usConfirmDate(ev, leadId) {
   renderCalendar();
   updateCounters();
   const msg = (type === 'lowered')
-    ? "Lowered to $" + loweredAmt.toFixed(2) + "/day until " + fmtDate(dateInput.value)
+    ? "Lowered to $" + loweredAmt.toFixed(2) + "/" + freqUnit(m) + " until " + fmtDate(dateInput.value)  // v241: freq-aware
     : prettyResType(type) + " · resume " + fmtDate(dateInput.value);
   showToast(msg);
 }
@@ -5370,7 +5410,7 @@ function buildBrokenContextRow(m) {
   // Build the row HTML
   const promiseLabel = m.resolution_type === 'spoke' ? 'Said they\'d pay' :
                        m.resolution_type === 'paused' ? 'Was suspended' :
-                       m.resolution_type === 'lowered' ? 'Was lowered to $' + (m.lowered_amount || 0).toFixed(0) + '/day' :
+                       m.resolution_type === 'lowered' ? 'Was lowered to $' + (m.lowered_amount || 0).toFixed(0) + '/' + freqUnit(m) :  // v241
                        prettyResType(m.resolution_type);
   
   const cells = '<td colspan="12"><div class="broken-context">' +
@@ -5445,7 +5485,7 @@ function buildRow(m, editable) {
     if (m.resolution_type === 'spoke') {
       resTxt = 'Spoke to';
     } else if (m.resolution_type === 'lowered' && m.lowered_amount > 0) {
-      resTxt = 'Lowered to $' + m.lowered_amount.toFixed(2) + '/day' + (m.resume_date ? ' · original resumes ' + fmtDate(m.resume_date) : '');
+      resTxt = 'Lowered to $' + m.lowered_amount.toFixed(2) + '/' + freqUnit(m) + (m.resume_date ? ' · original resumes ' + fmtDate(m.resume_date) : '');  // v241
     } else {
       resTxt = prettyResType(m.resolution_type) + (m.resume_date ? ' · resume ' + fmtDate(m.resume_date) : '');
     }
@@ -6208,14 +6248,18 @@ function showDateRow(leadId, type) {  try {
       const m = state.find(x => x.lead_id === leadId);
       const origAmt = (m && m.bounce_amt) || 0;
       const hint = document.getElementById("lowered-amt-hint-" + leadId);
+      // v241: label + hint use the deal's actual frequency
+      const fu = freqUnit(m);
+      const amtLbl = amtRow && amtRow.querySelector('label');
+      if (amtLbl) amtLbl.textContent = 'New ' + fu + 'ly payment';
       if (origAmt > 0) {
         amtInput.placeholder = "less than " + origAmt.toFixed(2);
         amtInput.max = (origAmt - 0.01).toFixed(2);
-        if (hint) hint.textContent = "Must be less than $" + origAmt.toFixed(2) + "/day (current daily pull)";
+        if (hint) hint.textContent = "Must be less than $" + origAmt.toFixed(2) + "/" + fu + " (current " + fu + "ly pull)";
       } else {
         amtInput.placeholder = "0.00";
         amtInput.removeAttribute("max");
-        if (hint) hint.textContent = "amount to pull each business day until the original payment resumes";
+        if (hint) hint.textContent = "amount to pull each business " + fu + " until the original payment resumes";
       }
       amtInput.oninput = () => updateConfirmBtnState(leadId);
     } else if (amtRow) {
@@ -6246,13 +6290,15 @@ function updateConfirmBtnState(leadId) {
   }
   if (type === 'lowered') {
     const amt = parseFloat(document.getElementById("lowered-amt-" + leadId).value);
+    // v241: freq-aware labels
+    const m = state.find(x => x.lead_id === leadId);
+    const fu = freqUnit(m);
     if (!amt || amt <= 0) {
       btn.disabled = true;
-      btn.textContent = "Enter new daily amount";
+      btn.textContent = "Enter new " + fu + "ly amount";
       return;
     }
     // Failsafe: lowered amount must be strictly less than the original (current daily pull)
-    const m = state.find(x => x.lead_id === leadId);
     const origAmt = (m && m.bounce_amt) || 0;
     if (origAmt > 0 && amt >= origAmt) {
       btn.disabled = true;
@@ -6260,7 +6306,7 @@ function updateConfirmBtnState(leadId) {
       return;
     }
     btn.disabled = false;
-    btn.textContent = "Confirm — $" + amt.toFixed(2) + "/day until " + fmtDate(dateVal);
+    btn.textContent = "Confirm — $" + amt.toFixed(2) + "/" + fu + " until " + fmtDate(dateVal);
     return;
   }
   btn.disabled = false;
@@ -6373,6 +6419,15 @@ function confirmDateResolution(leadId) {
   if (!m) return;
   // If switching away from an active manual-pay plan, end it so the Master Sheet pill clears.
   if (m.manual_pay_state === 'ACTIVE') beaconEndManualPay(m).catch(beaconWriteErr);
+  // v241: pre-suspend state — if suspending a deal already on a lowered plan, save the plan so
+  // Beacon can restore it automatically when the suspension period ends.
+  if (type === 'paused' && m.resolution_type === 'lowered') {
+    m._preSuspendType = 'lowered';
+    m._preSuspendResume = m.resume_date;
+    m._preSuspendAmt = m.lowered_amount;
+  } else if (type !== 'paused') {
+    m._preSuspendType = ''; m._preSuspendResume = ''; m._preSuspendAmt = 0;
+  }
   m.resolution_type = type;
   m.resolution_date = TODAY_ISO;
   m.resume_date = dateInput.value;
@@ -6386,7 +6441,7 @@ function confirmDateResolution(leadId) {
   renderCalendar();
   updateCounters();
   const msg = (type === 'lowered')
-    ? "Lowered to $" + loweredAmt.toFixed(2) + "/day until " + fmtDate(dateInput.value)
+    ? "Lowered to $" + loweredAmt.toFixed(2) + "/" + freqUnit(m) + " until " + fmtDate(dateInput.value)  // v241
     : prettyResType(type) + " · resume " + fmtDate(dateInput.value);
   showToast(msg);
   _clearDealSearch();
