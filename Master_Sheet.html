@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 193</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 195</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1193,7 +1193,10 @@ async function loadBounceSummary(){
     const rid=(f.Deal&&f.Deal[0])||null;
     const lead = rid && ridToLead[rid];
     if(lead==null||lead==='') continue;
-    const code=(f['Return Code']||'').toUpperCase().trim();
+    // build 194: split on whitespace and take first token — Airtable may store the full
+    // Pinnacle description ("R16 - Account Frozen/..."); the R-code is always the first word.
+    // Mirrors Beacon's rcodeSeverity() v230 fix so STOP_RCODES.includes(code) matches correctly.
+    const code=(f['Return Code']||'').toUpperCase().trim().split(/\s/)[0];
     const sev=(f.Severity||'').toUpperCase();
     const e = bounceByLead[lead] = bounceByLead[lead] || {codes:new Set(), count:0, hasStop:false, dates:[], stopDates:[]};
     e.count++;
@@ -1905,7 +1908,7 @@ async function handleDailyReport(input) {
       if(!headers.length){headers=rows[0]?rows[0].map(h=>String(h||'').toLowerCase().trim()):[];dataRows=rows.slice(1);}
       const ci=n=>headers.findIndex(h=>h.includes(n));
       const custI=ci('customer'),balI=ci('balance'),pctI=ci('% paid'),statI=ci('status'),leadI=ci('lead'),purchI=ci('purchased'),paidI=ci('paid today'),pmtdI=ci('paid this month');
-      let updates=[],ambiguous=0;
+      let updates=[],ambiguous=0,reinstated=0;
       const DAILY_TODAY=new Date().toISOString().slice(0,10);  // build 52: stamp date for payments seen today
       const claimed=new Set();
       // Match precedence (June 10, 2026): LeadID alone when unique; LeadID+RTR
@@ -1929,7 +1932,9 @@ async function handleDailyReport(input) {
           if(cands.length===1) m=cands[0];
           else if(cands.length>1){ ambiguous++; return; }
         }
-        if(!m) m=deals.find(d=>squish(d.merchant)==name&&['NEW','ACTIVE'].includes(d.status));
+        // build 195: also match DEFAULT deals so the report can reinstate them when Pinnacle
+        // updates the threshold (e.g. 10% → 5% per 21 biz days) and reclassifies them as ACTIVE.
+        if(!m) m=deals.find(d=>squish(d.merchant)==name&&['NEW','ACTIVE','DEFAULT'].includes(d.status));
         if(m){
           if(claimed.has(m._id)){ ambiguous++; return; }  // two report rows -> one deal record: never double-write
           claimed.add(m._id);
@@ -1939,6 +1944,10 @@ async function handleDailyReport(input) {
           let newStatus=null;
           if(!m.status_override){
             if(stat==='DEFAULT'&&m.status!=='DEFAULT') newStatus='DEFAULT';
+            // build 195: if Pinnacle now shows ACTIVE and we have this deal as DEFAULT (not manually
+            // pinned), reinstate it. Restore the original lifecycle status using deal_type so a
+            // first-time funding comes back as NEW and a refi/renewal comes back as ACTIVE.
+            else if(stat==='ACTIVE'&&m.status==='DEFAULT'){ newStatus=(m.deal_type==='REFI'?'ACTIVE':'NEW'); reinstated++; }
             else if(bal<=0&&['NEW','ACTIVE'].includes(m.status)) newStatus='PIF';
           }
           // build 52 (option 2): the daily report owns the 30-day clock. If this row shows a payment —
@@ -1962,7 +1971,8 @@ async function handleDailyReport(input) {
         await atFetch('PATCH','',{records:batch});
       }
       await loadDeals();
-      showNotice('Synced '+updates.length+' deal'+(updates.length!==1?'s':'')+' — balances and PNL updated.','success');
+      const reinstateMsg = reinstated ? ' · '+reinstated+' deal'+(reinstated!==1?'s':'')+' reinstated from DEFAULT.' : '';
+      showNotice('Synced '+updates.length+' deal'+(updates.length!==1?'s':'')+' — balances and PNL updated.'+reinstateMsg,'success');
     }catch(err){ showNotice('Failed: '+err.message,'error'); }
     finally{ hideLoading(); }
   };
