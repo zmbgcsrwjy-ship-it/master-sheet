@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 195</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 196</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3629,7 +3629,7 @@ function renderOutlook(){
       else if(d.status==='COMPLETED') t+='<span class="tag paid">completed</span>';
       // build 192: DEFAULT deals whose balance hit zero got there via REFI — label them "refi" not "paid off"
       else if(isDefPaidOff(d)) t+='<span class="tag refi" title="Defaulted but balance cleared via REFI — treated as a winner">refi</span>';
-      t+=olCsChip(d);           // bouncing / suspended / resume / lowered / legal — same as All deals
+      t+=olCsChip(d)+manualPayChip(d);  // build 196: add manualPayChip so Outlook tab matches All Deals
       return t;
     };
     const nameCls=d=> (isPaid(d)||wasRefiedOut(d)||isDefPaidOff(d)) ? 'nm paidname' : 'nm';
@@ -3653,7 +3653,7 @@ function renderOutlook(){
           // build 150: written-off deals also show their bounce/collections tag (BOUNCING / STOP PMT
           // / suspended / lowered) so you can see how the deal died, not just that it's written off.
           // Skip when the state is LEGAL — the "legal" write-off tag already covers that.
-          const csTag = (d.collections_state||'').toUpperCase()==='LEGAL' ? '' : olCsChip(d);
+          const csTag = (d.collections_state||'').toUpperCase()==='LEGAL' ? '' : olCsChip(d)+manualPayChip(d);  // build 196
           return `<div class="ol-row"><span class="ol-namecell"><span class="nm">${esc0(d.merchant)}</span><span class="ol-tags">${tag}${csTag}</span></span>${balCell(d)}${pctBar(d)}<span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
         }).join('')
       : '<div class="ol-empty-col">Nothing written off \u2014 clean month so far.</div>';
@@ -3711,6 +3711,9 @@ function olCsChip(d){
   // build 192: paid-off deals don't need collection chips — that chapter is closed
   if(d.status==='PIF'||d.status==='COMPLETED'||(d.status==='DEFAULT'&&(d.balance||0)<=0.5)) return '';
   const s=(d.collections_state||'').toUpperCase(); if(!s||s==='OK') return '';
+  // build 196: MANUAL PAY is rendered by manualPayChip (same as csChip) — skip it here so both
+  // tabs use the same chip with the same gate logic instead of a stale gray pill.
+  if(s==='MANUAL PAY') return '';
   // build 190: use stopIsActive so STOP PMT clears once a payment lands after the stop date
   const activeStop = stopIsActive(d);
   let col, label=s;
