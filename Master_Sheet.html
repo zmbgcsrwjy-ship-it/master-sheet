@@ -533,7 +533,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 196</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 197</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3249,310 +3249,365 @@ function renderReview(){
   const now=new Date();
   if(asof) asof.textContent='as of '+now.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
 
-  const isDead=d=> d.status==='DEFAULT' || (d.collections_state||'').toUpperCase()==='LEGAL';
-  const isActive=d=> ['ACTIVE','NEW'].includes(d.status) && !isDead(d);
+  // ── Helpers ──
+  const pp100=d=>{ let v=_rvNum(d.pct_paid); return v<=1?v*100:v; };
+  const msDay=86400000;
+  const daysSinceStr=s=>{ const t=Date.parse(s); return isFinite(t)?Math.max(0,(now-t)/msDay):Infinity; };
+  const getAge=d=>{ const t=Date.parse(d.date_funded); return isFinite(t)?Math.max(0,(now-t)/msDay):0; };
+  const getGap=d=>d.last_cleared?daysSinceStr(d.last_cleared):getAge(d);
+  const bizApprox=calDays=>Math.round(calDays*5/7);
+  const getExp=d=>{ const biz=bizApprox(getAge(d)); const term=_rvNum(d.term); if(!term)return 0; return d.frequency==='Weekly'?Math.min(1,(biz/5)/term):Math.min(1,biz/term); };
 
-  // ── Core book aggregates (OUR book share throughout) ──
-  const bookFunded=funded.reduce((s,d)=>s+_rvNum(d.book_funded),0);
-  const netPnl=funded.reduce((s,d)=>s+_rvNum(d.pnl),0);
-  const expected=funded.filter(d=>!isDead(d)).reduce((s,d)=>s+_rvNum(d.book_profit),0);
-  const atRisk=funded.filter(isDead).reduce((s,d)=>s+_rvNum(d.max_loss),0);
-  const bookBalance=funded.filter(isActive).reduce((s,d)=>s+_rvNum(d.balance)*_rvNum(d.book_pct)/100,0);
-  const nDead=funded.filter(isDead).length;
-  const defaultRate=_rvPct(nDead,funded.length);
-  const bookAtRisk=funded.filter(isDead).reduce((s,d)=>s+_rvNum(d.book_funded),0);
-  const dollarDefault=_rvPct(bookAtRisk,bookFunded);
-  // weighted collection %: how much of RTR has been collected across active deals
-  const totRtr=funded.filter(isActive).reduce((s,d)=>s+_rvNum(d.rtr),0);
-  const totPaid=funded.filter(isActive).reduce((s,d)=>s+(_rvNum(d.rtr)-_rvNum(d.balance)),0);
-  const collPct=_rvPct(totPaid,totRtr);
-  const avgFactor=funded.length?funded.reduce((s,d)=>s+_rvNum(d.factor),0)/funded.length:0;
-  const refiShare=_rvPct(funded.filter(d=>d.deal_type==='REFI').length,funded.length);
-  const pifCount=funded.filter(d=>d.status==='PIF'||d.status==='COMPLETED').length;  // build 147: a completed deal paid us too
+  // ── Buckets (checked in order per spec) ──
+  const STRESSED_CS=['LOWERED','BOUNCING','MANUAL PAY','RESUME SCHEDULED'];
+  const getBucket=d=>{
+    const pp=pp100(d), st=(d.status||'').toUpperCase(), cs=(d.collections_state||'').toUpperCase(), gap=getGap(d);
+    if(st==='COMPLETED'||st==='PIF'||pp>=98) return 'completed';
+    if(cs==='LEGAL'||cs==='DEAD'||gap>30) return 'default';
+    if((st==='DEFAULT'||STRESSED_CS.includes(cs))&&gap<=30) return 'stressed';
+    return 'performing';
+  };
+  funded.forEach(d=>d._bucket=getBucket(d));
+  const byBkt=b=>funded.filter(d=>d._bucket===b);
+  const completed_=byBkt('completed'), defaulted=byBkt('default'), stressed=byBkt('stressed'), performing=byBkt('performing');
 
-  // ── Deal-structure metrics (every metric, read against CDF-MCA norms) ──
-  const bdLen=d=> d.frequency==='Weekly' ? _rvNum(d.term)*5 : _rvNum(d.term);
-  const avgBookSize = funded.length ? bookFunded/funded.length : 0;
-  const avgDealSize = funded.length ? funded.reduce((s,d)=>s+_rvNum(d.funded),0)/funded.length : 0;
-  const termDeals = funded.filter(d=>bdLen(d)>0);
-  const avgTermBD = termDeals.length ? termDeals.reduce((s,d)=>s+bdLen(d),0)/termDeals.length : 0;
-  const avgCommPct = funded.length ? funded.reduce((s,d)=>s+_rvNum(d.comm_pct),0)/funded.length : 0;
-  // largest single deal as a share of book — concentration in one name
-  const biggest = funded.reduce((m,d)=>Math.max(m,_rvNum(d.book_funded)),0);
-  const topDealShare = _rvPct(biggest, bookFunded);
+  // ── Per-deal money helpers (our book share throughout) ──
+  const getBf=d=>_rvNum(d.book_funded);
+  const getBrtr=d=>_rvNum(d.book_payback);
+  const getBbal=d=>_rvNum(d.balance)*(_rvNum(d.book_pct)/100);
+  const getPaid=d=>getBrtr(d)-getBbal(d);
+  const getCashOut=d=>_rvNum(d.max_loss);
+  const bfOf=arr=>arr.reduce((s,d)=>s+getBf(d),0);
+  const bbalOf=arr=>arr.reduce((s,d)=>s+getBbal(d),0);
 
-  // ── Book maturity: how far the active book has run (weighted by book funded) ──
-  // A young book can't be judged on realized defaults alone — most deals haven't had time to fail.
-  // build 147: pct_paid is stored as a 0–1 FRACTION (the All Deals tab renders it as pct_paid*100).
-  // Normalize to a 0–100 percent everywhere in the review so maturity, the curve, and buckets are right.
-  const pp100 = d=>{ let v=_rvNum(d.pct_paid); return v<=1 ? v*100 : v; };
-  const actForMat = funded.filter(isActive);
-  const matBase = actForMat.reduce((s,d)=>s+_rvNum(d.book_funded),0) || 1;
-  const bookMaturity = actForMat.reduce((s,d)=>s+_rvNum(d.book_funded)*Math.min(100,pp100(d)),0)/matBase; // 0-100 %, $-weighted
-  const daysSince = d=>{ const t=Date.parse(d.date_funded); return isFinite(t)?Math.max(0,(now-t)/86400000):0; };
-  const avgAgeDays = funded.length ? funded.reduce((s,d)=>s+daysSince(d),0)/funded.length : 0;
-  const seasonedShare = _rvPct(actForMat.filter(d=>pp100(d)>=50).length, actForMat.length||1); // % of active book past halfway
+  // ── Book-level aggregates ──
+  const totalBF=bfOf(funded);
+  const totalBrtr=funded.reduce((s,d)=>s+getBrtr(d),0);
+  const totalCashOut=funded.reduce((s,d)=>s+getCashOut(d),0);
+  const totalPaid=funded.reduce((s,d)=>s+getPaid(d),0);
+  const totalPnl=funded.reduce((s,d)=>s+_rvNum(d.pnl),0);
+  const breakEven=totalBrtr?totalCashOut/totalBrtr*100:0;
+  const weightedFactor=totalBF?funded.reduce((s,d)=>s+_rvNum(d.factor)*getBf(d),0)/totalBF:0;
+  const weightedCommPct=totalBF?funded.reduce((s,d)=>s+_rvNum(d.comm_pct)*getBf(d),0)/totalBF:0;
 
-  // topIndShare now derived from indRows below (single source of truth) — the early estimate could
-  // diverge from the table. Placeholder here; real value set right after indRows is built.
-  let topIndShare = 0;
+  // ── Mature Dm (age ≥ 90 days) ──
+  const mature=funded.filter(d=>getAge(d)>=90);
+  const matureDefault=mature.filter(d=>d._bucket==='default');
+  const matureBF=bfOf(mature);
+  const matureDefaultBF=bfOf(matureDefault);
+  const Dm=matureBF?matureDefaultBF/matureBF*100:0;
+  const nDm=matureDefault.length;
+  const EPDcount=matureDefault.filter(d=>pp100(d)<15).length;
+  const EPDshare=nDm?EPDcount/nDm*100:0;
 
-  // ── FORWARD PROGNOSIS — CURRENT-STATE MODEL (build 146) ─────────────────────
-  // "Best case if everything stays exactly as it is today." Anchors on the book's OWN live default
-  // rate (what's actually defaulting right now), then adjusts each still-open deal up or down by its
-  // real current signals — bounces, stops, ACH severity, collections state, and how far it's paid
-  // down. A clean deal near payoff barely moves the number; a stopped/bouncing deal carries a much
-  // higher default probability. Recovery uses your loaded history if present, else the house 30%.
-  const cal = rvLoadCalibration();
-  const RECOVERY = cal ? cal.recovery/100 : 0.30;
-  const liveDefaultRate = defaultRate;               // ANCHOR: dead deals ÷ all funded, right now
-  const openBook = funded.filter(d=>!isDead(d));
-  const openProfitIfAllPay = openBook.reduce((s,d)=>s+_rvNum(d.book_profit),0);
-  const openBookFunded = openBook.reduce((s,d)=>s+_rvNum(d.book_funded),0);
-  const openRtr = openBook.reduce((s,d)=>s+_rvNum(d.book_payback),0);
-  const realizedPnl = funded.filter(isDead).reduce((s,d)=>s+_rvNum(d.pnl),0);
+  // ── Projection scenarios ──
+  const S=appSettings;
+  const RATES={
+    base:{performing:S.proj_base_performing!=null?S.proj_base_performing:0.85, stressed:S.proj_base_stressed!=null?S.proj_base_stressed:0.40, default:S.proj_base_default!=null?S.proj_base_default:0.08, completed:1.0},
+    down:{performing:S.proj_down_performing!=null?S.proj_down_performing:0.75, stressed:S.proj_down_stressed!=null?S.proj_down_stressed:0.25, default:S.proj_down_default!=null?S.proj_down_default:0.03, completed:1.0},
+    up:  {performing:S.proj_up_performing!=null?S.proj_up_performing:0.93,  stressed:S.proj_up_stressed!=null?S.proj_up_stressed:0.55,  default:S.proj_up_default!=null?S.proj_up_default:0.15, completed:1.0},
+  };
+  const computeL=rates=>{
+    const matBrtr=mature.reduce((s,d)=>s+getBrtr(d),0);
+    if(!matBrtr) return rates.performing;
+    const matFinal=mature.reduce((s,d)=>s+getPaid(d)+getBbal(d)*(rates[d._bucket]||rates.performing),0);
+    return matFinal/matBrtr;
+  };
+  const Lbase=computeL(RATES.base), Ldown=computeL(RATES.down), Lup=computeL(RATES.up);
+  const young=funded.filter(d=>getAge(d)<90);
+  const computePnl=(rates,L)=>{
+    const mFinal=mature.reduce((s,d)=>s+getPaid(d)+getBbal(d)*(rates[d._bucket]||rates.performing),0);
+    const mCo=mature.reduce((s,d)=>s+getCashOut(d),0);
+    const yProj=young.reduce((s,d)=>s+getBrtr(d)*L,0);
+    const yCo=young.reduce((s,d)=>s+getCashOut(d),0);
+    return (mFinal-mCo)+(yProj-yCo);
+  };
+  const pnlBase=computePnl(RATES.base,Lbase);
+  const pnlDown=computePnl(RATES.down,Ldown);
+  const pnlUp=computePnl(RATES.up,Lup);
+  const marginBase=totalCashOut?pnlBase/totalCashOut*100:0;
+  const houseSplit=pnlBase*HOUSE_SPLIT;
+  const partnerSplit=pnlBase*0.25;
 
-  // Per-deal live default probability: start at the book's current rate, then move it by what the
-  // deal is actually doing today. Returns a probability 0–1 (clamped to a sane 2%–92%).
-  const liveDealDefaultProb = d=>{
-    let p = liveDefaultRate/100;                      // start at the current book rate
-    if(p<=0) p=0.05;                                  // if nothing's defaulted yet, seed a small floor
-    const b = bounceByLead[d.lead_id] || null;
-    const cs = (d.collections_state||'').toUpperCase();
-    const paid = Math.max(0, Math.min(1, d.pct_paid||0));
-    // --- risk UP: active distress signals ---
-    if(cs==='LEGAL' || (b && b.hasStop))      p += 0.45;         // stop payment / in legal — strongest pre-default flag
-    else if(cs==='BOUNCING' || (b && b.count>0)){
-      const n = b ? b.count : 1;
-      const sev = b && [...b.codes].some(c=>STOP_RCODES.includes(c));  // account-error/severe code present
-      p += Math.min(0.35, 0.08*n) + (sev?0.10:0);                // each bounce adds risk, capped; severe code adds more
-    }
-    if(cs==='SUSPENDED' || cs==='RESUME SCHEDULED') p += 0.12;   // not collecting right now
-    // --- risk DOWN: healthy signals ---
-    if(cs==='RESUME NORMAL')                   p -= 0.06;         // talked to, back on track
-    if(cs==='LOWERED')                         p -= 0.02;         // reduced but paying
-    // paydown cushion: the further along, the less can go wrong. Full weight near payoff.
-    p -= paid*0.22;                                                // 0% paid: no relief; 100% paid: −22 pts
-    if(paid>=0.85) p = Math.min(p, 0.06);                         // nearly home — cap risk low regardless
-    return Math.max(0.02, Math.min(0.92, p));
+  // ── Segment analysis — seasoned deals (age ≥ 45) ──
+  const seasoned=funded.filter(d=>getAge(d)>=45);
+  const segStats=arr=>{
+    if(!arr.length) return {n:0,bf:0,defPct:0,strPct:0,sOrD:0,collPct:0};
+    const n=arr.length, bf=bfOf(arr);
+    const defBF=bfOf(arr.filter(d=>d._bucket==='default'));
+    const strBF=bfOf(arr.filter(d=>d._bucket==='stressed'));
+    const defPct=bf?defBF/bf*100:0, strPct=bf?strBF/bf*100:0;
+    const co=arr.reduce((s,d)=>s+getCashOut(d),0);
+    const paid=arr.reduce((s,d)=>s+getPaid(d),0);
+    return {n, bf, defPct, strPct, sOrD:defPct+strPct, collPct:co?paid/co*100:0};
   };
 
-  let expSurviveProfit=0, expLoss=0, wDefSum=0, wCap=0, nFlagged=0;
-  openBook.forEach(d=>{
-    const pr = liveDealDefaultProb(d);
-    const bf=_rvNum(d.book_funded), bp=_rvNum(d.book_profit), rtr=_rvNum(d.book_payback);
-    expSurviveProfit += bp*(1-pr);                     // profit if it survives
-    expLoss += pr*Math.max(0, bf - RECOVERY*rtr);       // loss if it defaults (dollar/recovery math)
-    wDefSum += pr*bf; wCap += bf;
-    const b=bounceByLead[d.lead_id]; const cs=(d.collections_state||'').toUpperCase();
-    if((b&&(b.hasStop||b.count>0)) || ['LEGAL','BOUNCING','SUSPENDED','RESUME SCHEDULED'].includes(cs)) nFlagged++;
+  // ISO segments
+  const isoMap={};
+  seasoned.forEach(d=>{ const k=(d.iso||'Unspecified').trim().toUpperCase()||'UNSPECIFIED'; (isoMap[k]=isoMap[k]||[]).push(d); });
+  const isoSegs=Object.keys(isoMap).map(k=>({label:k,...segStats(isoMap[k])})).sort((a,b)=>b.bf-a.bf);
+
+  // RED ISOs (seasoned rule: S/D ≥ 45%, n ≥ 5)
+  const redISOSet=new Set(isoSegs.filter(s=>s.n>=5&&s.sOrD>=45).map(s=>s.label));
+  const redISObookFunded=funded.filter(d=>redISOSet.has((d.iso||'').trim().toUpperCase())).reduce((s,d)=>s+getBf(d),0);
+  const redISOShare=totalBF?redISObookFunded/totalBF*100:0;
+
+  // Industry roll-up segments (seasoned)
+  const indRollup=d=>{ const i=(d.industry||'').toLowerCase();
+    if(/restaurant|caterer|bak|food|grocery|convenience|drinking/.test(i)) return 'Restaurant/Food';
+    if(/physician|dent|chiro|health|veterin|medical/.test(i)) return 'Health/Medical';
+    if(/construct|contract|plumb|electric|roof|landscap|hvac|remodel/.test(i)) return 'Construction/Trades';
+    return 'Other'; };
+  const indRollMap={};
+  seasoned.forEach(d=>{ const k=indRollup(d); (indRollMap[k]=indRollMap[k]||[]).push(d); });
+  const indRollSegs=Object.keys(indRollMap).map(k=>({label:k,...segStats(indRollMap[k])})).sort((a,b)=>b.bf-a.bf);
+
+  // ── Watch list (performing deals showing stress signals) ──
+  const watchList=[];
+  performing.forEach(d=>{
+    const gap=getGap(d), exp=getExp(d), pp=pp100(d), rules=[];
+    const staleThresh=d.frequency==='Weekly'?10:7;
+    if(gap>=staleThresh&&!(d.collections_state||'')) rules.push('stale '+Math.round(gap)+'d (no CS flag)');
+    if(exp>=1&&pp<98) rules.push('past term, '+pp.toFixed(0)+'% paid');
+    if(pp/100<exp-0.10) rules.push(pp.toFixed(0)+'% vs '+Math.round(exp*100)+'% exp');
+    if(rules.length) watchList.push({d, gap, exp, pp, bbal:getBbal(d), rules});
   });
-  const projMethod='current';
-  const projLossFromOpen = expLoss;
-  const projMatureProfit = realizedPnl + expSurviveProfit - expLoss;
-  const projDefault = wCap ? wDefSum/wCap*100 : liveDefaultRate;   // effective $-weighted live default rate
-  const BASE_DEFAULT = liveDefaultRate;                            // (kept for downstream references)
-  const projMarginPct = _rvPct(projMatureProfit, bookFunded);
+  watchList.sort((a,b)=>b.bbal-a.bbal);
 
-  // ── Grade: blend backward-looking realized health with the forward prognosis ──
-  let score=100;
-  score-= Math.min(30, dollarDefault*1.4);                 // realized default drag (capped lower now)
-  score-= (netPnl<0 && bookMaturity>40 ? 18 : 0);          // only punish underwater once the book has run a bit
-  score-= (collPct<35 && bookMaturity>20 ? 10 : collPct<50 && bookMaturity>20 ? 5 : 0);
-  score-= (projMarginPct<0 ? 22 : projMarginPct<8 ? 11 : projMarginPct<15 ? 4 : 0); // PROGNOSIS drives the grade
-  score-= (avgTermBD>110 ? 6 : 0);                          // very long terms = more time to sour
-  score-= (topDealShare>25 ? 6 : topDealShare>18 ? 3 : 0);  // single-name concentration
+  // ── Collections pressure ──
+  const openBbal=bbalOf(performing)+bbalOf(stressed);
+  const pressureStressed=openBbal?bbalOf(stressed)/openBbal*100:0;
+  const perfBehind=performing.filter(d=>pp100(d)/100<getExp(d)-0.10);
+  const pressurePerfBehind=openBbal?bbalOf(perfBehind)/openBbal*100*0.5:0;
+  const pressure=pressureStressed+pressurePerfBehind;
 
+  // ── Data quality penalties ──
+  const dataPenalties=[];
+  const staleBlank=watchList.filter(w=>w.rules.some(r=>r.includes('stale')));
+  if(staleBlank.length) dataPenalties.push('stale clears w/ blank CS ('+staleBlank.length+')');
+  const statusConflicts=funded.filter(d=>{ const st=(d.status||'').toUpperCase(); const pp=pp100(d);
+    if(st==='DEFAULT'&&pp>=98) return true;
+    if((st==='COMPLETED'||st==='PIF')&&_rvNum(d.balance)>0) return true;
+    return false; });
+  if(statusConflicts.length) dataPenalties.push('status conflicts ('+statusConflicts.length+')');
 
-  // ── Industry analysis ──
-  const byInd={};
-  funded.forEach(d=>{ const k=(d.industry||'Unspecified').trim()||'Unspecified'; (byInd[k]=byInd[k]||[]).push(d); });
-  const indRows=Object.keys(byInd).map(k=>{
-    const ds=byInd[k];
-    const bf=ds.reduce((s,d)=>s+_rvNum(d.book_funded),0);
-    const pnl=ds.reduce((s,d)=>s+_rvNum(d.pnl),0);
-    const dead=ds.filter(isDead).length;
-    return {label:k, n:ds.length, bookFunded:bf, pnl, dr:_rvPct(dead,ds.length), share:_rvPct(bf,bookFunded)};
-  }).sort((a,b)=>b.bookFunded-a.bookFunded);
-  topIndShare = indRows.length ? indRows[0].share : 0;   // build 147: from the same rows the table shows
-  const concPenalty = topIndShare>45?14:topIndShare>32?7:0;
-  score-=concPenalty;
+  // ── Grade — 5-component weighted ──
+  const LPTS={'A+':4.3,'A':4.0,'A-':3.7,'B+':3.3,'B':3.0,'B-':2.7,'C+':2.3,'C':2.0,'C-':1.7,'D+':1.3,'D':1.0,'D-':0.7,'F':0};
+  const pts=l=>LPTS[l]||0;
+  const ptsToLetter=p=>p>=4.15?'A+':p>=3.85?'A':p>=3.5?'A-':p>=3.15?'B+':p>=2.85?'B':p>=2.5?'B-':p>=2.15?'C+':p>=2.0?'C':p>=1.7?'C-':p>=1.3?'D+':p>=1.0?'D':p>=0.7?'D-':'F';
+  const pricingLetter=breakEven<=68?'A':breakEven<=70?'A-':breakEven<=71.5?'B+':breakEven<=72.5?'B':breakEven<=74?'B-':breakEven<=75.5?'C+':breakEven<=77?'C':breakEven<=79?'D':'F';
+  const uwLetter=Dm<=10?'A':Dm<=15?'B':Dm<=20?'C':Dm<=25?'C-':Dm<=30?'D+':Dm<=35?'D':'F';
+  const isoMixLetter=redISOShare<=10?'A':redISOShare<=20?'B':redISOShare<=30?'C':redISOShare<=40?'C-':redISOShare<=50?'D+':redISOShare<=60?'D':'F';
+  const collLetter=pressure<=10?'A':pressure<=20?'B':pressure<=30?'C+':pressure<=40?'C':pressure<=50?'D':'F';
+  const dataLetterArr=['A+','A','A-','B+','B','B-','C+','C','C-','D+','D','D-','F'];
+  const dataLetter=dataLetterArr[Math.min(dataPenalties.length,dataLetterArr.length-1)];
+  const weightedGrade=pts(pricingLetter)*0.20+pts(uwLetter)*0.35+pts(isoMixLetter)*0.20+pts(collLetter)*0.20+pts(dataLetter)*0.05;
+  let overallLetter=ptsToLetter(weightedGrade);
+  if(pnlBase<0&&pts(overallLetter)>pts('D+')) overallLetter='D+';
+  const gColor=l=>{ const p=pts(l); return p>=3.5?'#37c66f':p>=2.5?'#6fd396':p>=1.7?'#f59e0b':p>=1.0?'#fb923c':'#f87171'; };
+  const overallColor=gColor(overallLetter);
 
-  // ── ISO analysis ──
-  const byIso={};
-  funded.forEach(d=>{ const k=(d.iso||'Unspecified').trim()||'Unspecified'; (byIso[k]=byIso[k]||[]).push(d); });
-  const isoRows=Object.keys(byIso).map(k=>{
-    const ds=byIso[k];
-    const bf=ds.reduce((s,d)=>s+_rvNum(d.book_funded),0);
-    const pnl=ds.reduce((s,d)=>s+_rvNum(d.pnl),0);
-    const dead=ds.filter(isDead).length;
-    const af=ds.length?ds.reduce((s,d)=>s+_rvNum(d.factor),0)/ds.length:0;
-    return {label:k, n:ds.length, bookFunded:bf, pnl, dr:_rvPct(dead,ds.length), avgF:af, share:_rvPct(bf,bookFunded)};
-  }).sort((a,b)=>b.bookFunded-a.bookFunded);
+  // ── Deal structure ──
+  const bdLen=d=>d.frequency==='Weekly'?_rvNum(d.term)*5:_rvNum(d.term);
+  const termDeals=funded.filter(d=>bdLen(d)>0);
+  const avgTermBD=termDeals.length?termDeals.reduce((s,d)=>s+bdLen(d),0)/termDeals.length:0;
+  const avgBookSize=funded.length?totalBF/funded.length:0;
+  const refiShare=_rvPct(funded.filter(d=>d.deal_type==='REFI').length,funded.length);
+  const biggest=funded.reduce((m,d)=>Math.max(m,getBf(d)),0);
+  const topDealShare=_rvPct(biggest,totalBF);
 
-  score=Math.max(5,Math.min(100,Math.round(score)));
-  const grade = score>=85?'A':score>=72?'B':score>=58?'C':score>=42?'D':'F';
-  const gColor=_rvGradeColor(grade);
-
-  // ── Collection curve buckets (active deals by % paid) ──
-  const buckets=[{k:'0–25%',lo:0,hi:25,c:'#f87171'},{k:'25–50%',lo:25,hi:50,c:'#fb923c'},{k:'50–75%',lo:50,hi:75,c:'#f59e0b'},{k:'75–99%',lo:75,hi:100,c:'#6fd396'}];
-  const actives=funded.filter(isActive);
-  const curveRows=buckets.map(b=>{ const n=actives.filter(d=>pp100(d)>=b.lo&&pp100(d)<b.hi).length; return {label:b.k,value:n,color:b.c,note:n+' deals'}; });
-
-  // ── Status composition donut ──
-  const compParts=[
-    {label:'Active/New',value:funded.filter(isActive).length,color:'#4a9eff'},
-    {label:'Paid in full',value:pifCount,color:'#37c66f'},
-    {label:'Default/Legal',value:nDead,color:'#f87171'},
-  ];
-
-  // ── Honest findings ──
+  // ── Honest assessment cards ──
   const F=[];
   const push=(kind,icon,html)=>F.push({kind,icon,html});
-  if(netPnl>=0) push('good','✓',`Book is <b>net positive</b> at <b>${fmt$(netPnl)}</b> across ${funded.length} funded deals. Expected upside from the deals still paying is <b>${fmt$(expected)}</b>.`);
-  else push('bad','✕',`Book is <b>net negative</b> at <b>${fmt$(netPnl)}</b>. Losses are currently outrunning the paying book — protect margin on new fundings until this recovers.`);
-  if(dollarDefault>20) push('bad','▲',`<b>${dollarDefault.toFixed(1)}% of book capital</b> is in defaulted or legal deals (${fmt$(bookAtRisk)}). That's a heavy loss rate — tighten underwriting and revisit the ISOs feeding these.`);
-  else if(dollarDefault>10) push('warn','▲',`<b>${dollarDefault.toFixed(1)}% of book capital</b> is written off (${fmt$(bookAtRisk)}). Watchable, not alarming — keep an eye on the concentration below.`);
-  else push('good','✓',`Default exposure is contained: only <b>${dollarDefault.toFixed(1)}%</b> of book capital is in dead deals.`);
-  if(topIndShare>45) push('warn','◆',`<b>${indRows[0].label}</b> is <b>${topIndShare.toFixed(0)}%</b> of the book by capital — over-concentrated. One bad stretch in that industry hits hard; aim to diversify new fundings.`);
-  else if(indRows.length>=3) push('good','◆',`Industry spread is reasonable — the largest (<b>${indRows[0].label}</b>) is ${topIndShare.toFixed(0)}% of the book.`);
-  // ISO callouts: best and worst by default rate among ISOs with >=2 deals
-  const isoQual=isoRows.filter(r=>r.n>=2);
-  const worstIso=isoQual.slice().sort((a,b)=>b.dr-a.dr)[0];
-  const bestIso=isoQual.slice().sort((a,b)=> (b.pnl-a.pnl))[0];
-  if(worstIso && worstIso.dr>=34) push('bad','⚑',`<b>${worstIso.label}</b> is sending weak paper — <b>${worstIso.dr.toFixed(0)}% default rate</b> across ${worstIso.n} deals. Consider pausing or re-pricing deals from this source.`);
-  if(bestIso && bestIso.pnl>0) push('good','★',`<b>${bestIso.label}</b> is your strongest source by profit (<b>${fmt$(bestIso.pnl)}</b> across ${bestIso.n} deals). Lean into this relationship.`);
-  if(collPct<40) push('warn','◷',`Collections are running slow — active deals are only <b>${collPct.toFixed(0)}%</b> paid down on average. Watch for early-stage deals stalling before their first pulls clear.`);
-  else push('good','◷',`Collection pace is healthy at <b>${collPct.toFixed(0)}%</b> paid down across the active book.`);
-  if(refiShare>50) push('info','↻',`<b>${refiShare.toFixed(0)}%</b> of deals are REFIs — you're leaning on renewals. Healthy for retention, but make sure new-merchant origination keeps pace so the book doesn't age into a few names.`);
-  if(avgFactor>1.49) push('info','∑',`Average factor is <b>${avgFactor.toFixed(3)}</b> — pricing is on the higher end, which cushions defaults but can raise stack/broker risk on the merchant side.`);
-
-  // ── Forward-looking (prognosis) findings ──
-  const maturedEnough = bookMaturity>=20 || avgAgeDays>=35;
-  if(!maturedEnough) push('info','◔',`This is a <b>young book</b> — only <b>${bookMaturity.toFixed(0)}%</b> paid down on the active side and averaging <b>${Math.round(avgAgeDays)} days</b> old. Realized numbers will look flattering because most deals haven't had time to sour. The prognosis below extrapolates the mature outcome.`);
-  if(projMarginPct>=15) push('good','↗',`Current-state projected margin of <b>${projMarginPct.toFixed(1)}%</b> (~${fmt$(projMatureProfit)}) at the effective ${projDefault.toFixed(0)}% signal-adjusted default rate. If today’s conditions hold, this book pays.`);
-  else if(projMarginPct>=0) push('warn','→',`Projected mature margin is thin at <b>${projMarginPct.toFixed(1)}%</b> (~${fmt$(projMatureProfit)}). At the assumed ${projDefault.toFixed(0)}% default rate there isn't much cushion — a few extra defaults tip this negative. Guard underwriting quality.`);
-  else push('bad','↘',`Current-state projection turns <b>negative</b> (~${fmt$(projMatureProfit)}) at the effective ${projDefault.toFixed(0)}% signal-adjusted default rate. On today’s trajectory this book loses money — tighten origination and work the flagged deals before more capital deploys.`);
-  if(avgTermBD>0){
-    if(avgTermBD>110) push('warn','⏱',`Average term is <b>${avgTermBD.toFixed(0)} business days</b> — on the long side for CDF paper. Longer terms mean capital is exposed longer and defaults have more time to surface. Favor shorter terms where the merchant supports it.`);
-    else if(avgTermBD<60) push('info','⏱',`Average term is <b>${avgTermBD.toFixed(0)} business days</b> — short, which recycles capital fast but leaves less room to absorb a slow payer. Fits a tight-filter CDF book.`);
-    else push('good','⏱',`Average term of <b>${avgTermBD.toFixed(0)} business days</b> sits in the healthy CDF band — capital turns at a sensible pace.`);
+  const cushion=Lbase*100-breakEven;
+  push(cushion>0?'good':'bad', cushion>0?'✓':'✕',
+    `Break-even <b>${breakEven.toFixed(1)}%</b> of RTR · base-case lifetime L <b>${(Lbase*100).toFixed(1)}%</b> · cushion <b>${cushion>=0?'+':''}${cushion.toFixed(1)} pts</b>. ${cushion>0?'The book should cover its cost at base-case collection rates.':'The book does not cover its cost at base-case rates — collection rates must improve.'}`);
+  push(Dm<=20?'good':Dm<=30?'warn':'bad', Dm<=20?'✓':'▲',
+    `Mature default rate Dm: <b>${Dm.toFixed(1)}%</b> of book $ in mature deals (${matureDefault.length} of ${mature.length} ≥90d). EPD: <b>${EPDcount}/${nDm}</b> defaults paid &lt;15% first (${EPDshare.toFixed(0)}% EPD rate).`);
+  const redISOList=isoSegs.filter(s=>s.n>=5&&s.sOrD>=45);
+  if(redISOList.length){
+    redISOList.forEach(s=>push('bad','⚑',`<b>${esc0(s.label)}</b> (RED): ${s.n} deals · <b>${s.defPct.toFixed(0)}% default + ${s.strPct.toFixed(0)}% stressed = ${s.sOrD.toFixed(0)}%</b> at risk. RED ISOs total <b>${redISOShare.toFixed(0)}%</b> of all book $.`));
+  } else {
+    push('good','✓','No RED ISOs (no ISO with ≥5 deals has ≥45% stressed-or-defaulted). Book is diversified across sources.');
   }
-  if(avgBookSize>50000) push('warn','◪',`Average deal is <b>${fmt$(avgBookSize)}</b> on book — larger than the typical $10–50K CDF range. Bigger deals concentrate risk; one default stings more. Make sure the underwriting rigor scales with size.`);
-  else push('good','◪',`Average deal size of <b>${fmt$(avgBookSize)}</b> sits in the CDF sweet spot — small enough to spread risk across names.`);
-  if(topDealShare>25) push('warn','◈',`Your single largest deal is <b>${topDealShare.toFixed(0)}%</b> of the whole book. That's a lot riding on one merchant — a single default there swings the whole month.`);
+  const greenISOs=isoSegs.filter(s=>s.n>=5&&s.sOrD<=20);
+  if(greenISOs.length){ const g=greenISOs[0]; push('good','★',`<b>${esc0(g.label)}</b> (GREEN): ${g.n} deals, only <b>${g.sOrD.toFixed(0)}%</b> stressed-or-defaulted — strongest performing source.`); }
+  push(watchList.length>0?'warn':'good','◷',
+    watchList.length>0
+      ?`<b>${watchList.length} deal${watchList.length>1?'s':''}</b> on the watch list (${fmt$(watchList.reduce((s,w)=>s+w.bbal,0))} book balance). Performing deals showing early stress signals — catch these before they become collections cases.`
+      :'No performing deals on the watch list — payment pacing is clean across the board.');
+  const top5=funded.filter(d=>d._bucket!=='completed').sort((a,b)=>getBbal(b)-getBbal(a)).slice(0,5);
+  if(top5.length) push('info','◈',`Largest open positions: ${top5.map(d=>`<b>${esc0(d.merchant)}</b> ${fmt$(getBbal(d))}`).join(' · ')}.`);
+  if(EPDshare>50) push('warn','▲',`EPD rate is elevated (${EPDshare.toFixed(0)}% of defaults paid &lt;15% before stopping). Early defaults signal front-end underwriting weakness — review bank statement standards.`);
 
-  // ── Written go-forward summary (plain-English, derived from the metrics above) ──
-  const strengths=[], watch=[], moves=[];
-  if(netPnl>=0) strengths.push('the book is net positive today'); else watch.push('the book is currently underwater');
-  if(bestIso&&bestIso.pnl>0) strengths.push(`${esc0(bestIso.label)} is producing quality paper`);
-  if(dollarDefault<10) strengths.push('early default exposure is contained');
-  if(collPct>=50) strengths.push('collections are pacing well');
-  if(projMarginPct>=15) strengths.push('the forward projection is comfortably profitable');
-  if(topIndShare>45) watch.push(`over-concentration in ${esc0(indRows[0].label)} (${topIndShare.toFixed(0)}% of book)`);
-  if(worstIso&&worstIso.dr>=34) watch.push(`weak paper from ${esc0(worstIso.label)}`);
-  if(avgTermBD>110) watch.push('terms running long');
-  if(topDealShare>25) watch.push('heavy single-deal concentration');
-  if(projMarginPct<8) watch.push('a thin projected margin');
-  // concrete moves
-  if(worstIso&&worstIso.dr>=34) moves.push(`Pause or re-price deals from ${esc0(worstIso.label)} until its default rate comes down.`);
-  if(topIndShare>45) moves.push(`Diversify new fundings away from ${esc0(indRows[0].label)} to bring its share under ~35%.`);
-  if(bestIso&&bestIso.pnl>0) moves.push(`Send more volume through ${esc0(bestIso.label)} — it's earning its keep.`);
-  if(avgTermBD>110) moves.push('Favor shorter terms where the merchant\u2019s cash flow supports it, to cut exposure time.');
-  if(avgBookSize>50000||topDealShare>25) moves.push('Keep deal sizes spread — resist stacking too much book into one large name.');
-  if(projMarginPct<8) moves.push('Hold the line on underwriting quality; the projected cushion is thin, so a small rise in defaults matters.');
-  if(!maturedEnough) moves.push('Re-run this review every couple of weeks as the book seasons — the prognosis sharpens as deals mature.');
-  if(!moves.length) moves.push('Stay the course — the metrics support the current underwriting and mix.');
+  // ── Go-forward summary ──
+  const strengths=[],watch_=[],moves=[];
+  if(cushion>0) strengths.push(`${cushion.toFixed(0)}-pt cushion above break-even`); else watch_.push('base-case L below break-even — collection rates must improve');
+  if(Dm<=20) strengths.push(`contained mature default rate (${Dm.toFixed(1)}%)`); else watch_.push(`elevated Dm ${Dm.toFixed(1)}%`);
+  if(!redISOList.length) strengths.push('no RED ISOs'); else redISOList.forEach(s=>watch_.push(`${s.label} RED (${s.sOrD.toFixed(0)}% S/D)`));
+  if(greenISOs.length) strengths.push(`${greenISOs[0].label} outperforming`);
+  if(watchList.length>3) watch_.push(`${watchList.length} deals on the watch list`);
+  if(pressure>30) watch_.push(`collections pressure ${pressure.toFixed(0)} (elevated)`);
+  if(redISOList.length) moves.push(`Pause or re-price paper from ${redISOList.map(s=>s.label).join(', ')} — stressed-or-defaulted rate ≥45%.`);
+  if(greenISOs.length) moves.push(`Send more volume through ${greenISOs[0].label} — the numbers support it.`);
+  if(EPDshare>50) moves.push('Tighten front-end underwriting (bank statement vintage, NSF frequency) — EPD rate is elevated.');
+  if(watchList.length>3) moves.push('Work the watch list before new capital deploys — early intervention prevents collections cases.');
+  if(!moves.length) moves.push('Stay the course — metrics support current underwriting and deal mix.');
   const summaryHtml=
-    `<p><b>Where the book stands.</b> ${funded.length} deals, ${fmt$(bookFunded)} deployed, `+
-    `net PNL ${netPnl>=0?'<span class="rv-pos">'+fmt$(netPnl)+'</span>':'<span class="rv-neg">'+fmt$(netPnl)+'</span>'} so far. `+
-    `The active book is ${bookMaturity.toFixed(0)}% paid down and averages ${Math.round(avgAgeDays)} days old, so today’s read is ${maturedEnough?'well-seasoned':'still early, but based on live signals not assumptions'}.</p>`+
-    `<p><b>Prognosis (current-state).</b> Anchored on the live ${liveDefaultRate.toFixed(1)}% default rate and each open deal’s real signals (bounces, stops, collections, paydown), this book projects to a profit of `+
-    `${projMatureProfit>=0?'<span class="rv-pos">':'<span class="rv-neg">'}${fmt$(projMatureProfit)}</span> — a ${projMarginPct.toFixed(1)}% margin on deployed capital. `+
-    `${projMarginPct>=15?'That\u2019s a healthy trajectory if underwriting holds.':projMarginPct>=0?'That\u2019s a thin cushion — protect it.':'That\u2019s a losing trajectory on current form — act before more capital deploys.'}</p>`+
+    `<p><b>Where the book stands.</b> ${funded.length} deals · ${fmt$(totalBF)} deployed · net PNL <span class="${totalPnl>=0?'rv-pos':'rv-neg'}">${fmt$(totalPnl)}</span> realized. Break-even ${breakEven.toFixed(1)}% · base L ${(Lbase*100).toFixed(1)}% → cushion ${cushion>=0?'+':''}${cushion.toFixed(1)} pts.</p>`+
+    `<p><b>Prognosis.</b> Book PNL (down / base / up): <span class="${pnlDown>=0?'rv-pos':'rv-neg'}">${fmt$(pnlDown)}</span> / <span class="${pnlBase>=0?'rv-pos':'rv-neg'}">${fmt$(pnlBase)}</span> / <span class="${pnlUp>=0?'rv-pos':'rv-neg'}">${fmt$(pnlUp)}</span>. House split (base): Sal ${fmt$(partnerSplit)} · Matt ${fmt$(partnerSplit)} · HHC ${fmt$(houseSplit)}.</p>`+
     (strengths.length?`<p><b>Working:</b> ${strengths.join('; ')}.</p>`:'')+
-    (watch.length?`<p><b>Watch:</b> ${watch.join('; ')}.</p>`:'')+
+    (watch_.length?`<p><b>Watch:</b> ${watch_.join('; ')}.</p>`:'')+
     `<p><b>Moves from here:</b></p><ul class="rv-summary-list">${moves.map(m=>'<li>'+m+'</li>').join('')}</ul>`;
 
-  // ── Render ──
+  // ── Render helpers ──
   const kpi=(k,v,s,cls)=>`<div class="rv-kpi"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div><div class="s">${s||''}</div></div>`;
-  const indTable='<table class="rv-table"><thead><tr><th>Industry</th><th style="text-align:right">Deals</th><th style="text-align:right">Book funded</th><th style="text-align:right">Share</th><th style="text-align:right">PNL</th><th style="text-align:right">Default</th></tr></thead><tbody>'+
-    indRows.slice(0,8).map(r=>`<tr><td class="nm">${esc0(r.label)}</td><td style="text-align:right">${r.n}</td><td style="text-align:right">${fmt$(r.bookFunded)}</td><td style="text-align:right">${r.share.toFixed(0)}%</td><td style="text-align:right" class="${r.pnl>=0?'rv-pos':'rv-neg'}">${fmt$(r.pnl)}</td><td style="text-align:right" class="${r.dr>25?'rv-neg':r.dr>0?'rv-amb':''}">${r.dr.toFixed(0)}%</td></tr>`).join('')+'</tbody></table>';
-  const isoTable='<table class="rv-table"><thead><tr><th>ISO / source</th><th style="text-align:right">Deals</th><th style="text-align:right">Book funded</th><th style="text-align:right">PNL</th><th style="text-align:right">Avg factor</th><th style="text-align:right">Default</th></tr></thead><tbody>'+
-    isoRows.slice(0,8).map(r=>`<tr><td class="nm">${esc0(r.label)}</td><td style="text-align:right">${r.n}</td><td style="text-align:right">${fmt$(r.bookFunded)}</td><td style="text-align:right" class="${r.pnl>=0?'rv-pos':'rv-neg'}">${fmt$(r.pnl)}</td><td style="text-align:right">${r.avgF.toFixed(3)}</td><td style="text-align:right" class="${r.dr>25?'rv-neg':r.dr>0?'rv-amb':''}">${r.dr.toFixed(0)}%</td></tr>`).join('')+'</tbody></table>';
+  const segFlagHtml=s=>s.n<5?'<span class="rv-mini" style="color:var(--text2)">small sample</span>':
+    s.sOrD>=45?`<span class="rv-neg rv-mini">RED risk: ${s.sOrD.toFixed(0)}% S/D</span>`:
+    s.sOrD<=20?`<span class="rv-pos rv-mini">GREEN: ${s.sOrD.toFixed(0)}% S/D</span>`:'';
 
+  // Sub-grades table
+  const subgradeRow=(name,letter,wt,driver)=>`<tr><td>${name}</td><td style="text-align:right;font-weight:700;color:${gColor(letter)}">${letter}</td><td style="text-align:right;color:var(--text2)">${wt}%</td><td style="text-align:right;font-size:12px;color:var(--text2)">${driver}</td></tr>`;
+  const subgradesHtml=`<table class="rv-table" style="margin-top:10px"><thead><tr><th>Component</th><th style="text-align:right">Grade</th><th style="text-align:right">Wt</th><th style="text-align:right">Driver</th></tr></thead><tbody>
+    ${subgradeRow('Pricing/Structure',pricingLetter,20,'B/E '+breakEven.toFixed(1)+'%')}
+    ${subgradeRow('Underwriting',uwLetter,35,'Dm '+Dm.toFixed(1)+'%')}
+    ${subgradeRow('ISO Mix',isoMixLetter,20,'RED '+redISOShare.toFixed(1)+'% of book')}
+    ${subgradeRow('Collections',collLetter,20,'pressure '+pressure.toFixed(0))}
+    ${subgradeRow('Data/Visibility',dataLetter,5,dataPenalties.length?dataPenalties[0]:'clean')}
+  </tbody></table>`;
+
+  // 3-scenario bars
+  const pnlMax=Math.max(1,Math.abs(pnlDown),Math.abs(pnlBase),Math.abs(pnlUp));
+  const scenarioBars=rvBarChart([
+    {label:`Upside (L=${(Lup*100).toFixed(1)}%)`,value:pnlUp,color:'#37c66f',note:(totalCashOut?pnlUp/totalCashOut*100:0).toFixed(1)+'% on cash out'},
+    {label:`Base (L=${(Lbase*100).toFixed(1)}%)`,value:pnlBase,color:pnlBase>=0?'#4a9eff':'#f87171',note:marginBase.toFixed(1)+'% on cash out'},
+    {label:`Downside (L=${(Ldown*100).toFixed(1)}%)`,value:pnlDown,color:pnlDown>=0?'#9aa3b8':'#fb923c',note:(totalCashOut?pnlDown/totalCashOut*100:0).toFixed(1)+'% on cash out'},
+  ],pnlMax);
+
+  // Monthly cohort table
+  const cohortMap={};
+  funded.forEach(d=>{ if(!d.date_funded)return; const ym=d.date_funded.slice(0,7); (cohortMap[ym]=cohortMap[ym]||[]).push(d); });
+  const cohortRows=Object.keys(cohortMap).sort().reverse().map(ym=>{
+    const ds=cohortMap[ym], n=ds.length;
+    const bf=bfOf(ds), co=ds.reduce((s,d)=>s+getCashOut(d),0), paid=ds.reduce((s,d)=>s+getPaid(d),0);
+    const defBF=bfOf(ds.filter(d=>d._bucket==='default')), strBF=bfOf(ds.filter(d=>d._bucket==='stressed'));
+    const defPct=bf?defBF/bf*100:0, strPct=bf?strBF/bf*100:0;
+    const comp=ds.filter(d=>d._bucket==='completed').length;
+    const pnl=ds.reduce((s,d)=>s+_rvNum(d.pnl),0);
+    const cc=co?paid/co*100:0;
+    return `<tr><td class="nm">${monthLabel(ym)}</td><td style="text-align:right">${n}</td><td style="text-align:right">${fmt$(bf)}</td>`+
+      `<td style="text-align:right" class="${cc>=85?'rv-pos':cc>=60?'rv-amb':'rv-neg'}">${cc.toFixed(0)}%</td>`+
+      `<td style="text-align:right" class="${defPct>20?'rv-neg':defPct>10?'rv-amb':''}">${defPct.toFixed(0)}%</td>`+
+      `<td style="text-align:right" class="${strPct>20?'rv-amb':''}">${strPct.toFixed(0)}%</td>`+
+      `<td style="text-align:right">${comp}</td>`+
+      `<td style="text-align:right" class="${pnl>=0?'rv-pos':'rv-neg'}">${fmt$(pnl)}</td></tr>`;
+  }).join('');
+  const cohortTable=`<table class="rv-table"><thead><tr><th>Month</th><th style="text-align:right">Deals</th><th style="text-align:right">Book $</th><th style="text-align:right">Coll/Cost</th><th style="text-align:right">Default%</th><th style="text-align:right">Stressed%</th><th style="text-align:right">Done</th><th style="text-align:right">PNL</th></tr></thead><tbody>${cohortRows}</tbody></table>`;
+
+  // ISO segment table
+  const isoSegTable=`<table class="rv-table"><thead><tr><th>ISO (seasoned)</th><th style="text-align:right">n</th><th style="text-align:right">Book $</th><th style="text-align:right">Default%</th><th style="text-align:right">Stressed%</th><th style="text-align:right">S/D%</th><th style="text-align:right">Coll%</th><th></th></tr></thead><tbody>`+
+    isoSegs.map(s=>`<tr><td class="nm">${esc0(s.label)}</td><td style="text-align:right">${s.n}</td><td style="text-align:right">${fmt$(s.bf)}</td>`+
+      `<td style="text-align:right" class="${s.defPct>20?'rv-neg':s.defPct>10?'rv-amb':''}">${s.defPct.toFixed(0)}%</td>`+
+      `<td style="text-align:right" class="${s.strPct>20?'rv-amb':''}">${s.strPct.toFixed(0)}%</td>`+
+      `<td style="text-align:right" class="${s.sOrD>=45?'rv-neg':s.sOrD>=30?'rv-amb':'rv-pos'}">${s.sOrD.toFixed(0)}%</td>`+
+      `<td style="text-align:right">${s.collPct.toFixed(0)}%</td><td>${segFlagHtml(s)}</td></tr>`).join('')+'</tbody></table>';
+
+  // Industry roll-up table
+  const indRollTable=`<table class="rv-table"><thead><tr><th>Industry (seasoned)</th><th style="text-align:right">n</th><th style="text-align:right">Book $</th><th style="text-align:right">Default%</th><th style="text-align:right">Stressed%</th><th style="text-align:right">S/D%</th><th></th></tr></thead><tbody>`+
+    indRollSegs.map(s=>`<tr><td class="nm">${esc0(s.label)}</td><td style="text-align:right">${s.n}</td><td style="text-align:right">${fmt$(s.bf)}</td>`+
+      `<td style="text-align:right" class="${s.defPct>20?'rv-neg':s.defPct>10?'rv-amb':''}">${s.defPct.toFixed(0)}%</td>`+
+      `<td style="text-align:right" class="${s.strPct>20?'rv-amb':''}">${s.strPct.toFixed(0)}%</td>`+
+      `<td style="text-align:right" class="${s.sOrD>=45?'rv-neg':s.sOrD>=30?'rv-amb':'rv-pos'}">${s.sOrD.toFixed(0)}%</td>`+
+      `<td>${segFlagHtml(s)}</td></tr>`).join('')+'</tbody></table>';
+
+  // Watch list table
+  const watchHtml=watchList.length?`<table class="rv-table"><thead><tr><th>Merchant</th><th style="text-align:right">%Paid</th><th style="text-align:right">Exp%</th><th style="text-align:right">Last Clear</th><th style="text-align:right">Bal</th><th>Flag</th></tr></thead><tbody>`+
+    watchList.slice(0,15).map(w=>`<tr><td class="nm">${esc0(w.d.merchant)}<br><span class="rv-mini">${esc0(w.d.iso||'')}</span></td>`+
+      `<td style="text-align:right">${w.pp.toFixed(0)}%</td><td style="text-align:right">${(w.exp*100).toFixed(0)}%</td>`+
+      `<td style="text-align:right;font-size:12px">${w.d.last_cleared?w.d.last_cleared.slice(0,10):'—'}</td>`+
+      `<td style="text-align:right">${fmt$(w.bbal)}</td><td class="rv-mini rv-amb">${w.rules.join('; ')}</td></tr>`).join('')+'</tbody></table>'
+    :'<p class="rv-mini" style="color:var(--text2);padding:8px 0">No deals on the watch list — payment pacing is clean.</p>';
+
+  // Bucket composition donut
+  const compParts=[
+    {label:'Performing',value:performing.length,color:'#4a9eff'},
+    {label:'Stressed',value:stressed.length,color:'#f59e0b'},
+    {label:'Default',value:defaulted.length,color:'#f87171'},
+    {label:'Completed',value:completed_.length,color:'#37c66f'},
+  ];
   const donut=rvDonut(compParts,120);
   const compLegend='<div class="rv-legend">'+compParts.map(p=>`<span><i class="rv-dot" style="background:${p.color}"></i>${p.label} · ${p.value}</span>`).join('')+'</div>';
-  const curveBars=rvBarChart(curveRows, Math.max(1,...curveRows.map(r=>r.value)), v=>v);
+  const bucketBars=rvBarChart([
+    {label:'Performing',value:bbalOf(performing),color:'#4a9eff',note:performing.length+' deals'},
+    {label:'Stressed',value:bbalOf(stressed),color:'#f59e0b',note:stressed.length+' deals · ≠ default'},
+    {label:'Default',value:bbalOf(defaulted),color:'#f87171',note:defaulted.length+' deals'},
+    {label:'Completed',value:bbalOf(completed_),color:'#37c66f',note:completed_.length+' deals'},
+  ],Math.max(1,bbalOf(performing)));
 
-  const LEFT =
-    // Prognosis
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Prognosis — current-state best case</span><span class="sub">if everything stays as it is today</span></div>
-      <div class="rv-sec-lead">Anchored on the book's <b>live default rate of ${liveDefaultRate.toFixed(1)}%</b> (what's actually defaulted so far), then each open deal is adjusted by its <b>real current signals</b> — bounces, stop payments, ACH severity, collections state, and how far it's paid down. ${nFlagged} open deal${nFlagged!==1?'s are':' is'} carrying a live risk flag right now. A clean deal near payoff barely moves the number; a stopped or bouncing deal carries a much higher default probability. Effective <b>${projDefault.toFixed(0)}%</b> $-weighted default across the open book, ${(RECOVERY*100).toFixed(0)}% recovery on a loss.${cal?'':' <span class="rv-mini">Load closed-deal history (top right) to also calibrate recovery to your real number.</span>'}</div>
-      ${rvBarChart([
-        {label:'If every open deal pays',value:realizedPnl+openProfitIfAllPay,color:'#37c66f',note:'best case'},
-        {label:'Projected ('+projDefault.toFixed(0)+'% live default)',value:projMatureProfit,color: projMatureProfit>=0?'#4a9eff':'#f87171',note:'current-state'},
-        {label:'Realized today',value:netPnl,color:'#9aa3b8',note:'banked'},
-      ], Math.max(1, realizedPnl+openProfitIfAllPay))}
+  const LEFT=
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Prognosis — 3-scenario projection</span><span class="sub">anchored on how mature deals actually finish</span></div>
+      <div class="rv-sec-lead">Break-even: collect <b>${breakEven.toFixed(1)}%</b> of RTR to get our money back. Mature deals (${mature.length}) give us L (lifetime ratio) → applied to young deals to project out. Rates from Settings (update proj_* keys in Airtable Settings table to change).</div>
+      ${scenarioBars}
       <table class="rv-table" style="margin-top:10px"><tbody>
-        <tr><td class="nm">Projected profit (current-state)</td><td style="text-align:right" class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</td></tr>
-        <tr><td class="nm">Projected margin on capital</td><td style="text-align:right" class="${projMarginPct>=15?'rv-pos':projMarginPct>=0?'rv-amb':'rv-neg'}">${projMarginPct.toFixed(1)}%</td></tr>
-        <tr><td class="nm">Live default rate (anchor)</td><td style="text-align:right">${liveDefaultRate.toFixed(1)}% <span class="rv-mini">right now</span></td></tr>
-        <tr><td class="nm">Effective default (signal-adjusted)</td><td style="text-align:right">${projDefault.toFixed(0)}%</td></tr>
-        <tr><td class="nm">Open deals flagged at risk</td><td style="text-align:right" class="${nFlagged>0?'rv-amb':''}">${nFlagged}</td></tr>
-        <tr><td class="nm">Recovery on defaults</td><td style="text-align:right">${(RECOVERY*100).toFixed(0)}%</td></tr>
-        <tr><td class="nm">Upside if all open deals pay</td><td style="text-align:right" class="rv-pos">${fmt$(realizedPnl+openProfitIfAllPay)}</td></tr>
+        <tr><td class="nm">Book funded</td><td style="text-align:right">${fmt$(totalBF)}</td></tr>
+        <tr><td class="nm">Total cash out</td><td style="text-align:right">${fmt$(totalCashOut)}</td></tr>
+        <tr><td class="nm">Break-even (cash out ÷ RTR)</td><td style="text-align:right" class="${breakEven<=72.5?'rv-pos':breakEven<=75?'rv-amb':'rv-neg'}">${breakEven.toFixed(1)}%</td></tr>
+        <tr><td class="nm">Wtd factor / commission</td><td style="text-align:right">${weightedFactor.toFixed(3)} / ${weightedCommPct.toFixed(1)}%</td></tr>
+        <tr><td class="nm">Mature deals (≥90d): count / Dm</td><td style="text-align:right" class="${Dm<=20?'rv-pos':Dm<=30?'rv-amb':'rv-neg'}">${mature.length} / ${Dm.toFixed(1)}%</td></tr>
+        <tr><td class="nm">EPD (default w/ &lt;15% paid)</td><td style="text-align:right" class="${EPDshare>50?'rv-neg':EPDshare>30?'rv-amb':''}">${EPDcount}/${nDm} (${EPDshare.toFixed(0)}%)</td></tr>
+        <tr><td class="nm">House split (base): Sal / Matt / HHC</td><td style="text-align:right">${fmt$(partnerSplit)} / ${fmt$(partnerSplit)} / ${fmt$(houseSplit)}</td></tr>
       </tbody></table></div>`+
-    ( cal ? rvCalibrationPanel(cal) : '' )+
-    // Deal structure metrics
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Book composition</span><span class="sub">by bucket — stressed ≠ default (still paying)</span></div>
+      <div style="display:flex;gap:16px;align-items:flex-start"><div>${donut}${compLegend}</div><div style="flex:1">${bucketBars}</div></div>
+      <table class="rv-table" style="margin-top:10px"><thead><tr><th>Bucket</th><th style="text-align:right">n</th><th style="text-align:right">Book funded</th><th style="text-align:right">Book balance</th><th style="text-align:right">Coll%</th></tr></thead><tbody>
+        ${['performing','stressed','default','completed'].map(b=>{
+          const arr=funded.filter(d=>d._bucket===b), bf2=bfOf(arr), bb=bbalOf(arr);
+          const note=b==='stressed'?'<span class="rv-mini rv-amb">gap≤30, still paying</span>':b==='default'?'<span class="rv-mini rv-neg">gap>30 or legal</span>':'';
+          return `<tr><td class="nm">${b.charAt(0).toUpperCase()+b.slice(1)} ${note}</td><td style="text-align:right">${arr.length}</td><td style="text-align:right">${fmt$(bf2)}</td><td style="text-align:right">${fmt$(bb)}</td><td style="text-align:right">${bf2?((bf2-bb)/bf2*100).toFixed(0):'—'}%</td></tr>`;
+        }).join('')}
+      </tbody></table></div>`+
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Monthly cohort performance</span><span class="sub">by funding month</span></div>${cohortTable}</div>`+
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Segment analysis</span><span class="sub">seasoned deals (≥45d) · RED ≥45% S/D n≥5 · GREEN ≤20% n≥5</span></div>
+      <div class="rv-mini" style="margin-bottom:6px">ISO concentration · RED ISO share of all book: <b class="${redISOShare>=50?'rv-neg':redISOShare>=30?'rv-amb':''}">${redISOShare.toFixed(1)}%</b></div>${isoSegTable}
+      <div class="rv-mini" style="margin-top:12px;margin-bottom:6px">Industry roll-up</div>${indRollTable}
+    </div>`+
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Deal structure</span><span class="sub">read against CDF-MCA norms</span></div>
       <div class="rv-metrics">
-        ${rvMetric('Avg deal size',fmt$(avgBookSize), avgBookSize>50000?'large — concentrates risk':avgBookSize<10000?'small':'in the $10–50K CDF band', avgBookSize>50000?'amb':'pos')}
-        ${rvMetric('Avg term',avgTermBD?avgTermBD.toFixed(0)+' BD':'—', avgTermBD>110?'long — more exposure time':avgTermBD&&avgTermBD<60?'short — fast turn':'healthy band', avgTermBD>110?'amb':'pos')}
-        ${rvMetric('Avg factor',avgFactor?avgFactor.toFixed(3):'—', avgFactor>1.49?'high — good cushion':avgFactor<1.35?'thin margin':'standard', avgFactor<1.35?'amb':'pos')}
-        ${rvMetric('Avg commission',avgCommPct?avgCommPct.toFixed(1)+'%':'—', avgCommPct>15?'rich — costs upfront':'reasonable', avgCommPct>15?'amb':'pos')}
-        ${rvMetric('REFI share',refiShare.toFixed(0)+'%', refiShare>50?'renewal-heavy':'origination-led', 'info')}
-        ${rvMetric('Largest single deal',topDealShare.toFixed(0)+'%', topDealShare>25?'of book — concentrated':'of book', topDealShare>25?'amb':'pos')}
-      </div></div>`+
-    // Composition + collection curve
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Book composition & collection health</span><span class="sub">where the book stands right now</span></div>
-      <div><div class="rv-mini" style="margin-bottom:8px">Status mix</div><div class="rv-donut-wrap">${donut}<div>${compLegend}</div></div></div>
-      <div style="margin-top:14px"><div class="rv-mini" style="margin-bottom:8px">Active deals by % paid down</div>${curveBars}</div></div>`+
-    // Industry
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Industry concentration & performance</span><span class="sub">${indRows.length} industries</span></div>
-      <div class="rv-sec-lead">Largest exposure is <b>${esc0(indRows[0].label)}</b> at ${topIndShare.toFixed(0)}% of book capital.</div>
-      ${indTable}</div>`+
-    // ISO
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">ISO / source quality</span><span class="sub">${isoRows.length} sources</span></div>
-      <div class="rv-sec-lead">Which sources bring paper that pays — a high-volume ISO with a high default rate is where to tighten.</div>
-      ${isoTable}</div>`;
+        ${rvMetric('Avg deal size',fmt$(avgBookSize),avgBookSize>50000?'large':'in the $10–50K CDF band',avgBookSize>50000?'amb':'pos')}
+        ${rvMetric('Avg term',avgTermBD?avgTermBD.toFixed(0)+' BD':'—',avgTermBD>110?'long — more exposure time':'healthy band',avgTermBD>110?'amb':'pos')}
+        ${rvMetric('Wtd factor',weightedFactor?weightedFactor.toFixed(3):'—','by book $',weightedFactor<1.35?'amb':'pos')}
+        ${rvMetric('Wtd commission',weightedCommPct?weightedCommPct.toFixed(1)+'%':'—','by book $',weightedCommPct>15?'amb':'pos')}
+        ${rvMetric('REFI share',refiShare.toFixed(0)+'%',refiShare>50?'renewal-heavy':'origination-led','info')}
+        ${rvMetric('Top deal conc.',topDealShare.toFixed(0)+'%',topDealShare>25?'of book — concentrated':'of book',topDealShare>25?'amb':'pos')}
+      </div></div>`;
 
-  const RIGHT =
-    // Go-forward summary
+  const RIGHT=
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Go-forward summary</span><span class="sub">the read, in plain terms</span></div>
       <div class="rv-summary">${summaryHtml}</div></div>`+
-    // Findings
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Honest assessment</span><span class="sub">what's working, what needs attention</span></div>
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Watch list</span><span class="sub">${watchList.length} performing deals showing stress · ${fmt$(watchList.reduce((s,w)=>s+w.bbal,0))} balance</span></div>
+      <div class="rv-sec-lead">Performing deals (no CollectionsState flag) that are stale, past term, or behind pace. Catch these before they become collections cases.</div>
+      ${watchHtml}</div>`+
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Honest assessment</span><span class="sub">numbers-driven, no boilerplate</span></div>
       <ul class="rv-findings">${F.map(f=>`<li class="rv-find ${f.kind}"><span class="fi">${f.icon}</span><span>${f.html}</span></li>`).join('')}</ul></div>`;
 
   body.innerHTML=
     '<div class="rv-print-head"><h1>Portfolio Review — Highland Hill Capital</h1><div class="d">'+now.toLocaleString('en-US',{dateStyle:'full',timeStyle:'short'})+'</div></div>'+
-    // Hero verdict (full width)
     `<div class="rv-hero">
-      <div class="rv-grade" style="border-color:${gColor}"><span class="g" style="color:${gColor}">${grade}</span><span class="gl">book health</span></div>
+      <div style="text-align:center">
+        <div class="rv-grade" style="border-color:${overallColor}"><span class="g" style="color:${overallColor}">${overallLetter}</span><span class="gl">book health</span></div>
+        ${subgradesHtml}
+      </div>
       <div class="rv-hero-txt">
-        <h2>${grade==='A'?'Strong, well-run book':grade==='B'?'Healthy book, minor watch items':grade==='C'?'Mixed — real strengths, real leaks':grade==='D'?'Under pressure — tighten up':'At risk — act now'}</h2>
-        <p>${funded.length} funded deals · ${fmt$(bookFunded)} deployed · net PNL <b class="${netPnl>=0?'rv-pos':'rv-neg'}">${fmt$(netPnl)}</b> so far. The book is <b>${bookMaturity.toFixed(0)}% paid down</b> and ${maturedEnough?'seasoning':'still young'}, so the grade leans on the <b>current-state prognosis</b>: projected profit of <b class="${projMatureProfit>=0?'rv-pos':'rv-neg'}">${fmt$(projMatureProfit)}</b> (${projMarginPct.toFixed(1)}% margin) at the live ${liveDefaultRate.toFixed(1)}% default rate, adjusted for each deal’s current signals.</p>
+        <h2>${pts(overallLetter)>=3.5?'Strong, well-run book':pts(overallLetter)>=2.5?'Healthy book, minor watch items':pts(overallLetter)>=1.7?'Mixed — real strengths, real leaks':pts(overallLetter)>=1.0?'Under pressure — tighten up':'At risk — act now'}</h2>
+        <p>${funded.length} funded deals · ${fmt$(totalBF)} deployed · net PNL <b class="${totalPnl>=0?'rv-pos':'rv-neg'}">${fmt$(totalPnl)}</b> realized. Break-even <b>${breakEven.toFixed(1)}%</b> · L base <b>${(Lbase*100).toFixed(1)}%</b> (cushion ${cushion>=0?'+':''}${cushion.toFixed(1)} pts). Base PNL: <b class="${pnlBase>=0?'rv-pos':'rv-neg'}">${fmt$(pnlBase)}</b>. Dm <b class="${Dm<=20?'rv-pos':Dm<=30?'rv-amb':'rv-neg'}">${Dm.toFixed(1)}%</b> · ${stressed.length} stressed · ${defaulted.length} default.</p>
       </div>
     </div>`+
-    // KPI strip (full width)
     '<div class="rv-kpis">'+
-      kpi('Book deployed',fmt$(bookFunded),funded.length+' deals','')+
-      kpi('Net PNL (today)',fmt$(netPnl),netPnl>=0?'realized so far':'underwater so far',netPnl>=0?'rv-pos':'rv-neg')+
-      kpi('Projected profit',fmt$(projMatureProfit),'at maturity · '+projMarginPct.toFixed(1)+'% margin',projMatureProfit>=0?'rv-pos':'rv-neg')+
-      kpi('Book maturity',bookMaturity.toFixed(0)+'%','paid down · '+Math.round(avgAgeDays)+'d avg age','')+
+      kpi('Break-even',breakEven.toFixed(1)+'%','cash out ÷ RTR',breakEven<=72.5?'rv-pos':breakEven<=76?'rv-amb':'rv-neg')+
+      kpi('Base PNL',fmt$(pnlBase),'L='+( Lbase*100).toFixed(1)+'%',pnlBase>=0?'rv-pos':'rv-neg')+
+      kpi('Mature Dm',Dm.toFixed(1)+'%',mature.length+' mature deals · EPD '+EPDshare.toFixed(0)+'%',Dm<=20?'rv-pos':Dm<=30?'rv-amb':'rv-neg')+
+      kpi('Pressure',pressure.toFixed(0),'stressed+behind open book',pressure<=20?'rv-pos':pressure<=40?'rv-amb':'rv-neg')+
     '</div>'+
-    // Two columns: hard data left, narrative right
     `<div class="rv-cols"><div class="rv-col-data">${LEFT}</div><div class="rv-col-story">${RIGHT}</div></div>`;
 }
 function exportReviewPdf(){
