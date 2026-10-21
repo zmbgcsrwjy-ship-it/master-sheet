@@ -11,7 +11,7 @@
 :root{
   --bg:#0f1117;--bg2:#161b27;--bg3:#1e2435;--bg4:#252d40;
   --border:#2a3249;--border2:#323d57;
-  --text:#e8eaf0;--text2:#9aa3b8;--text3:#5c6580;
+  --text:#e8eaf0;--text2:#bcc4d8;--text3:#8590ab;
   --blue:#4a9eff;--blue-bg:#1a2a45;--blue-border:#2a4a7f;
   --green:#3ecf8e;--green-bg:#0d2b1e;--green-border:#1a4a32;
   --red:#f87171;--red-bg:#2b1010;--red-border:#4a1a1a;
@@ -67,6 +67,7 @@ body.compact .sidebar-logo,body.compact .sidebar-nav,body.compact .sidebar-nav-b
 .topbar-left p{font-size:12px;color:var(--text3);margin-top:2px}
 .btn-row{display:flex;gap:8px;flex-wrap:wrap}
 .content{padding:24px;flex:1;overflow-y:auto}
+#panel-review .content{padding-left:12px;padding-right:12px}
 
 /* BUTTONS */
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;white-space:nowrap;font-weight:500}
@@ -533,7 +534,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 198</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 199</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3461,16 +3462,18 @@ function renderReview(){
     `<p><b>Moves from here:</b></p><ul class="rv-summary-list">${moves.map(m=>'<li>'+m+'</li>').join('')}</ul>`;
 
   // ── Render helpers ──
+  // Abbreviation tooltip — hover to see full meaning
+  const A=(text,tip)=>`<abbr title="${tip}" style="text-decoration:underline dotted;text-decoration-color:var(--text3);cursor:help;text-underline-offset:2px;font-style:normal">${text}</abbr>`;
   const kpi=(k,v,s,cls)=>`<div class="rv-kpi"><div class="k">${k}</div><div class="v ${cls||''}">${v}</div><div class="s">${s||''}</div></div>`;
   const segFlagHtml=s=>s.n<5?'<span class="rv-mini" style="color:var(--text2)">small sample</span>':
-    s.sOrD>=45?`<span class="rv-neg rv-mini">RED risk: ${s.sOrD.toFixed(0)}% S/D</span>`:
-    s.sOrD<=20?`<span class="rv-pos rv-mini">GREEN: ${s.sOrD.toFixed(0)}% S/D</span>`:'';
+    s.sOrD>=45?`<span class="rv-neg rv-mini">RED risk: ${s.sOrD.toFixed(0)}% ${A('S/D','Stressed + Default combined rate — deals ≥45d that are stressed or in default')}</span>`:
+    s.sOrD<=20?`<span class="rv-pos rv-mini">GREEN: ${s.sOrD.toFixed(0)}% ${A('S/D','Stressed + Default combined rate — deals ≥45d that are stressed or in default')}</span>`:'';
 
   // Sub-grade tiles (compact, no dead space)
   const subgradeTile=(name,letter,wt,driver)=>`<div style="background:var(--bg4);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;min-width:0;flex:1"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">${name} <span style="opacity:.55">· ${wt}%</span></div><div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:19px;font-weight:800;line-height:1;color:${gColor(letter)}">${letter}</span><span style="font-size:10.5px;color:var(--text2)">${driver}</span></div></div>`;
   const subgradesHtml=[
-    subgradeTile('Pricing/Structure',pricingLetter,20,'B/E '+breakEven.toFixed(1)+'%'),
-    subgradeTile('Underwriting',uwLetter,35,'Dm '+Dm.toFixed(1)+'%'),
+    subgradeTile('Pricing/Structure',pricingLetter,20,A('B/E','Break-even — the % of RTR (face value) we must collect to get our cash out back')+' '+breakEven.toFixed(1)+'%'),
+    subgradeTile('Underwriting',uwLetter,35,A('Dm','Mature default rate — % of deals ≥90 days old that have defaulted')+' '+Dm.toFixed(1)+'%'),
     subgradeTile('ISO Mix',isoMixLetter,20,'RED '+redISOShare.toFixed(1)+'%'),
     subgradeTile('Collections',collLetter,20,'pressure '+pressure.toFixed(0)),
     subgradeTile('Data',dataLetter,5,dataPenalties.length?dataPenalties[0]:'clean'),
@@ -3479,9 +3482,9 @@ function renderReview(){
   // 3-scenario bars
   const pnlMax=Math.max(1,Math.abs(pnlDown),Math.abs(pnlBase),Math.abs(pnlUp));
   const scenarioBars=rvBarChart([
-    {label:`Upside (L=${(Lup*100).toFixed(1)}%)`,value:pnlUp,color:'#37c66f',note:(totalCashOut?pnlUp/totalCashOut*100:0).toFixed(1)+'% on cash out'},
-    {label:`Base (L=${(Lbase*100).toFixed(1)}%)`,value:pnlBase,color:pnlBase>=0?'#4a9eff':'#f87171',note:marginBase.toFixed(1)+'% on cash out'},
-    {label:`Downside (L=${(Ldown*100).toFixed(1)}%)`,value:pnlDown,color:pnlDown>=0?'#9aa3b8':'#fb923c',note:(totalCashOut?pnlDown/totalCashOut*100:0).toFixed(1)+'% on cash out'},
+    {label:`Upside (${A('L','Lifetime collection ratio — what mature deals actually collected vs. what was funded. Applied to young deals to project their outcome.')}=${(Lup*100).toFixed(1)}%)`,value:pnlUp,color:'#37c66f',note:(totalCashOut?pnlUp/totalCashOut*100:0).toFixed(1)+'% margin on cash out'},
+    {label:`Base (${A('L','Lifetime collection ratio — what mature deals actually collected vs. what was funded. Applied to young deals to project their outcome.')}=${(Lbase*100).toFixed(1)}%)`,value:pnlBase,color:pnlBase>=0?'#4a9eff':'#f87171',note:marginBase.toFixed(1)+'% margin on cash out'},
+    {label:`Downside (${A('L','Lifetime collection ratio — what mature deals actually collected vs. what was funded. Applied to young deals to project their outcome.')}=${(Ldown*100).toFixed(1)}%)`,value:pnlDown,color:pnlDown>=0?'#9aa3b8':'#fb923c',note:(totalCashOut?pnlDown/totalCashOut*100:0).toFixed(1)+'% margin on cash out'},
   ],pnlMax);
 
   // Monthly cohort table
@@ -3505,7 +3508,7 @@ function renderReview(){
   const cohortTable=`<table class="rv-table"><thead><tr><th>Month</th><th style="text-align:right">Deals</th><th style="text-align:right">Book $</th><th style="text-align:right">Coll/Cost</th><th style="text-align:right">Default%</th><th style="text-align:right">Stressed%</th><th style="text-align:right">Done</th><th style="text-align:right">PNL</th></tr></thead><tbody>${cohortRows}</tbody></table>`;
 
   // ISO segment table
-  const isoSegTable=`<table class="rv-table"><thead><tr><th>ISO (seasoned)</th><th style="text-align:right">n</th><th style="text-align:right">Book $</th><th style="text-align:right">Default%</th><th style="text-align:right">Stressed%</th><th style="text-align:right">S/D%</th><th style="text-align:right">Coll%</th><th></th></tr></thead><tbody>`+
+  const isoSegTable=`<table class="rv-table"><thead><tr><th>${A('ISO','Independent Sales Organization — the broker who originated the deal')}</th><th style="text-align:right">n</th><th style="text-align:right">Book $</th><th style="text-align:right">Default%</th><th style="text-align:right">Stressed%</th><th style="text-align:right">${A('S/D%','Stressed + Default combined rate')}</th><th style="text-align:right">${A('Coll%','Collection rate — % of book funded that has been paid back')}</th><th></th></tr></thead><tbody>`+
     isoSegs.map(s=>`<tr><td class="nm">${esc0(s.label)}</td><td style="text-align:right">${s.n}</td><td style="text-align:right">${fmt$(s.bf)}</td>`+
       `<td style="text-align:right" class="${s.defPct>20?'rv-neg':s.defPct>10?'rv-amb':''}">${s.defPct.toFixed(0)}%</td>`+
       `<td style="text-align:right" class="${s.strPct>20?'rv-amb':''}">${s.strPct.toFixed(0)}%</td>`+
@@ -3513,7 +3516,7 @@ function renderReview(){
       `<td style="text-align:right">${s.collPct.toFixed(0)}%</td><td>${segFlagHtml(s)}</td></tr>`).join('')+'</tbody></table>';
 
   // Industry roll-up table
-  const indRollTable=`<table class="rv-table"><thead><tr><th>Industry (seasoned)</th><th style="text-align:right">n</th><th style="text-align:right">Book $</th><th style="text-align:right">Default%</th><th style="text-align:right">Stressed%</th><th style="text-align:right">S/D%</th><th></th></tr></thead><tbody>`+
+  const indRollTable=`<table class="rv-table"><thead><tr><th>Industry (seasoned)</th><th style="text-align:right">n</th><th style="text-align:right">Book $</th><th style="text-align:right">Default%</th><th style="text-align:right">Stressed%</th><th style="text-align:right">${A('S/D%','Stressed + Default combined rate')}</th><th></th></tr></thead><tbody>`+
     indRollSegs.map(s=>`<tr><td class="nm">${esc0(s.label)}</td><td style="text-align:right">${s.n}</td><td style="text-align:right">${fmt$(s.bf)}</td>`+
       `<td style="text-align:right" class="${s.defPct>20?'rv-neg':s.defPct>10?'rv-amb':''}">${s.defPct.toFixed(0)}%</td>`+
       `<td style="text-align:right" class="${s.strPct>20?'rv-amb':''}">${s.strPct.toFixed(0)}%</td>`+
@@ -3551,8 +3554,8 @@ function renderReview(){
     <div style="background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:8px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:3px">Margin (up)</div><div style="font-size:16px;font-weight:800;color:${marginUp>=15?'#37c66f':marginUp>=5?'#4a9eff':'#f87171'}">${marginUp.toFixed(1)}%</div></div>
     <div style="background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:8px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:3px">Margin (base)</div><div style="font-size:16px;font-weight:800;color:${marginBase>=15?'#37c66f':marginBase>=5?'#4a9eff':'#f87171'}">${marginBase.toFixed(1)}%</div></div>
     <div style="background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:8px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:3px">Margin (down)</div><div style="font-size:16px;font-weight:800;color:${marginDown>=5?'#4a9eff':marginDown>=-5?'#f59e0b':'#f87171'}">${marginDown.toFixed(1)}%</div></div>
-    <div style="background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:8px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:3px">Default rate (Dm)</div><div style="font-size:16px;font-weight:800;color:${Dm<=20?'#37c66f':Dm<=30?'#f59e0b':'#f87171'}">${Dm.toFixed(1)}%</div><div style="font-size:9.5px;color:var(--text3);margin-top:2px">${mature.length} mature deals</div></div>
-    <div style="background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:8px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:3px">EPD rate</div><div style="font-size:16px;font-weight:800;color:${EPDshare>50?'#f87171':EPDshare>30?'#f59e0b':'#9aa3b8'}">${EPDshare.toFixed(0)}%</div><div style="font-size:9.5px;color:var(--text3);margin-top:2px">${EPDcount}/${nDm} defaults</div></div>
+    <div style="background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:8px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:3px">Default rate (${A('Dm','Mature Default Rate — % of deals ≥90 days old that defaulted. Only seasoned deals counted, so a new book starts at 0% and grows more accurate over time.')})</div><div style="font-size:16px;font-weight:800;color:${Dm<=20?'#37c66f':Dm<=30?'#f59e0b':'#f87171'}">${Dm.toFixed(1)}%</div><div style="font-size:9.5px;color:var(--text3);margin-top:2px">${mature.length} mature deals</div></div>
+    <div style="background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:8px 10px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:3px">${A('EPD','Early Payment Default — a deal that defaulted having paid less than 15% of the funded amount. The most damaging type of default.')}</div><div style="font-size:16px;font-weight:800;color:${EPDshare>50?'#f87171':EPDshare>30?'#f59e0b':'#9aa3b8'}">${EPDshare.toFixed(0)}%</div><div style="font-size:9.5px;color:var(--text3);margin-top:2px">${EPDcount}/${nDm} defaults</div></div>
   </div>`;
 
   const LEFT=
@@ -3563,8 +3566,8 @@ function renderReview(){
       <table class="rv-table" style="margin-top:12px"><tbody>
         <tr><td class="nm">Book funded</td><td style="text-align:right">${fmt$(totalBF)}</td></tr>
         <tr><td class="nm">Total cash out</td><td style="text-align:right">${fmt$(totalCashOut)}</td></tr>
-        <tr><td class="nm">Break-even (cash out ÷ RTR)</td><td style="text-align:right" class="${breakEven<=72.5?'rv-pos':breakEven<=75?'rv-amb':'rv-neg'}">${breakEven.toFixed(1)}%</td></tr>
-        <tr><td class="nm">Wtd factor / commission</td><td style="text-align:right">${weightedFactor.toFixed(3)} / ${weightedCommPct.toFixed(1)}%</td></tr>
+        <tr><td class="nm">${A('Break-even','The % of RTR (the full face value we purchased) we must collect to get our cash out back. Lower = better.')} (cash out ÷ ${A('RTR','Remaining To Receive — the total face value of the purchased receivable. This is the merchant\'s promise to pay, not what we funded.')})</td><td style="text-align:right" class="${breakEven<=72.5?'rv-pos':breakEven<=75?'rv-amb':'rv-neg'}">${breakEven.toFixed(1)}%</td></tr>
+        <tr><td class="nm">${A('Wtd','Weighted by book $ funded')} factor / commission</td><td style="text-align:right">${weightedFactor.toFixed(3)} / ${weightedCommPct.toFixed(1)}%</td></tr>
         <tr><td class="nm">House split (base): Sal / Matt / HHC</td><td style="text-align:right">${fmt$(partnerSplit)} / ${fmt$(partnerSplit)} / ${fmt$(houseSplit)}</td></tr>
       </tbody></table></div>`+
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Book composition</span><span class="sub">by bucket — stressed ≠ default (still paying)</span></div>
@@ -3578,18 +3581,18 @@ function renderReview(){
       </tbody></table></div>`+
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Deal structure</span><span class="sub">read against CDF-MCA norms</span></div>
       <div class="rv-metrics">
-        ${rvMetric('Avg deal size',fmt$(avgBookSize),avgBookSize>50000?'large':'in the $10–50K CDF band',avgBookSize>50000?'amb':'pos')}
-        ${rvMetric('Avg term',avgTermBD?avgTermBD.toFixed(0)+' BD':'—',avgTermBD>110?'long — more exposure time':'healthy band',avgTermBD>110?'amb':'pos')}
-        ${rvMetric('Wtd factor',weightedFactor?weightedFactor.toFixed(3):'—','by book $',weightedFactor<1.35?'amb':'pos')}
-        ${rvMetric('Wtd commission',weightedCommPct?weightedCommPct.toFixed(1)+'%':'—','by book $',weightedCommPct>15?'amb':'pos')}
+        ${rvMetric('Avg deal size',fmt$(avgBookSize),avgBookSize>50000?'large':'in the $10–50K '+A('CDF','Commercial Deal Financing — industry benchmark band for typical small-business MCA deal sizes')+' band',avgBookSize>50000?'amb':'pos')}
+        ${rvMetric('Avg term',avgTermBD?avgTermBD.toFixed(0)+' '+A('BD','Business Days'):'—',avgTermBD>110?'long — more exposure time':'healthy band',avgTermBD>110?'amb':'pos')}
+        ${rvMetric(A('Wtd','Weighted by book $ funded')+' factor',weightedFactor?weightedFactor.toFixed(3):'—','by book $',weightedFactor<1.35?'amb':'pos')}
+        ${rvMetric(A('Wtd','Weighted by book $ funded')+' commission',weightedCommPct?weightedCommPct.toFixed(1)+'%':'—','by book $',weightedCommPct>15?'amb':'pos')}
         ${rvMetric('REFI share',refiShare.toFixed(0)+'%',refiShare>50?'renewal-heavy':'origination-led','info')}
         ${rvMetric('Top deal conc.',topDealShare.toFixed(0)+'%',topDealShare>25?'of book — concentrated':'of book',topDealShare>25?'amb':'pos')}
       </div></div>`+
-    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Monthly cohort performance</span><span class="sub">by funding month</span></div><div style="overflow-x:auto">${cohortTable}</div></div>`+
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Segment analysis</span><span class="sub">seasoned deals (≥45d) · RED ≥45% S/D n≥5 · GREEN ≤20% n≥5</span></div>
       <div class="rv-mini" style="margin-bottom:6px">ISO concentration · RED ISO share of all book: <b class="${redISOShare>=50?'rv-neg':redISOShare>=30?'rv-amb':''}">${redISOShare.toFixed(1)}%</b></div><div style="overflow-x:auto">${isoSegTable}</div>
       <div class="rv-mini" style="margin-top:12px;margin-bottom:6px">Industry roll-up</div><div style="overflow-x:auto">${indRollTable}</div>
-    </div>`;
+    </div>`+
+    `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Monthly cohort performance</span><span class="sub">by funding month</span></div><div style="overflow-x:auto">${cohortTable}</div></div>`;
 
   const RIGHT=
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Go-forward summary</span><span class="sub">the read, in plain terms</span></div>
@@ -3611,9 +3614,9 @@ function renderReview(){
       </div>
     </div>`+
     '<div class="rv-kpis">'+
-      kpi('Break-even',breakEven.toFixed(1)+'%','cash out ÷ RTR',breakEven<=72.5?'rv-pos':breakEven<=76?'rv-amb':'rv-neg')+
-      kpi('Base PNL',fmt$(pnlBase),'L='+( Lbase*100).toFixed(1)+'%',pnlBase>=0?'rv-pos':'rv-neg')+
-      kpi('Mature Dm',Dm.toFixed(1)+'%',mature.length+' mature deals · EPD '+EPDshare.toFixed(0)+'%',Dm<=20?'rv-pos':Dm<=30?'rv-amb':'rv-neg')+
+      kpi(A('Break-even','Cash out ÷ RTR — the % of the purchased receivable we must collect to get our money back'),breakEven.toFixed(1)+'%','cash out ÷ '+A('RTR','Remaining To Receive — the full face value of the purchased receivable'),breakEven<=72.5?'rv-pos':breakEven<=76?'rv-amb':'rv-neg')+
+      kpi('Base PNL',fmt$(pnlBase),A('L','Lifetime collection ratio — actual collections ÷ cost on mature deals, then applied to young deals')+'='+(Lbase*100).toFixed(1)+'%',pnlBase>=0?'rv-pos':'rv-neg')+
+      kpi('Mature '+A('Dm','Mature Default Rate — % of deals ≥90d that defaulted'),Dm.toFixed(1)+'%',mature.length+' mature deals · '+A('EPD','Early Payment Default — defaulted with <15% paid')+' '+EPDshare.toFixed(0)+'%',Dm<=20?'rv-pos':Dm<=30?'rv-amb':'rv-neg')+
       kpi('Pressure',pressure.toFixed(0),'stressed+behind open book',pressure<=20?'rv-pos':pressure<=40?'rv-amb':'rv-neg')+
     '</div>'+
     `<div class="rv-cols"><div class="rv-col-data">${LEFT}</div><div class="rv-col-story">${RIGHT}</div></div>`;
