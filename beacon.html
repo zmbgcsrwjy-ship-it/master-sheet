@@ -1377,7 +1377,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v243</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v244</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2502,9 +2502,23 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
       // vanish (HAPPYANGELS). A deal in the report must ALWAYS show somewhere — no exceptions.
       (batchStops[m.deal._rid]=batchStops[m.deal._rid]||[]).push(bDay);
     }
-    const sev = _isStop ? 'STOP' : (b.consec>1?'CONSEC':'NEW');
+    // v244: if the report didn't supply a consec count (column absent on some exports — e.g. Mac vs PC
+    // download differences from Pinnacle), compute it from the deal's Airtable bounce history so
+    // consecutive deals aren't mis-labelled NEW. Gap ≤3 calendar days covers the Fri→Mon weekend bridge.
+    let effectiveConsec = b.consec;
+    if (effectiveConsec < 2 && m.deal) {
+      const priorDates = (m.deal._bounceDates||[]).filter(d=>d<bDay).sort();
+      let streak=1, prev=bDay;
+      for (let i=priorDates.length-1;i>=0;i--){
+        const gap=bDaysBetween(priorDates[i],prev);
+        if(gap!==null && gap<=3){streak++;prev=priorDates[i];}
+        else break;
+      }
+      if(streak>1) effectiveConsec=streak;
+    }
+    const sev = _isStop ? 'STOP' : (effectiveConsec>1?'CONSEC':'NEW');
     toCreate.push({fields:{ 'Bounce':key, 'Deal':[m.deal._rid], 'Date':bDay, 'Amount':b.amount,
-      'Return Code':b.returnCode, 'Severity':sev, 'Consecutive Count':b.consec,
+      'Return Code':b.returnCode, 'Severity':sev, 'Consecutive Count':effectiveConsec,
       'Rep':b.rep, 'Source Report':sourceName||'', 'Hit Date':b.hitDate||null, 'Return Date':b.returnDate||null }});
   }
   const created = toCreate.length ? await atCreate('Bounces', toCreate) : [];
