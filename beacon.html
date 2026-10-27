@@ -1377,7 +1377,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v244</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v245</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2465,10 +2465,25 @@ async function beaconSyncBounces(parsed, merchants, existingBounceKeys, sourceNa
     const _isStop = b.type==='stop' || b.type==='revocation' || _stopCodes.indexOf((b.returnCode||'').toUpperCase())>=0;
     if (existingBounceKeys.has(key)){
       skipped.push(key);
+      const existingRec = beaconRawCache.bounces.find(r=>(r.fields&&r.fields.Bounce)===key);
       if (_isStop){
-        const existingRec = beaconRawCache.bounces.find(r=>(r.fields&&r.fields.Bounce)===key);
+        // v230: upgrade stale NEW/CONSEC → STOP when return code says it's really a stop
         if (existingRec && existingRec.id && (existingRec.fields||{}).Severity !== 'STOP'){
           toUpgrade.push({id:existingRec.id, fields:{'Severity':'STOP','Return Code':b.returnCode}});
+        }
+      } else if (existingRec && existingRec.id && (existingRec.fields||{}).Severity === 'NEW') {
+        // v245: upgrade stale NEW → CONSEC when Airtable bounce history shows a streak.
+        // Handles records written with consec=0 (e.g. missing column on first upload).
+        const mUpg = beaconMatchDeal(b, merchants);
+        if (mUpg.deal) {
+          const priorDates = (mUpg.deal._bounceDates||[]).filter(d=>d<bDay).sort();
+          let streak=1, prev=bDay;
+          for (let i=priorDates.length-1;i>=0;i--){
+            const gap=bDaysBetween(priorDates[i],prev);
+            if(gap!==null && gap<=3){streak++;prev=priorDates[i];}
+            else break;
+          }
+          if (streak > 1) toUpgrade.push({id:existingRec.id, fields:{'Severity':'CONSEC','Consecutive Count':streak}});
         }
       }
       continue;
