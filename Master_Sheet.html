@@ -534,7 +534,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 199</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 200</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -1179,9 +1179,10 @@ const RC_ACCOUNT_CODES = ['R02','R03','R04','R09','R11','R20'];
 const RC_STOP_CODES    = ['R05','R07','R08','R10','R16','R29'];
 const STOP_RCODES = RC_ACCOUNT_CODES.concat(RC_STOP_CODES);
 function rcSeverity(code){ const rc=String(code||'').toUpperCase().trim(); if(RC_STOP_CODES.includes(rc)) return 'stop'; if(RC_ACCOUNT_CODES.includes(rc)) return 'account'; return ''; }
-let bounceByLead = {};
+let bounceByLead = {}, bounceByRid = {};
 async function loadBounceSummary(){
   bounceByLead = {};
+  bounceByRid = {};
   let recs=[], offset=null;
   do {
     const data = await atFetchT('Bounces','GET', offset?`?offset=${offset}`:'');
@@ -1204,8 +1205,17 @@ async function loadBounceSummary(){
     const bdate=(f.Date||'').slice(0,10); if(bdate) e.dates.push(bdate);
     if(code) e.codes.add(code);
     if(sev==='STOP' || STOP_RCODES.includes(code)){ e.hasStop=true; if(bdate) e.stopDates.push(bdate); }
+    // build 200: per-deal (record-ID) bounce lookup — so PIF deals don't inherit bounces from a REFI
+    if(rid){
+      const re = bounceByRid[rid] = bounceByRid[rid] || {codes:new Set(), count:0, hasStop:false, dates:[], stopDates:[]};
+      re.count++;
+      if(bdate) re.dates.push(bdate);
+      if(code) re.codes.add(code);
+      if(sev==='STOP' || STOP_RCODES.includes(code)){ re.hasStop=true; if(bdate) re.stopDates.push(bdate); }
+    }
   }
   Object.values(bounceByLead).forEach(e=>{ e.dates.sort(); e.stopDates.sort(); }); // ascending; dates[3] = 4th bounce
+  Object.values(bounceByRid).forEach(e=>{ e.dates.sort(); e.stopDates.sort(); });
 }
 // Returns small HTML badges for a deal's bounce history (stop codes first, then BOUNCING state).
 // build 190: a stop payment is "active" only while no cleared payment has landed after it.
@@ -1241,6 +1251,33 @@ function bounceBadges(d){
   }
   // BOUNCING is intentionally omitted here — csChip() renders it with correct colour (blue vs red).
   // Having it in both places produced a duplicate pill for Durango Taco / Pojas Floor style deals.
+  return out;
+}
+
+// build 200: deal-specific stop/bounce checks (keyed by Airtable record ID, not lead_id)
+// so PIF deals don't bleed bounces from a subsequent REFI on the same merchant.
+function stopIsActiveDeal(d){
+  const e = bounceByRid[d._id];
+  if(!e || !e.hasStop) return false;
+  const lastStop = e.stopDates.length ? e.stopDates[e.stopDates.length-1] : null;
+  const lastCleared = d.last_cleared ? d.last_cleared.slice(0,10) : null;
+  if(!lastStop || !lastCleared) return true;
+  return lastCleared < lastStop;
+}
+function bounceBadgesDeal(d){
+  let out='';
+  const e = bounceByRid[d._id];
+  if(e && stopIsActiveDeal(d)){
+    const stopCodes=[...e.codes].filter(c=>STOP_RCODES.includes(c));
+    const label = stopCodes.length ? stopCodes.join('/') : 'STOP';
+    const kinds=new Set(stopCodes.map(rcSeverity));
+    const why = kinds.has('account') && !kinds.has('stop') ? 'account/doc error — verify the account info on docs'
+              : kinds.has('account') && kinds.has('stop') ? 'stop + account error — merchant blocked us and/or account info is wrong'
+              : 'stop-payment / hard return — merchant blocked the debit';
+    out += `<span class="bbadge bbadge-stop" title="Severe return (${label}) — ${why}. Review before refinancing.">⛔ ${label}</span>`;
+  } else if(e && e.count>0){
+    out += `<span class="bbadge bbadge-bnc" title="${e.count} prior bounce${e.count!==1?'s':''} on this deal${e.hasStop?' (includes a prior stop payment that has since cleared)':''}">⚠ ${e.count} bnc</span>`;
+  }
   return out;
 }
 
@@ -2340,7 +2377,9 @@ function sortPif(key){
   renderPif();
 }
 function renderPif(){
-  const all=deals.filter(d=>d.status==='PIF');
+  // build 200: hide PIF deals where the merchant has an active/new renewal (same lead_id)
+  const activeLeads = new Set(deals.filter(d=>['ACTIVE','NEW'].includes(d.status)).map(d=>d.lead_id).filter(Boolean));
+  const all=deals.filter(d=>d.status==='PIF' && !activeLeads.has(d.lead_id));
   const body=document.getElementById('pif-body'),empty=document.getElementById('pif-empty');
   const repSel=document.getElementById('pif-rep-filter'),isoSel=document.getElementById('pif-iso-filter');
   // rep + ISO filters built from the PIF pool, preserving selections
@@ -2359,6 +2398,7 @@ function renderPif(){
     if(k==='date_funded'){ va=new Date(a.date_funded||0); vb=new Date(b.date_funded||0); }
     else if(k==='term'){ va=a.frequency==='Weekly'?(a.term||0)*5:(a.term||0); vb=b.frequency==='Weekly'?(b.term||0)*5:(b.term||0); }
     else if(k==='feepct'){ va=a.funded?(a.bank_fees/a.funded):0; vb=b.funded?(b.bank_fees/b.funded):0; }
+    else if(k==='bounce_count'){ va=(bounceByRid[a._id]||{}).count||0; vb=(bounceByRid[b._id]||{}).count||0; }
     else if(k==='merchant'||k==='lead_id'||k==='rep'||k==='iso'){ va=String(a[k]||'').toLowerCase(); vb=String(b[k]||'').toLowerCase(); return va<vb?-1*dir:va>vb?dir:0; }
     else { va=a[k]; vb=b[k]; }
     return ((va||0)-(vb||0))*dir;
@@ -2369,6 +2409,7 @@ function renderPif(){
   const head=`<tr>
     <th class="pif-c" onclick="sortPif('date_funded')">Date Funded ↕</th>
     <th onclick="sortPif('merchant')">Merchant ↕</th>
+    <th class="pif-c" onclick="sortPif('bounce_count')">Bounces ↕</th>
     <th onclick="sortPif('rep')">Rep ↕</th>
     <th onclick="sortPif('iso')">ISO ↕</th>
     <th class="pif-c" onclick="sortPif('funded')">Funded ↕</th>
@@ -2385,7 +2426,8 @@ function renderPif(){
     const nm=dealNameHtml(d);
     return `<tr>
       <td class="pif-c pif-dim">${fmtDate(d.date_funded)}</td>
-      <td class="pif-name" onclick="toggleContact(this,event)" data-contact="${cdata(d)}" style="cursor:${hasContact(d)?'pointer':'default'}">${nm}${hasContact(d)?'<span class="pif-card-icn">📇</span>':''}${bounceBadges(d)}</td>
+      <td class="pif-name" onclick="toggleContact(this,event)" data-contact="${cdata(d)}" style="cursor:${hasContact(d)?'pointer':'default'}">${nm}${hasContact(d)?'<span class="pif-card-icn">📇</span>':''}</td>
+      <td class="pif-c">${bounceBadgesDeal(d)}</td>
       <td class="pif-dim">${d.rep||'—'}</td>
       <td class="pif-dim">${d.iso||'—'}</td>
       <td class="pif-c">${fmt$(d.funded)}</td>
@@ -2397,7 +2439,7 @@ function renderPif(){
     </tr>`;
   }).join('');
   body.innerHTML=`<table class="pif-table"><colgroup>
-    <col style="width:8%"><col style="width:15%"><col style="width:11%"><col style="width:14%"><col style="width:9%"><col style="width:6%"><col style="width:9%"><col style="width:8%"><col style="width:8%"><col style="width:12%">
+    <col style="width:7%"><col style="width:14%"><col style="width:8%"><col style="width:9%"><col style="width:11%"><col style="width:8%"><col style="width:5%"><col style="width:8%"><col style="width:7%"><col style="width:7%"><col style="width:16%">
   </colgroup><thead>${head}</thead><tbody>${bodyRows}</tbody></table>`;
   document.querySelectorAll('#panel-pif .sort-ind').forEach(s=>{ s.textContent=' ↕'; });
 }
