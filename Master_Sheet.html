@@ -534,7 +534,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 202</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 203</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3459,6 +3459,29 @@ function renderReview(){
   const biggest=funded.reduce((m,d)=>Math.max(m,getBf(d)),0);
   const topDealShare=_rvPct(biggest,totalBF);
 
+  // ── Co-funded participation breakdown ──
+  const cofunded = funded.filter(d => isExternalFunder(d.funder));
+  const ownBook  = funded.filter(d => !isExternalFunder(d.funder));
+  const ftStats = arr => {
+    if(!arr.length) return null;
+    const n=arr.length, bf=bfOf(arr);
+    const co=arr.reduce((s,d)=>s+getCashOut(d),0);
+    const paid=arr.reduce((s,d)=>s+getPaid(d),0);
+    const pnl=arr.reduce((s,d)=>s+_rvNum(d.pnl),0);
+    const defBF=bfOf(arr.filter(d=>d._bucket==='default'));
+    const strBF=bfOf(arr.filter(d=>d._bucket==='stressed'));
+    const defPct=bf?defBF/bf*100:0, strPct=bf?strBF/bf*100:0, sOrD=defPct+strPct;
+    const collPct=co?paid/co*100:0;
+    const wFactor=bf?arr.reduce((s,d)=>s+_rvNum(d.factor)*getBf(d),0)/bf:0;
+    const compN=arr.filter(d=>d._bucket==='completed').length;
+    return {n,bf,co,paid,pnl,defPct,strPct,sOrD,collPct,wFactor,compN};
+  };
+  const cfS=ftStats(cofunded), ownS=ftStats(ownBook);
+  const cfFunderMap={};
+  cofunded.forEach(d=>{ const k=d.funder||'Unknown'; (cfFunderMap[k]=cfFunderMap[k]||[]).push(d); });
+  const cfFunderSegs=Object.keys(cfFunderMap).map(k=>({label:k,...(ftStats(cfFunderMap[k])||{})})).sort((a,b)=>(b.bf||0)-(a.bf||0));
+  const cfShare=totalBF&&cfS?cfS.bf/totalBF*100:0;
+
   // ── Honest assessment cards ──
   const F=[];
   const push=(kind,icon,html)=>F.push({kind,icon,html});
@@ -3565,6 +3588,50 @@ function renderReview(){
       `<td style="text-align:right" class="${s.sOrD>=45?'rv-neg':s.sOrD>=30?'rv-amb':'rv-pos'}">${s.sOrD.toFixed(0)}%</td>`+
       `<td>${segFlagHtml(s)}</td></tr>`).join('')+'</tbody></table>';
 
+  // Co-funded participation section
+  const cfRow=(label,ownVal,cfVal,ownCls='',cfCls='')=>
+    `<tr><td class="nm">${label}</td><td style="text-align:right" class="${ownCls}">${ownVal}</td><td style="text-align:right" class="${cfCls}">${cfVal}</td></tr>`;
+  const cfCompTable = (cfS&&ownS) ? `<table class="rv-table"><thead><tr>
+    <th>Metric</th>
+    <th style="text-align:right">Own book (${ownS.n})</th>
+    <th style="text-align:right;color:var(--peach)">Co-funded (${cfS.n})</th>
+  </tr></thead><tbody>
+    ${cfRow('Deployed',fmt$(ownS.bf),fmt$(cfS.bf))}
+    ${cfRow('Default %',ownS.defPct.toFixed(0)+'%',cfS.defPct.toFixed(0)+'%',ownS.defPct>20?'rv-neg':ownS.defPct>10?'rv-amb':'',cfS.defPct>20?'rv-neg':cfS.defPct>10?'rv-amb':'')}
+    ${cfRow('Stressed %',ownS.strPct.toFixed(0)+'%',cfS.strPct.toFixed(0)+'%',ownS.strPct>20?'rv-amb':'',cfS.strPct>20?'rv-amb':'')}
+    ${cfRow(A('S/D %','Stressed + Default combined — the headline risk metric'),ownS.sOrD.toFixed(0)+'%',cfS.sOrD.toFixed(0)+'%',ownS.sOrD>=45?'rv-neg':ownS.sOrD>=25?'rv-amb':'rv-pos',cfS.sOrD>=45?'rv-neg':cfS.sOrD>=25?'rv-amb':'rv-pos')}
+    ${cfRow(A('Coll/cost','Amount collected ÷ cash out — how much of our deployed capital has been recovered'),ownS.collPct.toFixed(0)+'%',cfS.collPct.toFixed(0)+'%',ownS.collPct>=85?'rv-pos':ownS.collPct>=60?'rv-amb':'rv-neg',cfS.collPct>=85?'rv-pos':cfS.collPct>=60?'rv-amb':'rv-neg')}
+    ${cfRow(A('Wtd','Weighted by book $ funded')+' factor',ownS.wFactor.toFixed(3),cfS.wFactor.toFixed(3))}
+    ${cfRow('Completed',ownS.compN,cfS.compN)}
+    ${cfRow('Realized PNL',fmt$(ownS.pnl),fmt$(cfS.pnl),ownS.pnl>=0?'rv-pos':'rv-neg',cfS.pnl>=0?'rv-pos':'rv-neg')}
+  </tbody></table>` : '';
+  const cfFunderTable = cfFunderSegs.length>1 ? `<div class="rv-mini" style="margin-top:14px;margin-bottom:6px">By funder</div>
+    <table class="rv-table"><thead><tr><th>Funder</th><th style="text-align:right">Deals</th><th style="text-align:right">Book $</th>
+    <th style="text-align:right">${A('S/D %','Stressed + Default combined rate')}</th>
+    <th style="text-align:right">${A('Coll/cost','Amount collected ÷ cash out')}</th>
+    <th style="text-align:right">PNL</th></tr></thead><tbody>
+    ${cfFunderSegs.map(s=>`<tr>
+      <td class="nm">${esc0(s.label)}</td>
+      <td style="text-align:right">${s.n||0}</td>
+      <td style="text-align:right">${fmt$(s.bf||0)}</td>
+      <td style="text-align:right" class="${(s.sOrD||0)>=45?'rv-neg':(s.sOrD||0)>=25?'rv-amb':'rv-pos'}">${(s.sOrD||0).toFixed(0)}%</td>
+      <td style="text-align:right" class="${(s.collPct||0)>=85?'rv-pos':(s.collPct||0)>=60?'rv-amb':'rv-neg'}">${(s.collPct||0).toFixed(0)}%</td>
+      <td style="text-align:right" class="${(s.pnl||0)>=0?'rv-pos':'rv-neg'}">${fmt$(s.pnl||0)}</td>
+    </tr>`).join('')}
+    </tbody></table>` : '';
+  const cfVerdict = !cfS ? '' : cfS.sOrD < (ownS?ownS.sOrD:100)-5
+    ? ' <span class="rv-pos">✓ Outperforming own-book — participation is working.</span>'
+    : cfS.sOrD > (ownS?ownS.sOrD:0)+5
+    ? ' <span class="rv-neg">⚑ Underperforming own-book — review whether GIL terms justify the risk.</span>'
+    : ' <span style="color:var(--text2)">Roughly in line with own-book.</span>';
+  const cofundSection = `<div class="rv-sec">
+    <div class="rv-sec-h"><span class="n" style="color:var(--peach)">Co-funded participation</span>
+    <span class="sub">${cofunded.length} deal${cofunded.length!==1?'s':''} · ${fmt$(cfS?cfS.bf:0)} deployed · ${cfShare.toFixed(0)}% of book</span></div>
+    <div class="rv-sec-lead">Participation deals where a GIL or external funder carries the paper and we take a book-% slice. <b>${A('S/D %','Stressed + Default combined rate')}</b> and <b>${A('Coll/cost','Amount collected ÷ cash out — how much of our deployed capital has been recovered')}</b> are the key reads — they show whether co-funded capital is keeping pace with deals we own outright.${cfVerdict}</div>
+    ${cfS ? cfCompTable : '<p class="rv-mini" style="color:var(--text2);padding:4px 0">No co-funded deals on record yet.</p>'}
+    ${cfFunderTable}
+  </div>`;
+
   // Watch list table
   const watchHtml=watchList.length?`<table class="rv-table"><thead><tr><th>Merchant</th><th style="text-align:right">%Paid</th><th style="text-align:right">Exp%</th><th style="text-align:right">Last Clear</th><th style="text-align:right">Bal</th><th>Flag</th></tr></thead><tbody>`+
     watchList.slice(0,15).map(w=>`<tr><td class="nm">${esc0(w.d.merchant)}<br><span class="rv-mini">${esc0(w.d.iso||'')}</span></td>`+
@@ -3630,6 +3697,7 @@ function renderReview(){
         ${rvMetric('REFI share',refiShare.toFixed(0)+'%',refiShare>50?'renewal-heavy':'origination-led','info')}
         ${rvMetric('Top deal conc.',topDealShare.toFixed(0)+'%',topDealShare>25?'of book — concentrated':'of book',topDealShare>25?'amb':'pos')}
       </div></div>`+
+    cofundSection+
     `<div class="rv-sec"><div class="rv-sec-h"><span class="n">Segment analysis</span><span class="sub">seasoned deals (≥45d) · RED ≥45% S/D n≥5 · GREEN ≤20% n≥5</span></div>
       <div class="rv-mini" style="margin-bottom:6px">ISO concentration · RED ISO share of all book: <b class="${redISOShare>=50?'rv-neg':redISOShare>=30?'rv-amb':''}">${redISOShare.toFixed(1)}%</b></div><div style="overflow-x:auto">${isoSegTable}</div>
       <div class="rv-mini" style="margin-top:12px;margin-bottom:6px">Industry roll-up</div><div style="overflow-x:auto">${indRollTable}</div>
