@@ -534,7 +534,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 201</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 202</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -3747,7 +3747,7 @@ function renderOutlook(){
     const olNameHtml=(d, paid=false)=>{
       const base = 'nm'+(paid?' paidname':'');
       if(isExternalFunder(d.funder)) return `<span class="${base}" style="color:var(--peach)">${esc0(d.merchant)}</span>`;
-      if(d.frequency==='Weekly')     return `<span class="${base} wk-name">${esc0(d.merchant)}</span>`;
+      if(d.frequency==='Weekly')     return `<span class="${base}" style="color:var(--wk-purple);font-weight:700">${esc0(d.merchant)}</span>`;
       return `<span class="${base}">${esc0(d.merchant)}</span>`;
     };
     // balance + %paid meter for each row so you can see how far into the deal we are
