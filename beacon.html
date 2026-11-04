@@ -326,7 +326,7 @@
   .us-action-btn.primary:hover { background: var(--text-hover); }
   .us-notes-panel { margin-top: 8px; display: none; }
   .us-notes-panel.shown { display: block; }
-  .us-notes-ta { width: 100%; min-height: 52px; font: inherit; font-size: 14px; padding: 7px 9px; border: 0.5px solid var(--border-strong); border-radius: 5px; background: var(--surface); color: var(--text); resize: vertical; box-sizing: border-box; }
+  .us-notes-ta { width: 100%; min-height: 52px; font: inherit; font-size: 15px; padding: 7px 9px; border: 0.5px solid var(--border-strong); border-radius: 5px; background: var(--surface); color: var(--text); resize: vertical; box-sizing: border-box; }
   .us-notes-ta:focus { outline: none; border-color: var(--text); }
   .us-notes-panel .us-confirm { margin-top: 6px; width: auto; align-self: flex-start; background: var(--text); color: var(--surface); border: 0; padding: 5px 14px; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
   .us-resolve-panel { margin-top: 8px; padding-top: 10px; border-top: 0.5px solid var(--border); display: none; }
@@ -896,17 +896,17 @@
   .minfo-note-editor { margin-top: 12px; }
   .minfo-note-editor .us-confirm { margin-top: 6px; }
   .minfo-panel .minfo-section { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); margin: 0 0 6px; }
-  .minfo-panel .minfo-line { display: flex; flex-wrap: wrap; align-items: baseline; font-size: 13px; color: var(--text); }
+  .minfo-panel .minfo-line { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; font-size: 13px; color: var(--text); }
   .minfo-panel .minfo-item { white-space: nowrap; }
   .minfo-panel .minfo-item .minfo-lbl { color: var(--text-2); font-size: 11px; margin-right: 5px; }
-  .minfo-panel .minfo-dot { color: var(--text-3); margin: 0 12px; }
+  .minfo-panel .minfo-dot { display: none; }
   .minfo-panel .minfo-line a { color: #5b9dff; text-decoration: none; }
   .minfo-panel .minfo-line a:hover { text-decoration: underline; }
   .minfo-copy { background: transparent; border: 0.5px solid var(--border-strong); color: var(--text-3); border-radius: 4px; padding: 0 5px; margin-left: 6px; font-size: 11px; cursor: pointer; line-height: 1.5; vertical-align: middle; }
   .minfo-copy:hover { color: var(--text); background: var(--surface-2); }
   .minfo-copy.copied { color: #2dd4bf; border-color: #2dd4bf; }
   .minfo-panel .minfo-empty { font-size: 12.5px; color: var(--text-3); font-style: italic; }
-  .minfo-panel .minfo-note { border-left: 2px solid var(--border-strong); padding: 3px 0 3px 10px; margin-bottom: 8px; font-size: 14px; color: var(--text); line-height: 1.45; }
+  .minfo-panel .minfo-note { border-left: 2px solid var(--border-strong); padding: 3px 0 3px 10px; margin-bottom: 8px; font-size: 15px; color: var(--text); line-height: 1.45; }
   .minfo-panel .minfo-note-date { font-size: 11px; color: var(--text-3); margin-bottom: 2px; }
   table.matrix .merchant-cell-inner { display: flex; align-items: center; gap: 8px; min-width: 0; }
   table.matrix .merchant-cell-inner > * { flex-shrink: 0; }
@@ -1377,7 +1377,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v245</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v247</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -5233,10 +5233,14 @@ function renderMainTable() {
         // route them into WEEKLY section so all the weekly logic applies.
         let effectiveSev = m.sev_class;
         if (m.manual_freq === 'Weekly' && effectiveSev !== 'stop') {
-          effectiveSev = 'weekly';
+          // v246: 3 consecutive weekly bounces ≈ 15 daily business days — promote to CONSECUTIVE section
+          effectiveSev = (m.streak_len >= 3) ? 'consecutive' : 'weekly';
         } else if (m.manual_freq === 'Daily' && effectiveSev === 'weekly') {
           // Override the other way too — if Sal marks Daily, push to consecutive
           effectiveSev = (m.streak_len >= 2) ? 'consecutive' : 'new';
+        } else if (effectiveSev === 'weekly' && m.streak_len >= 3) {
+          // v246: same promotion for weekly-frequency deals detected from the bounce report (no manual override needed)
+          effectiveSev = 'consecutive';
         }
         displayClass = effectiveSev;
         // Reassign group_order to match new priority: stop=1, consecutive=2, weekly=3, new=4
@@ -5297,6 +5301,11 @@ function renderMainTable() {
     // whether it's resolved — resolved rows just show green in place.
     // 3. Within section, sort by sev specifics
     if (a.sev_class === "stop") return (a.severity_rank || 100) - (b.severity_rank || 100) || (b.balance - a.balance);
+    // v246: weight weekly streak by ×5 so 3 weekly bounces (≈15 daily BDs) sorts above a 3-streak daily
+    if (a._displayClass === "consecutive" || b._displayClass === "consecutive") {
+      const eStr = m => (m.freq==='Weekly'||m._freqField==='Weekly') ? (m.streak_len||0)*5 : (m.streak_len||0);
+      return (eStr(b) - eStr(a)) || (b.balance - a.balance);
+    }
     if (a.sev_class === "consecutive") return (b.streak_len - a.streak_len) || (b.balance - a.balance);
     return b.balance - a.balance;
   });
@@ -5517,8 +5526,8 @@ function buildRow(m, editable) {
     if (m.sev_class === "stop" || m.open_stop) chips += codeChip(m.return_code, m.bounce_type);
   }
   else if (m.sev_class === "stop") chips += codeChip(m.return_code, m.bounce_type);
-  else if (m.sev_class === "consecutive") chips += '<span class="streak-chip">' + m.streak_len + ' IN A ROW</span>';
-  else if (m.sev_class === "weekly") chips += '<span class="weekly-chip">Weekly</span>';
+  else if (m._displayClass === "consecutive") chips += '<span class="streak-chip">' + m.streak_len + ' IN A ROW</span>';
+  else if (m.sev_class === "weekly" || m._displayClass === "weekly") chips += '<span class="weekly-chip">Weekly</span>';
   
   if (editable && m.resolution_type && !m._inflight && m._displayClass !== "broken" && m._displayClass !== "legal-still") {
     let resTxt;
@@ -5591,7 +5600,7 @@ function buildRow(m, editable) {
     '<td class="ctr">' + fmtPct(m.pct_paid) + '</td>' +
     '<td class="ctr balance-cell">' + fmt$(m.balance) + '</td>' +
     '<td class="ctr">' + (m.days_delinq || '—') + '</td>' +
-    '<td class="ctr">' + (m.streak_len >= 5 ? '<span style="color:var(--sev-broken);font-weight:800">' + m.streak_len + '</span>' : (m.streak_len || '—')) + '</td>' +
+    '<td class="ctr">' + (function(){ const isWk=(m.freq==='Weekly'||m._freqField==='Weekly'); const thresh=isWk?3:5; return (m.streak_len>=thresh?'<span style="color:var(--sev-broken);font-weight:800">'+m.streak_len+'</span>':(m.streak_len||'—')); })() + '</td>' +
     '<td class="ctr">' + (m.mtd_bounces || 0) + '</td>' +
     '<td class="ctr secondary">' + fmtDate(m.last_pull) + '</td>' +
     '<td class="ctr secondary">' + shortRep(m.rep) + '</td>' +
