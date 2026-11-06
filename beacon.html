@@ -1378,7 +1378,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v248</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v249</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -2297,21 +2297,14 @@ function beaconReconstruct(raw, todayISO){
       // return date 8/28 made it look unresolved. Using the hit date, 8/26 <= 8/27 → correctly handled.
       const stHit = (st.hit || st.date || '').slice(0,10);
       const resolvedAfter = m.resolution_type && m.resolution_date && stHit && m.resolution_date >= stHit;
-      // v224: also clear the open-stop if a payment cleared AFTER the stop hit date.
-      // When a v157 resolution expires (payment clears → resolution_type blanks), resolvedAfter becomes
-      // false even though the merchant paid. Without this guard, open_stop stays set and the deal ghosts
-      // on the HOT board forever even though the issue is resolved.
-      // v227: compare last_cleared against the most-recent REPORT date in _stopDates (f.Date —
-      // always the current pull/report date) rather than stHit (f['Hit Date'] — the original hit
-      // date, which re-listed daily bounce entries keep pointing back to the first stop, e.g. 9/14
-      // on a 9/24 row). Using stHit meant any payment after the original stop date — even a routine
-      // ACH pull the day after — fired clearedAfterStop and silently dropped the merchant off the board.
-      // Using _stopDates' most-recent report date means last_cleared must be after the LATEST bounce
-      // report listing, which can't happen while the stop is still active in today's report.
-      const _msStop = Array.isArray(m._stopDates) ? (m._stopDates.slice(-1)[0] || '') : '';
-      const clearedAfterStop = _msStop && m.last_cleared && m.last_cleared > _msStop;
+      // v249: Removed clearedAfterStop guard entirely for open stops.
+      // Previously a payment updating last_cleared (even a Zelle/manual payment that doesn't
+      // un-block the ACH debit) would silently drop the deal off the board. A STOP is a serious
+      // event that should ONLY leave the board when explicitly resolved — not because any payment
+      // came in off-channel. If a stop genuinely resolves (merchant resumes ACH), the user logs
+      // a resolution to close it out. This is intentional: stops require a conscious close-out.
       const legal = (typeof legalCasesOut!=='undefined') && legalCasesOut.some(c=>c.lead_id===m.lead_id && c.status!=='settled');
-      if (!m.bounced_today && !resolvedAfter && !clearedAfterStop && !legal){
+      if (!m.bounced_today && !resolvedAfter && !legal){
         // Carry the stop forward onto the board as an unresolved open stop.
         m.bucket = 'BOUNCED';
         m.bounced_today = false;          // it did NOT bounce today — it's a carried-forward open stop
