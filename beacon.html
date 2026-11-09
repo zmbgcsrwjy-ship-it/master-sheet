@@ -1378,7 +1378,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v249</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v251</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -1964,8 +1964,8 @@ function bLocalToday(){
 // Detection previously keyed off the Pinnacle "Severity" field only (bSevClass), so any severe code
 // Pinnacle didn't pre-tag as STOP slipped through as a plain bounce. rcodeSeverity() closes that by
 // classifying off the CODE, and every path now takes the worse of (code severity, Pinnacle severity).
-const RC_ACCOUNT_CODES = ['R02','R03','R04','R09','R11','R20'];   // account can't be debited as entered
-const RC_STOP_CODES    = ['R05','R07','R08','R10','R16','R29'];   // merchant/bank blocked or revoked auth
+const RC_ACCOUNT_CODES = ['R02','R03','R04','R09','R11','R16','R20'];   // account can't be debited as entered — orange chip
+const RC_STOP_CODES    = ['R05','R07','R08','R10','R29'];   // merchant/bank blocked or revoked auth — red chip
 // Kept for back-compat with existing call sites; now the union of both severe groups.
 const _STOP_CODES_ALL = RC_ACCOUNT_CODES.concat(RC_STOP_CODES);
 // Returns 'account' | 'stop' | '' for a raw return code.
@@ -2296,7 +2296,13 @@ function beaconReconstruct(raw, todayISO){
       // date wrongly concluded "stop came after resolution." HAPPYANGELS hit 8/26, resolved 8/27, but its
       // return date 8/28 made it look unresolved. Using the hit date, 8/26 <= 8/27 → correctly handled.
       const stHit = (st.hit || st.date || '').slice(0,10);
-      const resolvedAfter = m.resolution_type && m.resolution_date && stHit && m.resolution_date >= stHit;
+      // v250: also check resolution_history so a deal whose resolution expired (last_cleared blanked
+      // resolution_type) doesn't re-ghost onto the board. If the stop was EVER formally resolved
+      // after the hit date, consider it closed — the user consciously handled it at the time.
+      const resolvedInHistory = stHit && Array.isArray(m.resolution_history) &&
+        m.resolution_history.some(rh => rh.date && rh.date >= stHit);
+      const resolvedAfter = resolvedInHistory ||
+        (m.resolution_type && m.resolution_date && stHit && m.resolution_date >= stHit);
       // v249: Removed clearedAfterStop guard entirely for open stops.
       // Previously a payment updating last_cleared (even a Zelle/manual payment that doesn't
       // un-block the ACH debit) would silently drop the deal off the board. A STOP is a serious
@@ -2331,11 +2337,14 @@ function beaconReconstruct(raw, todayISO){
       const st = stopByDeal[rid];
       // Resolved? Same checks as the open_stop guard above.
       const stHit = (st.hit || st.date || '').slice(0,10);
-      const resolvedAfter = m.resolution_type && m.resolution_date && stHit && m.resolution_date >= stHit;
-      const _msStop = Array.isArray(m._stopDates) ? (m._stopDates.slice(-1)[0]||'') : '';
-      const clearedAfterStop = _msStop && m.last_cleared && m.last_cleared > _msStop;
+      // v251: sync with board logic — also check resolution_history so an expired resolution
+      // keeps the calendar carry suppressed (same fix as the open-stop board check in v250).
+      const resolvedInHistoryCal = stHit && Array.isArray(m.resolution_history) &&
+        m.resolution_history.some(rh => rh.date && rh.date >= stHit);
+      const resolvedAfter = resolvedInHistoryCal ||
+        (m.resolution_type && m.resolution_date && stHit && m.resolution_date >= stHit);
       const _legal = (typeof legalCasesOut!=='undefined') && legalCasesOut.some(c=>c.lead_id===m.lead_id && c.status!=='settled');
-      if (resolvedAfter || clearedAfterStop || _legal) continue; // resolved — don't carry
+      if (resolvedAfter || _legal) continue; // resolved — don't carry
 
       // Find episode start: most recent resolution date → first stop AFTER it.
       let lastResDate = '';
