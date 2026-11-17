@@ -1378,10 +1378,10 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v252</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v253</span></span>
   </div>
 
-  <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
+  <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
   <div class="sidebar-scroll">
   <div class="watch-list">
     <div class="watch-list-header">
@@ -2782,7 +2782,7 @@ let beaconRawCache = {deals:[], bounces:[], actions:[]};
 let bLcOk = false;   // v85: Deals.LastCleared exists & writable (daily sync stamps the 30-day clock)
 const beaconNoteRidMap = {};
 
-function beaconWriteErr(e){ console.error('[beacon write]', e); showToast("\u26a0 Airtable write FAILED \u2014 change not saved"); }
+function beaconWriteErr(e){ console.error('[beacon write]', e); showToast("\u26a0 Write FAILED \u2014 change not saved"); }
 let _legalTimer = null;
 function beaconQueueLegal(){ clearTimeout(_legalTimer); _legalTimer = setTimeout(()=>{ beaconPushLegalCases(legalCases, TODAY_ISO).catch(beaconWriteErr); }, 1500); }
 
@@ -2804,9 +2804,9 @@ async function beaconGate(){
     });
   }
   if (!atToken()){
-    const t = prompt('Paste the Airtable token (same one Master Sheet uses \u2014 saved in this browser only):');
+    const t = prompt('Paste your API token (same one Master Sheet uses \u2014 saved in this browser only):');
     if (t) localStorage.setItem(BEACON_CFG.tokenKey, t.trim());
-    if (!atToken()) throw new Error('No Airtable token \u2014 Beacon cannot load.');
+    if (!atToken()) throw new Error('No token found \u2014 Beacon cannot load.');
   }
 }
 function showBootError(e){
@@ -2916,13 +2916,13 @@ async function syncDailyReport(file){
     const wb=XLSX.read(buf,{type:'array'});
     const r=beaconBuildDailyUpdates(wb, beaconRawCache.deals);
     if(!r.updates.length){ finishSyncProgress(false,'Nothing to sync','No deals in this report matched the book.'); return; }
-    updateSyncProgress('Writing '+r.updates.length+' deal updates to Airtable\u2026');
+    updateSyncProgress('Writing '+r.updates.length+' deal updates\u2026');
     await atPatch('Deals', r.updates);
     updateSyncProgress('Rebuilding the board\u2026');
     await beaconReload();
     var extra = r.ambiguous>0 ? ('  \u00b7  '+r.ambiguous+' row(s) skipped (same LeadID on multiple deals \u2014 fix in Master Sheet).') : '';
     finishSyncProgress(true,'Daily report synced', r.updates.length+' of '+r.total+' rows updated.'+extra);
-  }catch(e){ finishSyncProgress(false,'Daily sync failed',(e&&e.message)||'Airtable write error \u2014 nothing saved.'); beaconWriteErr(e); }
+  }catch(e){ finishSyncProgress(false,'Daily sync failed',(e&&e.message)||'Write error \u2014 nothing saved.'); beaconWriteErr(e); }
   finally{ const fi=document.getElementById('daily-file'); if(fi) fi.value=''; }
 }
 
@@ -3079,7 +3079,7 @@ async function syncBounceReport(file){
     const wb = XLSX.read(buf, {type:'array'});
     const parsed = beaconParseBounceWB(wb);
     const keys = new Set(beaconRawCache.bounces.map(r=>(r.fields&&r.fields.Bounce)||''));
-    updateSyncProgress('Matching '+parsed.bounces.length+' bounces to deals and writing to Airtable\u2026');
+    updateSyncProgress('Matching '+parsed.bounces.length+' bounces to deals and writing updates\u2026');
     const res = await beaconSyncBounces(parsed, state, keys, file.name);
     updateSyncProgress('Rebuilding the board\u2026');
     await beaconReload();
@@ -3089,7 +3089,7 @@ async function syncBounceReport(file){
     finishSyncProgress(true,'Bounce report synced', bits + '.');
     if (res.unmatched.length) alert('UNMATCHED merchants (no deal found in the book):\n\n' + res.unmatched.join('\n'));
     if (res.ambiguous.length) console.warn('Ambiguous matches (largest open balance taken):', res.ambiguous);
-  } catch(e){ finishSyncProgress(false,'Bounce sync failed',(e&&e.message)||'Airtable write error \u2014 nothing saved.'); beaconWriteErr(e); }
+  } catch(e){ finishSyncProgress(false,'Bounce sync failed',(e&&e.message)||'Write error \u2014 nothing saved.'); beaconWriteErr(e); }
   finally { const fi=document.getElementById('bounce-file'); if(fi) fi.value=''; }
 }
 

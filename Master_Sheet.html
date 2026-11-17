@@ -519,8 +519,8 @@ select.badge:hover{filter:brightness(1.2)}
 <div id="setup-screen">
   <div class="setup-card">
     <h1>📋 Master Sheet</h1>
-    <p>Enter your credentials to connect to Airtable. Your data syncs in real time. Enter once, works forever.</p>
-    <label>Airtable API Token</label>
+    <p>Enter your API token to connect. Your data syncs in real time. Enter once, works forever.</p>
+    <label>API Token</label>
     <input type="password" id="setup-airtable" placeholder="pat..." autocomplete="off" spellcheck="false">
     <div class="setup-hint">Base ID is pre-configured. Your credentials are saved locally and baked into your copy of this file.</div>
     <button class="btn btn-blue" style="width:100%;justify-content:center;padding:11px;font-size:13px" onclick="setupAndBake()">💾 Save & open Master Sheet</button>
@@ -534,7 +534,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 204</b></span>
+        <span><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 205</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -563,7 +563,7 @@ select.badge:hover{filter:brightness(1.2)}
       <div class="topbar">
         <div class="topbar-left">
           <h2 id="view-title">All deals</h2>
-          <p>Live sync with Airtable</p>
+          <p>Live sync</p>
         </div>
         <div id="claw-alert" onclick="setView('clawback')" title="Deals whose clawback window closes within 7 days — decide before they age out" style="display:none;cursor:pointer;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border);font-size:13px;font-weight:700"></div>
         <div class="btn-row">
@@ -578,9 +578,9 @@ select.badge:hover{filter:brightness(1.2)}
         <div id="notice" class="notice"></div>
         <div class="metrics-grid">
           <div class="metric-card"><div class="lbl">Active deals</div><div class="val val-blue" id="m-active">0</div><div class="sub">in portfolio</div></div>
-          <div class="metric-card"><div class="lbl">Total active book funded</div><div class="val" id="m-funded">$0</div><div class="sub">our book, active</div></div>
-          <div class="metric-card"><div class="lbl">Total book RTR</div><div class="val" id="m-rtr">$0</div><div class="sub">our book, to collect</div></div>
-          <div class="metric-card"><div class="lbl">Outstanding book balance</div><div class="val" id="m-balance">$0</div><div class="sub">our book remaining</div></div>
+          <div class="metric-card" title="Total cash HHC deployed into currently-open deals (funded × book %). Your cost basis — money out the door, still in play."><div class="lbl">Total active book funded</div><div class="val" id="m-funded">$0</div><div class="sub">our book, active</div></div>
+          <div class="metric-card" title="Total contracted repayment across active deals, scaled to HHC's book %. Fixed at funding — it's the finish line and never changes as payments come in."><div class="lbl">Total book RTR</div><div class="val" id="m-rtr">$0</div><div class="sub">our book, to collect</div></div>
+          <div class="metric-card" title="HHC's share of what's still owed right now. Starts equal to RTR on day one and shrinks with every payment. The gap between RTR and this number is what's already been collected."><div class="lbl">Outstanding book balance</div><div class="val" id="m-balance">$0</div><div class="sub">our book remaining</div></div>
           <div class="metric-card"><div class="lbl">Renewal eligible</div><div class="val val-amber" id="m-renewal">0</div><div class="sub">≥ 50% paid</div></div>
           <div class="metric-card"><div class="lbl">Portfolio PNL</div><div class="val" id="m-pnl">$0</div><div class="sub">all deals</div></div>
           <div class="metric-card"><div class="lbl">Defaults</div><div class="val val-red" id="m-defaults">0</div><div class="sub" id="m-default-sub">total</div></div>
@@ -942,7 +942,7 @@ function setupAndBake() {
   const errEl = document.getElementById('setup-error');
 
   if (!airtable.startsWith('pat')) {
-    errEl.textContent = 'Airtable token should start with pat... — check and try again.';
+    errEl.textContent = 'Token should start with pat... — check and try again.';
     errEl.style.display = 'block'; return;
   }
 
@@ -1351,7 +1351,7 @@ function clawbackTag(d){
 }
 function esc0(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 async function loadDeals() {
-  showLoading('Loading deals from Airtable...');
+  showLoading('Loading deals...');
   try {
     await ensureFields();
     try{ await ensurePnlTables(); }catch(e){ /* schema access missing — PNL tab will surface errors */ }
