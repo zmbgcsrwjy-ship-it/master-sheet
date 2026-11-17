@@ -534,7 +534,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 203</b></span>
+        <span>Powered by Airtable<br><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 204</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2113,7 +2113,10 @@ function sortRenewal(key){
 }
 function renderRenewal(){
   // build 153: exclude legal deals (defaulted already out via status filter).
-  const all=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0&&(d.collections_state||'').toUpperCase()!=='LEGAL');
+  // build 204: also exclude DEAD deals — a written-off deal has no refi upside; DEFAULT status is
+  //            already blocked by the ['NEW','ACTIVE'] status filter above, but DEAD is a
+  //            collections_state flag (Beacon-owned) that can sit on a technically-ACTIVE deal.
+  const all=deals.filter(d=>d.pct_paid>=(appSettings.refi_threshold||0.5)&&['NEW','ACTIVE'].includes(d.status)&&d.balance>0&&(d.collections_state||'').toUpperCase()!=='LEGAL'&&(d.collections_state||'').toUpperCase()!=='DEAD');
   const body=document.getElementById('renewal-body'),empty=document.getElementById('renewal-empty'),wrap=document.getElementById('renewal-table-wrap');
   const repSel=document.getElementById('refi-rep-filter'),isoSel=document.getElementById('refi-iso-filter');
   const showIgnored=document.getElementById('refi-show-ignored') && document.getElementById('refi-show-ignored').checked;

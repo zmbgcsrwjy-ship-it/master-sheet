@@ -1378,7 +1378,7 @@
 
   <div class="bx-side-logo">
     <h1><span class="bx-logo-dot"></span><span class="bx-logo-text">Beacon</span></h1>
-    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v251</span></span>
+    <span class="sub"><span id="total-tracked">0</span> active + default deals tracked<br><span class="build-tag">LIVE · v252</span></span>
   </div>
 
   <button id="bx-refresh-btn" onclick="beaconManualRefresh()" title="Reload everything live from Airtable" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;background:var(--surface-2);color:var(--text);border:0.5px solid var(--border-strong);border-radius:8px;padding:9px 12px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:16px">↻<span class="rfr-label">Refresh</span></button>
@@ -3251,7 +3251,7 @@ function showMerchantInfo(leadId){
   const _ta = exp.querySelector('.notes-today-ta');
   if (_ta) _ta.addEventListener('input', onFieldChange);
 }
-function fmt$k(n) { if (n >= 1e6) return "$" + (n/1e6).toFixed(3) + "M"; if (n >= 1000) return "$" + Math.round(n/1000) + "K"; return "$" + Math.round(n); }
+function fmt$k(n) { if (n >= 1e6) return "$" + (n/1e6).toFixed(1) + "M"; if (n >= 1000) return "$" + (n/1000).toFixed(1) + "K"; return "$" + Math.round(n); } // v252: 1 decimal in K/M range (15.3K not 15K)
 function fmtPct(n) { return Math.round(n * 100) + "%"; }
 function fmtDate(s) { if (!s) return "—"; const d = new Date(s + "T00:00:00"); if (isNaN(d)) return s; return (d.getMonth()+1) + "/" + d.getDate(); }
 // v217: month/date/year for auto-generated notes (e.g. "Suspend Payment (resume 8/27/2026) on 8/17/2026")
