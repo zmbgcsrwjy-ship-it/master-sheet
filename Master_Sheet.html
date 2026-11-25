@@ -535,7 +535,7 @@ select.badge:hover{filter:brightness(1.2)}
     <div class="sidebar">
       <div class="sidebar-logo">
         <h1>📋 Master Sheet</h1>
-        <span><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 206</b></span>
+        <span><b style="color:var(--text2)" title="Added section subtotals to the PNL tab: Total PNL, Total kickbacks, Total kickback clawed back, and Total clawbacks — a neat sum row at the end of each section.">LIVE · build 207</b></span>
       </div>
       <div class="sidebar-nav">
         <div class="nav-section">Views</div>
@@ -2526,6 +2526,8 @@ function renderAllocator(){
   rows.forEach(r=>{ (groups[r.key]=groups[r.key]||[]).push(r); });
   allocGroupKeys=Object.keys(groups).filter(k=>k!=='__NOISO__').sort((a,b)=>a.toLowerCase()<b.toLowerCase()?-1:1);
   if(groups.__NOISO__) allocGroupKeys.push('__NOISO__');
+  // build 207: color by sorted position, not name hash — guarantees no two ISOs ever share a color
+  const isoColorMap={}; allocGroupKeys.forEach((k,i)=>{ if(k!=='__NOISO__') isoColorMap[k]=ALLOC_ISO_COLORS[i%ALLOC_ISO_COLORS.length]; });
   const totalSend=rows.reduce((s,r)=>s+r.isoComm,0), totalKbOurs=rows.reduce((s,r)=>s+r.kbOurs,0), totalKbHhc=rows.reduce((s,r)=>s+r.kbHhc,0);
   if(headEl) headEl.innerHTML=`<span>To send to ISOs: <b style="color:var(--text)">${fmt$(totalSend)}</b></span>
     <span>To send HHC (1.5%): <b style="color:#c9a15a">${fmt$(totalKbHhc)}</b></span>
@@ -2539,13 +2541,13 @@ function renderAllocator(){
   </tr></thead><tbody>`;
   allocGroupKeys.forEach((key,gi)=>{
     const grp=groups[key], isNo=key==='__NOISO__';
-    const isoClr = isNo ? '' : allocIsoColor(key);
+    const isoClr = isNo ? '' : (isoColorMap[key]||'');
     const gSend=grp.reduce((s,r)=>s+r.isoComm,0), gKbOurs=grp.reduce((s,r)=>s+r.kbOurs,0), gKbHhc=grp.reduce((s,r)=>s+r.kbHhc,0);
     const label=isNo?'No ISO — your commission, nothing to send out':key;
     const sub=`· ${grp.length} deal${grp.length===1?'':'s'}${isNo?'':' · to send '+(isoClr?`<b style="color:${isoClr}">${fmt$(gSend)}</b>`:fmt$(gSend))} · HHC ${fmt$(gKbHhc)} · MSC ${fmt$(gKbOurs)}`;
     h+=`<tr class="alloc-grouprow" style="background:var(--bg3)"><td colspan="11"><span class="alloc-iso-name"${isoClr?` style="color:${isoClr}"`:''}>${label}</span> <span class="alloc-grp-sub">${sub}</span><button onclick="markAllocPaidGroup(${gi})" style="float:right;background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);border-radius:5px;padding:3px 12px;font-size:12.5px;cursor:pointer">Mark all paid</button></td></tr>`;
     grp.forEach(r=>{
-      const rowClr = r.hasIso ? allocIsoColor(r.d.iso) : '';
+      const rowClr = r.hasIso ? (isoColorMap[allocIsoKey(r.d)]||'') : '';
       h+=`<tr>
         <td class="pif-c pif-dim">${fmtDate(r.d.date_funded)}</td>
         <td style="font-weight:600">${dealNameHtml(r.d)}</td>
@@ -3768,7 +3770,7 @@ function renderOutlook(){
   // build 167: the written-off amount is the deal's actual PNL loss, not the worst-case max loss.
   // PNL is negative for a loser (e.g. -$2,675.50); take the magnitude. This feeds both the row display
   // and the month's total loss so the Outlook math matches the real PNL shown in All Deals.
-  const lossOf=d=> Math.max(0, -(d.pnl||0));
+  const lossOf=d=> -(d.pnl||0); // build 207: signed — positive=net loss, negative=profitable default (offsets written-off total)
   const upsideOf=d=> (d.book_profit||0);
   const MO=['January','February','March','April','May','June','July','August','September','October','November','December'];
   const shortMonth=ym=>{ const [y,m]=ym.split('-'); return MO[parseInt(m)-1]+" "+y; };
@@ -3843,7 +3845,8 @@ function renderOutlook(){
           // / suspended / lowered) so you can see how the deal died, not just that it's written off.
           // Skip when the state is LEGAL — the "legal" write-off tag already covers that.
           const csTag = (d.collections_state||'').toUpperCase()==='LEGAL' ? '' : olCsChip(d)+manualPayChip(d);  // build 196
-          return `<div class="ol-row"><span class="ol-namecell">${olNameHtml(d,false)}<span class="ol-tags">${tag}${csTag}</span></span>${balCell(d)}${pctBar(d)}<span class="v neg">-${fmt$(lossOf(d))}</span></div>`;
+          const pnlVal=d.pnl||0;const pvSpan=pnlVal>=0?`<span class="v pos">${fmt$(pnlVal)}</span>`:`<span class="v neg">-${fmt$(-pnlVal)}</span>`; // build 207: profitable defaults show green
+          return `<div class="ol-row"><span class="ol-namecell">${olNameHtml(d,false)}<span class="ol-tags">${tag}${csTag}</span></span>${balCell(d)}${pctBar(d)}${pvSpan}</div>`;
         }).join('')
       : '<div class="ol-empty-col">Nothing written off \u2014 clean month so far.</div>';
 
@@ -3855,7 +3858,7 @@ function renderOutlook(){
         <div class="ol-spine">
           <div class="ol-chip"><span class="n pnl-pos">${fmt$(expected)}</span><span class="k">Expected \u00b7 ${payers.length} paying</span></div>
           <span class="ol-op">\u2212</span>
-          <div class="ol-chip loss"><span class="n">${fmt$(losses)}</span><span class="k">Written off \u00b7 ${losers.length}</span></div>
+          <div class="ol-chip loss"><span class="n">${fmt$(Math.max(0,losses))}</span><span class="k">Written off \u00b7 ${losers.length}</span></div>
         </div>
         <div class="ol-verdict">
           <div class="ol-verdict-num ${band}">${fmt$(outlook)}</div>
@@ -3869,7 +3872,7 @@ function renderOutlook(){
             ${payerLines}
           </div>
           <div class="ol-col">
-            <div class="ol-col-h"><span>Written off</span><span class="pnl-neg">-${fmt$(losses)}</span></div>
+            <div class="ol-col-h"><span>Written off</span>${losses>=0?`<span class="pnl-neg">-${fmt$(losses)}</span>`:`<span class="pnl-pos">+${fmt$(-losses)}</span>`}</div>
             ${loserLines}
           </div>
         </div>
