@@ -2469,8 +2469,12 @@ let allocGroupKeys = [];
 const allocIsoKey = d => { const s=String(d.iso||'').trim(); return (s && s!=='—' && s.toUpperCase()!=='UNASSIGNED') ? s : '__NOISO__'; };
 // Allocator-only: give each ISO a stable, distinct color so the ISO + what you owe them pop.
 // Avoids colors already used here (green = MSC, gold = HHC) and red. Not used anywhere else in the sheet.
-const ALLOC_ISO_COLORS = ['#5b9dff','#c084fc','#fb923c','#22d3ee','#f472b6','#818cf8','#e879f9','#38bdf8'];
+// build 207: 16 visually distinct colours — large enough that hash collisions are rare;
+// renderAllocator's isoColorMap uses hash-first + linear probe to guarantee no repeats.
+const ALLOC_ISO_COLORS = ['#5b9dff','#c084fc','#fb923c','#22d3ee','#f472b6','#818cf8','#e879f9','#38bdf8','#34d399','#fbbf24','#a78bfa','#06b6d4','#4ade80','#facc15','#f43f5e','#2dd4bf'];
 function allocIsoColor(iso){
+  // Returns the hash-preferred colour for a single lookup (no collision check).
+  // For the allocator table use isoColorMap (built in renderAllocator) which is collision-free.
   const s=String(iso||'').trim().toUpperCase();
   if(!s || s==='__NOISO__' || s==='—' || s==='UNASSIGNED') return '';
   let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
@@ -2526,8 +2530,10 @@ function renderAllocator(){
   rows.forEach(r=>{ (groups[r.key]=groups[r.key]||[]).push(r); });
   allocGroupKeys=Object.keys(groups).filter(k=>k!=='__NOISO__').sort((a,b)=>a.toLowerCase()<b.toLowerCase()?-1:1);
   if(groups.__NOISO__) allocGroupKeys.push('__NOISO__');
-  // build 207: color by sorted position, not name hash — guarantees no two ISOs ever share a color
-  const isoColorMap={}; allocGroupKeys.forEach((k,i)=>{ if(k!=='__NOISO__') isoColorMap[k]=ALLOC_ISO_COLORS[i%ALLOC_ISO_COLORS.length]; });
+  // build 207: stable ISO→colour map — hash picks each ISO's preferred slot, linear probe resolves
+  // any collision (processed in sorted order for determinism). Same ISO set → same colours always.
+  const isoColorMap={};
+  {const pal=ALLOC_ISO_COLORS,used=new Set();allocGroupKeys.filter(k=>k!=='__NOISO__').slice().sort((a,b)=>a.toLowerCase()<b.toLowerCase()?-1:1).forEach(iso=>{const s=iso.trim().toUpperCase();let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;let idx=h%pal.length,t=0;while(used.has(idx)&&t++<pal.length)idx=(idx+1)%pal.length;isoColorMap[iso]=pal[idx];used.add(idx);});}
   const totalSend=rows.reduce((s,r)=>s+r.isoComm,0), totalKbOurs=rows.reduce((s,r)=>s+r.kbOurs,0), totalKbHhc=rows.reduce((s,r)=>s+r.kbHhc,0);
   if(headEl) headEl.innerHTML=`<span>To send to ISOs: <b style="color:var(--text)">${fmt$(totalSend)}</b></span>
     <span>To send HHC (1.5%): <b style="color:#c9a15a">${fmt$(totalKbHhc)}</b></span>
